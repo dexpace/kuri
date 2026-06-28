@@ -72,6 +72,36 @@ internal sealed interface UriParseError {
     data object EmptyHost : UriParseError
 
     /**
+     * A host is present but the §7 host pipeline rejected it ([ERR-11]). Carries
+     * the host substring exactly as seen (post-strip, pre-IDNA) and a [HostError]
+     * discriminating the cause (e.g. IPv4 width overflow, an invalid numeric part,
+     * a malformed IPv6 literal). Forbidden-code-point failures are reported by the
+     * dedicated [ForbiddenHostCodePoint] variant instead, so callers can surface
+     * the exact code point.
+     *
+     * @property host the offending host text as seen in the input.
+     * @property reason the specific host-pipeline cause of the failure.
+     */
+    data class InvalidHost(
+        val host: String,
+        val reason: HostError,
+    ) : UriParseError
+
+    /**
+     * A forbidden host code point (or, for a domain host, a forbidden-domain
+     * code point) was encountered in a host substring ([ERR-12]). Kept distinct
+     * from a generic host failure so a caller can report the exact offending
+     * code point and its location.
+     *
+     * @property codePoint the offending Unicode scalar value.
+     * @property at the offset of the offending code unit in the original input.
+     */
+    data class ForbiddenHostCodePoint(
+        val codePoint: Int,
+        val at: Int,
+    ) : UriParseError
+
+    /**
      * The input length exceeds the configured maximum ([ERR-16]). Also produced
      * when percent-decoding/IDNA expansion pushes the serialized length past the
      * same bound, carrying the post-expansion [length].
