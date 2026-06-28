@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.detekt)
+    alias(libs.plugins.kover)
     alias(libs.plugins.binary.compat)
 }
 
@@ -85,4 +86,17 @@ detekt {
         "src/jvmMain/kotlin",
         "src/jvmTest/kotlin",
     )
+}
+
+// Enforce an 80% JVM line-coverage floor. koverVerify is automatically wired
+// into check for the total (merged) variant by the Kover plugin — no manual
+// task dependency is needed.
+kover {
+    reports {
+        verify {
+            rule {
+                minBound(80)
+            }
+        }
+    }
 }
