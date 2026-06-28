@@ -28,6 +28,9 @@ kotlin {
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_1_8)
+            // Resolve stdlib symbols against the Java 8 API so newer-JDK symbols
+            // can't leak into a library that must run on Java 8.
+            freeCompilerArgs.add("-Xjdk-release=1.8")
         }
     }
 
