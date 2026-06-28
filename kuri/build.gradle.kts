@@ -1,3 +1,5 @@
+@file:OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
+
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
@@ -18,11 +20,16 @@ tasks.withType<JavaCompile>().configureEach {
 
 kotlin {
     jvmToolchain(25)
+    explicitApi()
 
     // Target Kotlin 2.0 language/API level: Kotlin 2.4 dropped support for 1.9.
     compilerOptions {
         languageVersion.set(KotlinVersion.KOTLIN_2_0)
         apiVersion.set(KotlinVersion.KOTLIN_2_0)
+        allWarningsAsErrors.set(true)
+        // Compiling against a below-default language version emits a deprecation
+        // warning; suppress it so allWarningsAsErrors doesn't fail the build.
+        freeCompilerArgs.add("-Xsuppress-version-warnings")
     }
 
     jvm {
@@ -34,7 +41,7 @@ kotlin {
         }
     }
 
-    js(IR) {
+    js {
         browser()
         nodejs()
     }
