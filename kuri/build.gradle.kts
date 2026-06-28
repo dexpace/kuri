@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.ktlint)
 }
 
 group = "org.dexpace"
