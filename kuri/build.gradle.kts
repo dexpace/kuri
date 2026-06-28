@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
 }
 
 group = "org.dexpace"
@@ -71,4 +72,16 @@ kotlin {
             implementation(kotlin("test"))
         }
     }
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    allRules = false
+    config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+    source.setFrom(
+        "src/commonMain/kotlin",
+        "src/commonTest/kotlin",
+        "src/jvmMain/kotlin",
+        "src/jvmTest/kotlin",
+    )
 }
