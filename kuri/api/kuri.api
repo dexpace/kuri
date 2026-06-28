@@ -1,0 +1,6 @@
+public final class org/dexpace/kuri/Kuri {
+	public static final field INSTANCE Lorg/dexpace/kuri/Kuri;
+	public static final field VERSION Ljava/lang/String;
+	public final fun version ()Ljava/lang/String;
+}
+

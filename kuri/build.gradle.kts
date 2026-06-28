@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.detekt)
+    alias(libs.plugins.binary.compat)
 }
 
 group = "org.dexpace"
