@@ -16,13 +16,13 @@ import kotlin.test.assertTrue
  * [IdnaCase.expected] is the required ToASCII output, a null one means the input must be rejected
  * (SPEC §7.4, [HOST-26]/[HOST-28]).
  *
- * kuri implements the UTS-46 map / Punycode / re-assemble pipeline but defers three post-mapping
- * steps -- NFC normalization, ContextJ `CheckJoiners`, the leading-combining-mark validity rule --
- * and bundles the Unicode 15.1.0 mapping table while this corpus follows Unicode 16.0. The inputs
- * that fail purely for those reasons are tracked in [IDNA_KNOWN_FAILURES]. None reflect a
- * Punycode/mapping defect (verified offline: zero wrong-output mismatches). The suite ratchets: it
- * fails if any *other* case regresses and if a known failure starts passing without the baseline
- * being regenerated (`tools/idna/generate_conformance_fixture.py`).
+ * kuri implements the UTS-46 map / NFC / ContextJ `CheckJoiners` / leading-combining-mark /
+ * Punycode / re-assemble pipeline against the Unicode 16.0 tables. The small residual that still
+ * fails is tracked in [IDNA_KNOWN_FAILURES]; each entry is a UTS-46 criterion this `Url`-profile
+ * run does not apply (CheckBidi, decoded-A-label re-validation, host-layer forbidden code points,
+ * empty-domain length) or a corpus/Unicode-version corner -- none reflect a Punycode/mapping/NFC
+ * output defect. The suite ratchets: it fails if any *other* case regresses and if a known failure
+ * starts passing without the baseline being updated to the live residual.
  */
 class IdnaConformanceTest {
     private val knownFailures: Set<String> = IDNA_KNOWN_FAILURES

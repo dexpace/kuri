@@ -50,13 +50,12 @@ private const val LOW_SURROGATE_START: Int = 0xDC00
  *
  * Implementation status of the [HOST-26] steps:
  *  - **map** (step 2) — fully implemented via [IdnaMappingTable].
- *  - **NFC normalize** (step 3) — *deferred* (no normalization tables bundled yet); see
- *    [normalizeNfc]. Callers are assumed to supply NFC-normalized input this increment.
+ *  - **NFC normalize** (step 3) — fully implemented via [Normalizer.nfc] (UAX #15), applied after
+ *    mapping and before label splitting per the UTS-46 processing order.
  *  - **label split / Punycode / re-assemble** (steps 4 & 6) — fully implemented via [Punycode].
- *  - **validate** (step 5) — a *light* form: it enforces "valid code points only" using the
- *    mapping table. `CheckBidi`/`CheckJoiners` and the leading-combining-mark rule need Unicode
- *    Bidi / General_Category data not yet bundled and are therefore not enforced here (the
- *    conformance corpus is run with `--exclude-bidi`).
+ *  - **validate** (step 5) — enforces "valid code points only" (mapping table) plus the
+ *    leading-combining-mark rule and ContextJ `CheckJoiners` via [IdnaValidity]. `CheckBidi` is
+ *    intentionally not implemented (the conformance corpus is run with `--exclude-bidi`).
  *
  * Both transforms are pure: input string in, value out, no shared mutable state.
  */
@@ -96,8 +95,8 @@ internal object Idna {
         return labels.joinToString(LABEL_SEPARATOR) { decodeLabelForDisplay(it) }
     }
 
-    /** NFC normalization is not yet implemented (tracked); inputs are assumed NFC. */
-    private fun normalizeNfc(s: String): String = s
+    /** UTS-46 step 3: canonical NFC normalization (UAX #15), applied post-mapping, pre-label-split. */
+    private fun normalizeNfc(s: String): String = Normalizer.nfc(s)
 
     /**
      * Applies the UTS-46 mapping step to every code point of [domain], returning the mapped text or
@@ -184,12 +183,16 @@ internal object Idna {
     }
 
     /**
-     * Light UTS-46 validity check: every code point of [label] must map to [IdnaMapping.Valid] or
-     * [IdnaMapping.Deviation]. Empty labels are accepted because `VerifyDnsLength = false` (DNS
-     * length / emptiness is [HOST-31]); the leading-combining-mark and full `CheckBidi`/
-     * `CheckJoiners` rules require Unicode category / Bidi data not yet bundled and are not enforced.
+     * UTS-46 validity check on the decoded Unicode [label] (SPEC §7.4): rejects a leading combining
+     * mark and any RFC 5892 ContextJ violation ([IdnaValidity]), then requires every code point to
+     * map to [IdnaMapping.Valid] or [IdnaMapping.Deviation]. Empty labels pass (`VerifyDnsLength =
+     * false`; DNS length / emptiness is [HOST-31]). `CheckBidi` is intentionally not implemented
+     * (the conformance corpus is run with `--exclude-bidi`).
      */
-    private fun validateLabel(label: String): Boolean = codePointsOf(label).all { isValidLabelCodePoint(it) }
+    private fun validateLabel(label: String): Boolean =
+        !IdnaValidity.startsWithCombiningMark(label) &&
+            IdnaValidity.checkJoiners(label) &&
+            codePointsOf(label).all { isValidLabelCodePoint(it) }
 
     /** True when [codePoint] is permitted unchanged in a validated label (valid or deviation). */
     private fun isValidLabelCodePoint(codePoint: Int): Boolean =
