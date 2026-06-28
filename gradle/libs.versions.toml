@@ -1,0 +1,16 @@
+[versions]
+kotlin = "2.4.0"
+ktlint = "13.1.0"
+detekt = "1.23.8"
+kover = "0.9.8"
+binary-compat = "0.18.1"
+
+[libraries]
+# kotlin-test is pulled in via the kotlin("test") MPP helper; listed for reference.
+
+[plugins]
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+binary-compat = { id = "org.jetbrains.kotlinx.binary-compatibility-validator", version.ref = "binary-compat" }

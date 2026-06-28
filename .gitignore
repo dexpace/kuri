@@ -22,3 +22,6 @@ gradle-app.setting
 
 # IntelliJ IDEA
 .idea/
+
+# Kotlin build cache
+.kotlin/
