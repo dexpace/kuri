@@ -1,0 +1,86 @@
+/*
+ * Copyright (c) 2026 dexpace and Omar Aljarrah
+ * SPDX-License-Identifier: MIT
+ */
+package org.dexpace.kuri.error
+
+/**
+ * The catalog of *fatal* parse failures (SPEC §12.2).
+ *
+ * A fatal error aborts production of a value: it is reported as the single
+ * [ParseResult.Err] error and no [ParseResult.Ok] is produced ([ERR-2]). Each
+ * variant carries enough context to locate and explain the failure — at minimum
+ * an `at` offset into the original input (in UTF-16 code units, before any
+ * stripping/trimming, [ERR-8]) or an explanatory sub-value.
+ *
+ * This is a deliberately faithful *starter subset* of the §12.2 catalog: it
+ * holds only the variants that do not yet depend on parser-internal types (host
+ * pipeline, resource-limit registry). The remaining variants
+ * (`InvalidAuthority`, `InvalidHost`, `ForbiddenHostCodePoint`, `LimitExceeded`)
+ * land with the parser. The hierarchy is `sealed` so a `when` over it is
+ * exhaustive without an `else` ([ERR-18]); adding a variant is an intentional,
+ * API-visible change.
+ */
+internal sealed interface UriParseError {
+    /**
+     * A scheme component is present but ill-formed ([ERR-9]): the first
+     * character is not ALPHA, or a later character is outside
+     * `ALPHA / DIGIT / "+" / "-" / "."`.
+     *
+     * @property at the offset of the offending code unit in the original input.
+     * @property detail identifies the offending condition for diagnostics.
+     */
+    data class InvalidScheme(
+        val at: Int,
+        val detail: String,
+    ) : UriParseError
+
+    /**
+     * No scheme was found where one is required ([ERR-9]): in the `Uri` profile
+     * on input that is not a valid relative reference, or in the `Url` profile
+     * when parsing with no scheme and no usable base.
+     */
+    data object MissingScheme : UriParseError
+
+    /**
+     * A percent sequence is malformed (`%` not followed by two ASCII hex digits)
+     * in a context where that is *fatal* ([ERR-15]) — e.g. `Uri` strict mode. In
+     * lenient parsing the same condition is non-fatal and surfaces as a
+     * [ValidationError] instead.
+     *
+     * @property at the offset of the offending `%`.
+     */
+    data class InvalidPercentEncoding(
+        val at: Int,
+    ) : UriParseError
+
+    /**
+     * A port is present but is not a run of ASCII digits, or its numeric value
+     * exceeds the permitted maximum ([ERR-14]).
+     *
+     * @property text the port substring exactly as seen in the input.
+     */
+    data class InvalidPort(
+        val text: String,
+    ) : UriParseError
+
+    /**
+     * A host is empty in a context that forbids an empty host ([ERR-13]): in the
+     * `Url` profile, a special scheme other than `file`. The `Uri` profile
+     * permits an empty authority and never produces this.
+     */
+    data object EmptyHost : UriParseError
+
+    /**
+     * The input length exceeds the configured maximum ([ERR-16]). Also produced
+     * when percent-decoding/IDNA expansion pushes the serialized length past the
+     * same bound, carrying the post-expansion [length].
+     *
+     * @property length the observed length that triggered the failure.
+     * @property max the configured maximum that was exceeded.
+     */
+    data class InputTooLong(
+        val length: Int,
+        val max: Int,
+    ) : UriParseError
+}
