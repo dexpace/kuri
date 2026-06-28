@@ -57,7 +57,7 @@ This repo is greenfield, but it sits in the **Dexpace** family alongside
   `Thread.interrupt()` — catch `InterruptedException`, restore the interrupt flag, and
   throw `InterruptedIOException` (or attach the interrupt as suppressed).
 - **Commit style:** `feat:` / `test:` / `docs:` / `chore:` prefixes (`merge:` for merge
-  commits).
+  commits). **PR titles follow the same prefixed style** (e.g. `docs: add CLAUDE.md`).
 
 ## Design notes
 
