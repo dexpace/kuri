@@ -48,6 +48,8 @@ public sealed interface ParseResult<out T> {
  *
  * Mirrors the `parseOrNull` convenience contract of [ERR-5]: a failure punned to
  * absence. Prefer an explicit `when` when the error itself is needed.
+ *
+ * @return the value of an [ParseResult.Ok], or `null` for an [ParseResult.Err].
  */
 public fun <T> ParseResult<T>.getOrNull(): T? =
     when (this) {
@@ -55,7 +57,11 @@ public fun <T> ParseResult<T>.getOrNull(): T? =
         is ParseResult.Err -> null
     }
 
-/** Returns `true` iff this is an [ParseResult.Ok] (i.e. the parse succeeded). */
+/**
+ * Reports whether this is an [ParseResult.Ok] (i.e. the parse succeeded).
+ *
+ * @return `true` iff this result is an [ParseResult.Ok].
+ */
 public fun <T> ParseResult<T>.isOk(): Boolean = this is ParseResult.Ok
 
 /**
@@ -67,6 +73,7 @@ public fun <T> ParseResult<T>.isOk(): Boolean = this is ParseResult.Ok
  * original [UriParseError].
  *
  * @param transform applied only to the value of an [ParseResult.Ok].
+ * @return an [ParseResult.Ok] of the transformed value, or this [ParseResult.Err] unchanged.
  */
 public fun <T, R> ParseResult<T>.map(transform: (T) -> R): ParseResult<R> =
     when (this) {

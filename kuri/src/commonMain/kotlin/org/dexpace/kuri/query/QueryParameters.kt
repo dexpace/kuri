@@ -51,16 +51,27 @@ public class QueryParameters internal constructor(
     /** Defensive immutable copy of the decoded pairs in appearance order ([QUERY-5]). */
     internal val entries: List<Pair<String, String?>> = pairs.toList()
 
-    /** Total pair count, counting duplicates (SPEC §10.3, [QUERY-9]). */
+    /**
+     * Total pair count, counting duplicates (SPEC §10.3, [QUERY-9]).
+     *
+     * @return the number of pairs, including repeats of the same name.
+     */
     public fun size(): Int = entries.size
 
-    /** True when no pairs are present; equivalent to `size() == 0` (SPEC §10.3). */
+    /**
+     * True when no pairs are present; equivalent to `size() == 0` (SPEC §10.3).
+     *
+     * @return `true` iff this snapshot holds no pairs.
+     */
     public fun isEmpty(): Boolean = entries.isEmpty()
 
     /**
      * The decoded value of the **first** pair named [name], or `null` when absent or when that
      * first pair had no `=` (SPEC §10.3, [QUERY-11]). `get` cannot distinguish "absent" from
      * "present with no `=`"; use [names]/[nameAt]/[valueAt] for that distinction.
+     *
+     * @param name the decoded name to look up, matched case-sensitively.
+     * @return the first matching decoded value, or `null` when absent or when that pair had no `=`.
      */
     public fun get(name: String): String? = entries.firstOrNull { it.first == name }?.second
 
@@ -70,6 +81,9 @@ public class QueryParameters internal constructor(
      *
      * Per [QUERY-12] the element type is `String?`: `null` entries are retained rather than mapped
      * to `""` or dropped, so the no-`=` sentinel survives a `getAll` round-trip. Empty when none.
+     *
+     * @param name the decoded name to look up, matched case-sensitively.
+     * @return a read-only list of every matching value in order, `null` per no-`=` pair; empty when none.
      */
     public fun getAll(name: String): List<String?> {
         val result = ArrayList<String?>()
@@ -80,12 +94,19 @@ public class QueryParameters internal constructor(
         return result
     }
 
-    /** True when at least one pair is named [name], case-sensitively (SPEC §10.3). */
+    /**
+     * True when at least one pair is named [name], case-sensitively (SPEC §10.3).
+     *
+     * @param name the decoded name to test, matched case-sensitively.
+     * @return `true` iff at least one pair carries [name].
+     */
     public fun has(name: String): Boolean = entries.any { it.first == name }
 
     /**
      * The distinct decoded names in first-appearance order, backed by a [LinkedHashSet]
      * (SPEC §10.3, [QUERY-13]). Each name appears exactly once even when duplicated in the pairs.
+     *
+     * @return a read-only set of the distinct names in first-appearance order.
      */
     public fun names(): Set<String> {
         val result = LinkedHashSet<String>(entries.size)
@@ -99,6 +120,8 @@ public class QueryParameters internal constructor(
     /**
      * The decoded name of the pair at [index] (SPEC §10.3, [QUERY-10]).
      *
+     * @param index the zero-based position in `0 until size()`.
+     * @return the decoded name at [index].
      * @throws IndexOutOfBoundsException when [index] is negative or `>= size()`.
      */
     public fun nameAt(index: Int): String {
@@ -110,6 +133,8 @@ public class QueryParameters internal constructor(
      * The decoded value of the pair at [index], or `null` for a pair that had no `=`
      * (SPEC §10.3, [QUERY-10]).
      *
+     * @param index the zero-based position in `0 until size()`.
+     * @return the decoded value at [index], or `null` when that pair had no `=`.
      * @throws IndexOutOfBoundsException when [index] is negative or `>= size()`.
      */
     public fun valueAt(index: Int): String? {
@@ -123,6 +148,8 @@ public class QueryParameters internal constructor(
      * Pairs join with `&`; each emits `encodeName(name)` followed by `= encodeValue(value)` only
      * when `value` is non-`null`. `+` is never specially encoded, and the null-vs-empty distinction
      * is preserved, so a query needing no escaping round-trips exactly (e.g. `===3===`).
+     *
+     * @return the raw query string (without a leading `?`); `""` when [isEmpty].
      */
     public fun toQueryString(): String {
         check(entries.size <= MAX_PAIRS) { "pair count exceeds the parse bound" }

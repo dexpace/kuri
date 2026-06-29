@@ -30,6 +30,9 @@ public class QueryParametersBuilder internal constructor(
     /**
      * Appends `(name, value)` to the end without deduplicating (SPEC §10.3.2, [QUERY-15]). A `null`
      * value is retained as the no-`=` sentinel; an empty string as the `=`-with-empty sentinel.
+     *
+     * @param name the decoded name to append.
+     * @param value the decoded value, or `null` for a name with no `=`.
      */
     public fun add(
         name: String,
@@ -44,6 +47,9 @@ public class QueryParametersBuilder internal constructor(
      * Replace-first / remove-rest / keep-position (SPEC §10.3.2, [QUERY-16]): replaces the value of
      * the **first** pair named [name] in place, removes every later pair named [name], and appends
      * `(name, value)` when no pair has the name.
+     *
+     * @param name the decoded name to set, matched case-sensitively.
+     * @param value the decoded value, or `null` for a name with no `=`.
      */
     public fun set(
         name: String,
@@ -63,6 +69,8 @@ public class QueryParametersBuilder internal constructor(
     /**
      * Removes every pair named [name], preserving the order of the rest (SPEC §10.3.2, [QUERY-17]).
      * A no-op when no pair matches.
+     *
+     * @param name the decoded name whose pairs are removed, matched case-sensitively.
      */
     public fun removeAll(name: String): QueryParametersBuilder {
         pairs.removeAll { it.first == name }
@@ -84,7 +92,11 @@ public class QueryParametersBuilder internal constructor(
         return this
     }
 
-    /** Materializes an immutable [QueryParameters] from the current pairs (SPEC §10.3.2). */
+    /**
+     * Materializes an immutable [QueryParameters] from the current pairs (SPEC §10.3.2).
+     *
+     * @return a snapshot of the accumulated pairs; later mutation of this builder does not affect it.
+     */
     public fun build(): QueryParameters = QueryParameters(pairs.toList())
 
     /** Removes pairs named [name] strictly after [firstIndex], scanning back to front ([QUERY-16]). */
@@ -101,7 +113,11 @@ public class QueryParametersBuilder internal constructor(
     }
 }
 
-/** A pre-filled [QueryParametersBuilder] over this snapshot's pairs (SPEC §10.3.2, [QUERY-19]). */
+/**
+ * A pre-filled [QueryParametersBuilder] over this snapshot's pairs (SPEC §10.3.2, [QUERY-19]).
+ *
+ * @return a builder seeded with this snapshot's pairs, so an unmodified `build()` reproduces it.
+ */
 public fun QueryParameters.newBuilder(): QueryParametersBuilder = QueryParametersBuilder(entries)
 
 /**
