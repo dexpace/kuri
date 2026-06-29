@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dexpace-wordmark-dark.svg">
-    <img alt="dexpace" src="docs/assets/dexpace-wordmark-light.svg" width="320">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/kuri-dark.svg">
+    <img alt="kuri" src="docs/assets/kuri-light.svg" width="420">
   </picture>
 </p>
 
