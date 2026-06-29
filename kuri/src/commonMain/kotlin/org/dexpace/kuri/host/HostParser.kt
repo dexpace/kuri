@@ -99,13 +99,14 @@ internal object HostParser {
         }
 
     /**
-     * The special-scheme domain pipeline (§7.4): UTF-8 percent-decode, run UTS-46 ToASCII, then
-     * classify the ASCII domain. A ToASCII failure propagates unchanged ([HOST-26]).
+     * The special-scheme domain pipeline (§7.4): UTF-8 percent-decode, run the WHATWG "domain to
+     * ASCII" wrapper ([Idna.domainToAsciiForUrl] — UTS-46 with the ASCII fast-path and empty-result
+     * rule), then classify the ASCII domain. A domain-to-ASCII failure propagates unchanged ([HOST-26]).
      */
     private fun parseSpecialDomain(input: String): ParseResult<Host> {
         require(input.isNotEmpty()) { "empty domain reached the IDNA pipeline" }
         val decoded = PercentCodec.decode(input)
-        return when (val ascii = Idna.domainToAscii(decoded)) {
+        return when (val ascii = Idna.domainToAsciiForUrl(decoded)) {
             is ParseResult.Err -> ascii
             is ParseResult.Ok -> classifyAsciiDomain(ascii.value)
         }

@@ -33,10 +33,10 @@ private const val KEY_SEPARATOR: String = "\u0000"
  * Reconstruction mirrors the WHATWG component serializers (§11) for the getters under test: a path
  * as the concatenation of `"/" + segment` (so the empty list renders `""` and the special root
  * renders `"/"`), and a `search`/`hash` as `?`/`#` plus the value, with absent or present-but-empty
- * both collapsing to `""` (the getter cannot tell them apart). The only residual divergence is the
- * deferred IDNA host validity tracked in [KNOWN_FAILURES]. The suite ratchets in both directions: a
- * brand-new failure breaks the untracked-regressions test, and a fixed gap breaks the
- * baseline-equality test until the baseline is updated.
+ * both collapsing to `""` (the getter cannot tell them apart). There is no residual divergence:
+ * [KNOWN_FAILURES] is empty and the suite is at full conformance. It still ratchets in both
+ * directions — a brand-new failure breaks the untracked-regressions test, and a regression that
+ * repopulates the live set breaks the baseline-equality test until the baseline is updated.
  */
 @Suppress("TooManyFunctions") // small single-purpose reconstruction helpers plus the four ratchet tests.
 class UrlConformanceTest {
@@ -139,32 +139,27 @@ class UrlConformanceTest {
     }
 
     @Test
-    fun `the corpus and known-failures set are non-trivially populated`() {
-        assertTrue(URL_TEST_CASES.size > KNOWN_FAILURES.size * 2, "passing cases should dwarf known failures")
-        assertTrue(KNOWN_FAILURES.isNotEmpty(), "deferred corners should yield a tracked baseline")
+    fun `the corpus is substantial and fully conformant`() {
+        assertTrue(
+            URL_TEST_CASES.size > MIN_CORPUS_SIZE,
+            "the WPT corpus should be substantial: ${URL_TEST_CASES.size}",
+        )
+        assertTrue(liveFailingKeys().isEmpty(), "every WPT case must parse per spec; failing: ${liveFailingKeys()}")
     }
 
     private companion object {
+        /** The corpus-size floor for [the corpus is substantial and fully conformant]. */
+        private const val MIN_CORPUS_SIZE: Int = 500
+
         /**
-         * The tracked baseline of currently-failing case keys (`input + U+0000 + base`). The single
-         * remaining category is a deferred dependency, not a §8 state-machine bug:
-         *  - **deferred IDNA host validity (6):** a host that UTS-46 rejects (a soft-hyphen label
-         *    that maps to empty, an invalid `xn--` A-label) is accepted because the same UTS-46
-         *    validity steps deferred in `IdnaConformanceTest` are not yet applied, so the parse
-         *    succeeds where WPT requires failure.
-         *
-         * None reflect a wrong parsed component; closing the IDNA-validity gap will empty this set,
-         * which the ratcheting `the known-failures set exactly equals the live failing set` enforces.
+         * The tracked baseline of currently-failing case keys (`input + U+0000 + base`). It is empty:
+         * the live parser now satisfies every in-scope WPT case under the `Url` profile. The former
+         * deferred IDNA host-validity residual (an invalid `xn--` label, a soft-hyphen host that maps
+         * to empty) closed when the WHATWG "domain to ASCII" wrapper landed -- an ASCII domain is kept
+         * verbatim and a domain that maps to the empty string fails. The ratcheting `the known-failures
+         * set exactly equals the live failing set` test now pins the suite at full conformance: any
+         * regression repopulates the live set and breaks the build until this baseline is updated.
          */
-        private val KNOWN_FAILURES: Set<String> =
-            setOf(
-                // deferred IDNA host validity (host accepted where UTS-46 requires rejection)
-                "file://\u00ad/p\u0000",
-                "file://%C2%AD/p\u0000",
-                "file://xn--/p\u0000",
-                "https://\u00ad/\u0000",
-                "https://%C2%AD/\u0000",
-                "https://xn--/\u0000",
-            )
+        private val KNOWN_FAILURES: Set<String> = emptySet()
     }
 }

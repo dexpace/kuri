@@ -21,6 +21,9 @@ private const val LABEL_SEPARATOR: String = "."
 /** First non-ASCII code point; a label with any point `>=` this needs ACE encoding. */
 private const val NON_ASCII_MIN: Int = 0x80
 
+/** Distance from an uppercase ASCII letter to its lowercase counterpart (`'A'` -> `'a'`). */
+private const val ASCII_CASE_OFFSET: Int = 0x20
+
 /** Largest Unicode scalar value (U+10FFFF). */
 private const val MAX_CODE_POINT: Int = 0x10FFFF
 
@@ -82,6 +85,35 @@ internal object Idna {
         val mapped = mapAll(domain) ?: return idnaError(domain)
         val labels = splitLabels(normalizeNfc(mapped))
         return processLabels(labels, domain).map { it.joinToString(LABEL_SEPARATOR) }
+    }
+
+    /**
+     * WHATWG "domain to ASCII" for the `Url` profile (`beStrict = false`): the URL-layer wrapper over
+     * the pure UTS-46 [domainToAscii] (SPEC §7.4, [HOST-26]).
+     *
+     * An all-ASCII [domain] is returned **lowercased verbatim**: per the standard, an ASCII domain's
+     * Unicode ToASCII failures are only validation errors, never fatal, for web compatibility — so an
+     * invalid `xn--` label such as `xn--pokxncvks` is kept as-is rather than rejected (and an
+     * `IgnoreInvalidPunycode` flag alone would not suffice, since Punycode can decode yet still fail a
+     * later validity check). A non-ASCII [domain] runs the full UTS-46 pipeline and propagates its
+     * failure. Either way, a result that collapses to the empty string (e.g. a lone soft hyphen, which
+     * maps to nothing) is a failure ("if result is the empty string, return failure"). The residual
+     * forbidden-code-point check is applied by the host classifier, not here.
+     *
+     * @param domain the percent-decoded, assumed-NFC domain text.
+     * @return [ParseResult.Ok] with the ASCII domain, or [ParseResult.Err] on a domain-to-ASCII failure.
+     */
+    internal fun domainToAsciiForUrl(domain: String): ParseResult<String> {
+        val result =
+            if (isAsciiString(domain)) {
+                asciiLowercase(domain)
+            } else {
+                when (val ascii = domainToAscii(domain)) {
+                    is ParseResult.Err -> return ascii
+                    is ParseResult.Ok -> ascii.value
+                }
+            }
+        return if (result.isEmpty()) idnaError(domain) else ParseResult.Ok(result)
     }
 
     /**
@@ -233,6 +265,15 @@ internal object Idna {
     /** Builds the fatal IDNA failure carrying the original [domain] ([HOST-26], [HOST-30]). */
     private fun idnaError(domain: String): ParseResult.Err =
         ParseResult.Err(UriParseError.InvalidHost(domain, HostError.IdnaFailed))
+
+    /** True when every UTF-16 unit of [s] is ASCII (`< 0x80`); an ASCII domain skips UTS-46 ToASCII. */
+    private fun isAsciiString(s: String): Boolean = s.all { it.code < NON_ASCII_MIN }
+
+    /** ASCII-lowercases [s] (`A`–`Z` -> `a`–`z`), leaving every other code unit unchanged. */
+    private fun asciiLowercase(s: String): String =
+        buildString(s.length) {
+            for (c in s) append(if (c in 'A'..'Z') c + ASCII_CASE_OFFSET else c)
+        }
 
     /** Splits [input] into Unicode code points, combining well-formed surrogate pairs. */
     private fun codePointsOf(input: String): List<Int> {
