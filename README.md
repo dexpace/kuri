@@ -53,6 +53,7 @@ Correctness is the contract. The engine is validated against the Web Platform Te
 
 ## Installation
 
+> [!NOTE]
 > **Not yet published.** The first release has not shipped. kuri is not on Maven Central, Sonatype, or any other repository, so it cannot be resolved as a dependency today. Until then, [build from source](#building-from-source).
 
 The coordinates reserved for the first release are:
