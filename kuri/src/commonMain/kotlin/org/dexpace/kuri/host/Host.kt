@@ -26,7 +26,7 @@ package org.dexpace.kuri.host
  * [Empty] (an authority is present but the host is the empty string, e.g.
  * `file:///path`). The two MUST NOT be conflated ([MODEL-15]).
  */
-internal sealed interface Host {
+public sealed interface Host {
     /**
      * A registered name or domain stored in already-canonical form ([MODEL-16]).
      *
@@ -37,8 +37,8 @@ internal sealed interface Host {
      *
      * @property value the canonical registered-name text (no brackets).
      */
-    data class RegName(
-        val value: String,
+    public data class RegName(
+        public val value: String,
     ) : Host
 
     /**
@@ -51,8 +51,8 @@ internal sealed interface Host {
      *
      * @property value the address as 32 unsigned bits packed into a signed [Int].
      */
-    data class Ipv4(
-        val value: Int,
+    public data class Ipv4(
+        public val value: Int,
     ) : Host
 
     /**
@@ -69,9 +69,9 @@ internal sealed interface Host {
      *   without that prefix), or `null` for none — rejected by default in both
      *   profiles and only populated when zone ids are opted in.
      */
-    data class Ipv6(
-        val pieces: List<Int>,
-        val zoneId: String? = null,
+    public data class Ipv6(
+        public val pieces: List<Int>,
+        public val zoneId: String? = null,
     ) : Host
 
     /**
@@ -81,8 +81,8 @@ internal sealed interface Host {
      * @property value the `vN.…` bracket contents (version, `.`, and payload),
      *   stored verbatim without the surrounding `[`/`]`.
      */
-    data class IpFuture(
-        val value: String,
+    public data class IpFuture(
+        public val value: String,
     ) : Host
 
     /**
@@ -94,13 +94,13 @@ internal sealed interface Host {
      *
      * @property value the percent-encoded opaque host text (no brackets).
      */
-    data class Opaque(
-        val value: String,
+    public data class Opaque(
+        public val value: String,
     ) : Host
 
     /**
      * An authority component whose host is the empty string ([MODEL-15],
      * [HOST-46]). Distinct from `host == null`; serializes to the empty string.
      */
-    data object Empty : Host
+    public data object Empty : Host
 }

@@ -21,7 +21,7 @@ package org.dexpace.kuri.error
  * exhaustive without an `else` ([ERR-18]); adding a variant is an intentional,
  * API-visible change.
  */
-internal sealed interface UriParseError {
+public sealed interface UriParseError {
     /**
      * A scheme component is present but ill-formed ([ERR-9]): the first
      * character is not ALPHA, or a later character is outside
@@ -30,9 +30,9 @@ internal sealed interface UriParseError {
      * @property at the offset of the offending code unit in the original input.
      * @property detail identifies the offending condition for diagnostics.
      */
-    data class InvalidScheme(
-        val at: Int,
-        val detail: String,
+    public data class InvalidScheme(
+        public val at: Int,
+        public val detail: String,
     ) : UriParseError
 
     /**
@@ -40,7 +40,7 @@ internal sealed interface UriParseError {
      * on input that is not a valid relative reference, or in the `Url` profile
      * when parsing with no scheme and no usable base.
      */
-    data object MissingScheme : UriParseError
+    public data object MissingScheme : UriParseError
 
     /**
      * A percent sequence is malformed (`%` not followed by two ASCII hex digits)
@@ -50,8 +50,8 @@ internal sealed interface UriParseError {
      *
      * @property at the offset of the offending `%`.
      */
-    data class InvalidPercentEncoding(
-        val at: Int,
+    public data class InvalidPercentEncoding(
+        public val at: Int,
     ) : UriParseError
 
     /**
@@ -60,8 +60,8 @@ internal sealed interface UriParseError {
      *
      * @property text the port substring exactly as seen in the input.
      */
-    data class InvalidPort(
-        val text: String,
+    public data class InvalidPort(
+        public val text: String,
     ) : UriParseError
 
     /**
@@ -69,7 +69,7 @@ internal sealed interface UriParseError {
      * `Url` profile, a special scheme other than `file`. The `Uri` profile
      * permits an empty authority and never produces this.
      */
-    data object EmptyHost : UriParseError
+    public data object EmptyHost : UriParseError
 
     /**
      * A host is present but the §7 host pipeline rejected it ([ERR-11]). Carries
@@ -82,9 +82,9 @@ internal sealed interface UriParseError {
      * @property host the offending host text as seen in the input.
      * @property reason the specific host-pipeline cause of the failure.
      */
-    data class InvalidHost(
-        val host: String,
-        val reason: HostError,
+    public data class InvalidHost(
+        public val host: String,
+        public val reason: HostError,
     ) : UriParseError
 
     /**
@@ -96,9 +96,9 @@ internal sealed interface UriParseError {
      * @property codePoint the offending Unicode scalar value.
      * @property at the offset of the offending code unit in the original input.
      */
-    data class ForbiddenHostCodePoint(
-        val codePoint: Int,
-        val at: Int,
+    public data class ForbiddenHostCodePoint(
+        public val codePoint: Int,
+        public val at: Int,
     ) : UriParseError
 
     /**
@@ -109,8 +109,8 @@ internal sealed interface UriParseError {
      * @property length the observed length that triggered the failure.
      * @property max the configured maximum that was exceeded.
      */
-    data class InputTooLong(
-        val length: Int,
-        val max: Int,
+    public data class InputTooLong(
+        public val length: Int,
+        public val max: Int,
     ) : UriParseError
 }
