@@ -1,0 +1,440 @@
+/*
+ * Copyright (c) 2026 dexpace and Omar Aljarrah
+ * SPDX-License-Identifier: MIT
+ */
+package org.dexpace.kuri.parser
+
+import org.dexpace.kuri.ParseProfile
+import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.UriParseError
+import org.dexpace.kuri.error.ValidationError
+import org.dexpace.kuri.host.Host
+import org.dexpace.kuri.host.HostParser
+import org.dexpace.kuri.percent.PercentCodec
+import org.dexpace.kuri.percent.PercentEncodeSets
+import org.dexpace.kuri.scheme.Scheme
+import org.dexpace.kuri.text.isAsciiDigit
+
+/** The canonical `file` scheme, special-cased by the file sub-machine (§8.3). */
+private const val FILE_SCHEME: String = "file"
+
+/** WHATWG `localhost`, mapped to the empty host in the FILE_HOST state ([PARSE-37]). */
+private const val LOCALHOST: String = "localhost"
+
+/** The inclusive `Url`-profile port ceiling, a 16-bit unsigned integer ([PARSE-33]). */
+private const val MAX_PORT: Long = 65535L
+
+/** Sentinel for "no `@` found in the authority span" returned by [UrlParserAuthority]. */
+private const val NOT_FOUND: Int = -1
+
+/** Radix for the base-10 port integer accumulation ([PARSE-33]). */
+private const val DECIMAL_RADIX: Int = 10
+
+/**
+ * The authority, userinfo, host, port, and `file` sub-machine states of the §8.3 `Url`-profile
+ * state machine (WHATWG basic URL parser).
+ *
+ * Each `internal` member is exactly one WHATWG state function (AUTHORITY, HOST, PORT, FILE,
+ * FILE_SLASH, FILE_HOST); `private` members decompose them under the 60-line / 2-return budgets.
+ * The authority and host states scan forward and jump the single pointer to the next component
+ * boundary so it stays non-decreasing ([PARSE-9]), rather than rewinding as the WHATWG
+ * char-at-a-time phrasing does. The routing/path/query states live in the sibling
+ * [UrlParserStates] (hence the cohesive grouping and `TooManyFunctions` suppression).
+ */
+@Suppress("TooManyFunctions")
+internal object UrlParserAuthority {
+    // --- authority + userinfo (§8.3 [PARSE-26]–[PARSE-28], §8.4) ----------------------
+
+    /**
+     * AUTHORITY (§8.3 [PARSE-26]–[PARSE-28], §8.4; WHATWG authority state), forward-scanning.
+     *
+     * Locates the authority delimiter and the LAST `@` before it; everything before that `@` is
+     * userinfo (split on its first `:`), and the pointer advances to the host candidate.
+     */
+    internal fun authorityState(state: UrlParserState): UrlTransition {
+        val delimiter = authorityDelimiter(state, state.pos)
+        val lastAt = lastAtSign(state, state.pos, delimiter)
+        return resolveAuthority(state, lastAt, delimiter)
+    }
+
+    /** Splits off userinfo at [lastAt] (if any) and positions the pointer at the host candidate. */
+    private fun resolveAuthority(
+        state: UrlParserState,
+        lastAt: Int,
+        delimiter: Int,
+    ): UrlTransition =
+        when {
+            lastAt == NOT_FOUND -> UrlTransition.Reconsume(UrlState.HOST)
+            lastAt + 1 == delimiter -> UrlTransition.Fail(UriParseError.EmptyHost)
+            else -> {
+                applyUserinfo(state, state.pos, lastAt)
+                state.pos = lastAt + 1
+                UrlTransition.Reconsume(UrlState.HOST)
+            }
+        }
+
+    /** The first authority terminator at or after [from] (`/`, `?`, `#`, special `\`), or the length. */
+    private fun authorityDelimiter(
+        state: UrlParserState,
+        from: Int,
+    ): Int {
+        var i = from
+        var found = state.input.length
+        while (i < state.input.length && found == state.input.length) {
+            if (isAuthorityTerminator(state, state.input[i])) found = i
+            i++
+        }
+        check(found in from..state.input.length) { "authority delimiter out of range: $found" }
+        return found
+    }
+
+    /** The index of the LAST `@` in `[from, end)` (§8.4 [PARSE-44]), or [NOT_FOUND]. */
+    private fun lastAtSign(
+        state: UrlParserState,
+        from: Int,
+        end: Int,
+    ): Int {
+        require(end <= state.input.length) { "authority end out of range: $end" }
+        var i = end - 1
+        var found = NOT_FOUND
+        while (i >= from && found == NOT_FOUND) {
+            if (state.input[i] == '@') found = i
+            i--
+        }
+        return found
+    }
+
+    /**
+     * Accumulates the userinfo span `[start, lastAt)` into username/password (§8.4
+     * [PARSE-44]–[PARSE-47]).
+     *
+     * The first `:` splits username from password; any non-final `@` inside the span and any
+     * subsequent `:` are percent-encoded by the userinfo set (so `a@b@h` yields `a%40b` and
+     * `u:p:q` yields password `p%3Aq`), matching the last-`@`/first-`:` rules.
+     */
+    private fun applyUserinfo(
+        state: UrlParserState,
+        start: Int,
+        lastAt: Int,
+    ) {
+        require(start <= lastAt) { "userinfo span is inverted: $start..$lastAt" }
+        val userinfo = state.input.substring(start, lastAt)
+        val colon = userinfo.indexOf(':')
+        val rawUser = if (colon >= 0) userinfo.substring(0, colon) else userinfo
+        state.username = PercentCodec.encode(rawUser, PercentEncodeSets.USERINFO)
+        state.password =
+            if (colon >= 0) PercentCodec.encode(userinfo.substring(colon + 1), PercentEncodeSets.USERINFO) else ""
+        state.atSignSeen = true
+    }
+
+    // --- host (§8.3 [PARSE-29]–[PARSE-31]) -------------------------------------------
+
+    /**
+     * HOST (§8.3 [PARSE-29]–[PARSE-31]; WHATWG host/hostname state), forward-scanning.
+     *
+     * Scans to the first `:` outside brackets (→ PORT) or the first path terminator (→ PATH_START),
+     * isolates the host slice, and delegates classification to [HostParser]. An empty special-scheme
+     * host is fatal ([PARSE-31]).
+     */
+    internal fun hostState(state: UrlParserState): UrlTransition {
+        val scan = scanHost(state)
+        val hostSlice = state.input.substring(state.pos, scan.first)
+        return finishHost(state, hostSlice, scan.first, scan.second)
+    }
+
+    /** Returns the host-delimiter index and whether it is a port-introducing `:` ([PARSE-30]). */
+    private fun scanHost(state: UrlParserState): Pair<Int, Boolean> {
+        var i = state.pos
+        var insideBrackets = false
+        var found = NOT_FOUND
+        var isColon = false
+        while (i < state.input.length && found == NOT_FOUND) {
+            val ch = state.input[i]
+            if (ch == '[') {
+                insideBrackets = true
+            } else if (ch == ']') {
+                insideBrackets = false
+            }
+            when {
+                !insideBrackets && ch == ':' -> {
+                    found = i
+                    isColon = true
+                }
+                isAuthorityTerminator(state, ch) -> found = i
+                else -> i++
+            }
+        }
+        val idx = if (found == NOT_FOUND) state.input.length else found
+        return idx to isColon
+    }
+
+    /** Validates the host slice for emptiness, then parses and transitions ([PARSE-30]/[PARSE-31]). */
+    private fun finishHost(
+        state: UrlParserState,
+        hostSlice: String,
+        idx: Int,
+        isColon: Boolean,
+    ): UrlTransition =
+        when {
+            isColon && hostSlice.isEmpty() -> UrlTransition.Fail(UriParseError.EmptyHost)
+            !isColon && state.special && hostSlice.isEmpty() -> UrlTransition.Fail(UriParseError.EmptyHost)
+            else -> parseAndStoreHost(state, hostSlice, idx, isColon)
+        }
+
+    /** Parses [hostSlice] via [HostParser] and advances to PORT (on `:`) or PATH_START. */
+    private fun parseAndStoreHost(
+        state: UrlParserState,
+        hostSlice: String,
+        idx: Int,
+        isColon: Boolean,
+    ): UrlTransition =
+        when (val host = resolveHost(state, hostSlice)) {
+            is ParseResult.Err -> UrlTransition.Fail(host.error)
+            is ParseResult.Ok -> {
+                state.host = host.value
+                state.pos = idx
+                if (isColon) UrlTransition.Advance(UrlState.PORT) else UrlTransition.Reconsume(UrlState.PATH_START)
+            }
+        }
+
+    /** An empty non-special host is [Host.Empty]; otherwise the §7 host pipeline classifies it. */
+    private fun resolveHost(
+        state: UrlParserState,
+        hostSlice: String,
+    ): ParseResult<Host> =
+        if (hostSlice.isEmpty()) {
+            ParseResult.Ok(Host.Empty)
+        } else {
+            HostParser.parse(hostSlice, ParseProfile.URL, isSpecial = state.special, isFile = false)
+        }
+
+    // --- port (§8.3 [PARSE-32]–[PARSE-34]) -------------------------------------------
+
+    /**
+     * PORT (§8.3 [PARSE-32]–[PARSE-34]; WHATWG port state), forward-scanning the digit run.
+     *
+     * A non-digit that is also not a terminator is fatal; an empty run leaves the port unspecified;
+     * otherwise the value is range-checked and default-port-elided ([PARSE-34]).
+     */
+    internal fun portState(state: UrlParserState): UrlTransition {
+        var i = state.pos
+        while (i < state.input.length && state.input[i].isAsciiDigit()) {
+            i++
+        }
+        val digits = state.input.substring(state.pos, i)
+        val terminator = if (i < state.input.length) state.input[i] else null
+        return resolvePort(state, digits, i, terminator)
+    }
+
+    /** Validates the post-digit terminator and finalizes (or skips) the port ([PARSE-32]–[PARSE-34]). */
+    private fun resolvePort(
+        state: UrlParserState,
+        digits: String,
+        end: Int,
+        terminator: Char?,
+    ): UrlTransition {
+        val terminated = terminator == null || isAuthorityTerminator(state, terminator)
+        if (!terminated) {
+            return UrlTransition.Fail(UriParseError.InvalidPort(digits + terminator))
+        }
+        return finalizePort(state, digits, end)
+    }
+
+    /** Parses, range-checks, and default-port-elides the digit run, then reconsumes in PATH_START. */
+    private fun finalizePort(
+        state: UrlParserState,
+        digits: String,
+        end: Int,
+    ): UrlTransition {
+        val value = computePort(digits)
+        if (digits.isNotEmpty() && value == null) {
+            return UrlTransition.Fail(UriParseError.InvalidPort(digits))
+        }
+        state.port = elidedPort(state, value)
+        state.pos = end
+        return UrlTransition.Reconsume(UrlState.PATH_START)
+    }
+
+    /** The base-10 value of [digits], or `null` when it exceeds the 16-bit ceiling ([PARSE-33]). */
+    private fun computePort(digits: String): Long? {
+        var value = 0L
+        var overflow = false
+        for (d in digits) {
+            value = value * DECIMAL_RADIX + (d - '0')
+            if (value > MAX_PORT) overflow = true
+        }
+        return if (digits.isEmpty() || overflow) null else value
+    }
+
+    /** Drops the port when it equals the scheme's default ([PARSE-34]); an empty run yields `null`. */
+    private fun elidedPort(
+        state: UrlParserState,
+        value: Long?,
+    ): Int? {
+        if (value == null) {
+            return null
+        }
+        val scheme = state.scheme
+        val isDefault = scheme != null && Scheme.defaultPort(scheme)?.toLong() == value
+        return if (isDefault) null else value.toInt()
+    }
+
+    // --- file sub-machine (§8.3 [PARSE-35]–[PARSE-37]) -------------------------------
+
+    /**
+     * FILE (§8.3 [PARSE-35]; WHATWG file state).
+     *
+     * Establishes the `file` scheme (special, empty host), routes a leading `/`/`\` into
+     * FILE_SLASH, copies a `file` base where present, else falls into PATH.
+     */
+    internal fun fileState(state: UrlParserState): UrlTransition {
+        state.scheme = FILE_SCHEME
+        state.special = true
+        state.host = Host.Empty
+        val c = state.currentChar()
+        return when {
+            c == '/' || c == '\\' -> fileLeadingSlash(state, c)
+            baseIsFile(state) -> fileWithBase(state, c)
+            else -> UrlTransition.Reconsume(UrlState.PATH)
+        }
+    }
+
+    /** A leading `/`/`\` enters FILE_SLASH, recording invalid-reverse-solidus for `\` ([PARSE-35]). */
+    private fun fileLeadingSlash(
+        state: UrlParserState,
+        c: Char?,
+    ): UrlTransition {
+        if (c == '\\') {
+            state.errors.add(ValidationError.BACKSLASH_AS_SOLIDUS)
+        }
+        return UrlTransition.Advance(UrlState.FILE_SLASH)
+    }
+
+    /** True when [UrlParserState.base] is a `file:` URL (WHATWG file-state base branch). */
+    private fun baseIsFile(state: UrlParserState): Boolean = state.base?.scheme == FILE_SCHEME
+
+    /** Copies a `file` base's host/path/query and dispatches by the current code point ([PARSE-35]). */
+    private fun fileWithBase(
+        state: UrlParserState,
+        c: Char?,
+    ): UrlTransition {
+        val base = checkNotNull(state.base) { "file base branch requires a base" }
+        state.host = base.host
+        state.path.clear()
+        state.path.addAll(cloneBasePath(base))
+        state.query = base.query
+        return fileBaseTransition(state, c)
+    }
+
+    /** Per-code-point transition for [fileWithBase]: query, fragment-only EOF, or drive-aware path. */
+    private fun fileBaseTransition(
+        state: UrlParserState,
+        c: Char?,
+    ): UrlTransition =
+        when {
+            c == '?' -> {
+                state.query = ""
+                UrlTransition.Advance(UrlState.QUERY)
+            }
+            c == null -> UrlTransition.Advance(UrlState.FILE)
+            else -> fileBaseDriveBranch(state)
+        }
+
+    /** Shortens the copied path unless the remaining input is a drive letter, then reconsumes PATH. */
+    private fun fileBaseDriveBranch(state: UrlParserState): UrlTransition {
+        state.query = null
+        if (startsWithWindowsDrive(state.fromCurrent())) {
+            state.path.clear()
+        } else {
+            shortenPath(state)
+        }
+        return UrlTransition.Reconsume(UrlState.PATH)
+    }
+
+    /**
+     * FILE_SLASH (§8.3 [PARSE-36]; WHATWG file-slash state).
+     *
+     * A second `/`/`\` enters FILE_HOST; otherwise applies the `file`-base drive-letter quirk and
+     * falls into PATH.
+     */
+    internal fun fileSlashState(state: UrlParserState): UrlTransition {
+        val c = state.currentChar()
+        if (c == '/' || c == '\\') {
+            if (c == '\\') state.errors.add(ValidationError.BACKSLASH_AS_SOLIDUS)
+            return UrlTransition.Advance(UrlState.FILE_HOST)
+        }
+        return fileSlashBase(state)
+    }
+
+    /** Applies the WHATWG file-slash base drive-letter carry-over, then reconsumes in PATH. */
+    private fun fileSlashBase(state: UrlParserState): UrlTransition {
+        val base = state.base
+        if (base?.scheme == FILE_SCHEME) {
+            state.host = base.host
+            carryDriveLetter(state, base)
+        }
+        return UrlTransition.Reconsume(UrlState.PATH)
+    }
+
+    /** Appends the base's drive-letter segment when the remaining input is not itself a drive. */
+    private fun carryDriveLetter(
+        state: UrlParserState,
+        base: ParsedComponents,
+    ) {
+        val baseSegments = (base.path as? UrlPath.Segments)?.segments ?: emptyList()
+        val firstIsDrive = baseSegments.isNotEmpty() && isNormalizedWindowsDrive(baseSegments[0])
+        if (!startsWithWindowsDrive(state.fromCurrent()) && firstIsDrive) {
+            state.path.add(baseSegments[0])
+        }
+    }
+
+    /**
+     * FILE_HOST (§8.3 [PARSE-37]; WHATWG file-host state), forward-scanning.
+     *
+     * Scans to the first `/`, `\`, `?`, `#`, or EOF; a Windows-drive-letter buffer is reinterpreted
+     * as a path (the pointer stays put so PATH re-reads it), an empty buffer is the empty host, and
+     * `localhost` is mapped to the empty host ([PARSE-37]).
+     */
+    internal fun fileHostState(state: UrlParserState): UrlTransition {
+        var i = state.pos
+        while (i < state.input.length && !isFileHostEnd(state.input[i])) {
+            i++
+        }
+        val buffer = state.input.substring(state.pos, i)
+        return resolveFileHost(state, buffer, i)
+    }
+
+    /** True when [ch] ends a file-host scan (`/`, `\`, `?`, `#`) ([PARSE-37]). */
+    private fun isFileHostEnd(ch: Char): Boolean = ch == '/' || ch == '\\' || ch == '?' || ch == '#'
+
+    /** Classifies the file-host [buffer]: drive letter, empty host, or a parsed (localhost→empty) host. */
+    private fun resolveFileHost(
+        state: UrlParserState,
+        buffer: String,
+        end: Int,
+    ): UrlTransition =
+        when {
+            isWindowsDriveLetter(buffer) -> UrlTransition.Reconsume(UrlState.PATH)
+            buffer.isEmpty() -> {
+                state.host = Host.Empty
+                state.pos = end
+                UrlTransition.Reconsume(UrlState.PATH_START)
+            }
+            else -> parseFileHost(state, buffer, end)
+        }
+
+    /** Parses a non-empty file host and maps `localhost` to the empty host ([PARSE-37]). */
+    private fun parseFileHost(
+        state: UrlParserState,
+        buffer: String,
+        end: Int,
+    ): UrlTransition =
+        when (val host = HostParser.parse(buffer, ParseProfile.URL, isSpecial = true, isFile = true)) {
+            is ParseResult.Err -> UrlTransition.Fail(host.error)
+            is ParseResult.Ok -> {
+                state.host = if (host.value == Host.RegName(LOCALHOST)) Host.Empty else host.value
+                state.pos = end
+                UrlTransition.Reconsume(UrlState.PATH_START)
+            }
+        }
+}
