@@ -21,6 +21,7 @@ It is written in pure Kotlin with no `expect`/`actual` and no platform fallbacks
 
 Correctness is the contract. The engine is validated against the Web Platform Tests (`urltestdata.json`), the IDNA conformance corpora (`IdnaTestV2`, `toascii`), Unicode's `NormalizationTest.txt`, and the RFC 3986 §5.4 resolution tables, behind a checked-in known-failures baseline that fails the build on any regression.
 
+> [!NOTE]
 > Early development: version `0.1.0-SNAPSHOT`. kuri is pre-release and not yet published to any repository, and the public API may still change. The normative behavior is specified in [`docs/SPEC.md`](docs/SPEC.md).
 
 ## Contents
