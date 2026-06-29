@@ -80,12 +80,9 @@ From Java:
 import org.dexpace.kuri.Url;
 
 Url url = Url.parse("https://example.com/a?b=1").getOrThrow();
-url.
 
-scheme();    // "https"
-url.
-
-hostName();  // "example.com"
+url.scheme();    // "https"
+url.hostName();  // "example.com"
 ```
 
 ## Two models, one engine
