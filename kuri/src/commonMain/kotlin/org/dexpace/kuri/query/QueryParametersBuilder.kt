@@ -21,7 +21,7 @@ private const val SURROGATE_SHIFT: Int = 10
  * via [build] (SPEC §10.3.2). Name matching is byte-exact and case-sensitive throughout
  * ([QUERY-5]); a `null` value is the no-`=` sentinel, an empty string the `=`-with-empty sentinel.
  */
-internal class QueryParametersBuilder internal constructor(
+public class QueryParametersBuilder internal constructor(
     initial: List<Pair<String, String?>> = emptyList(),
 ) {
     /** The working pair list; copied from [initial] so the source snapshot is never mutated. */
@@ -30,8 +30,11 @@ internal class QueryParametersBuilder internal constructor(
     /**
      * Appends `(name, value)` to the end without deduplicating (SPEC §10.3.2, [QUERY-15]). A `null`
      * value is retained as the no-`=` sentinel; an empty string as the `=`-with-empty sentinel.
+     *
+     * @param name the decoded name to append.
+     * @param value the decoded value, or `null` for a name with no `=`.
      */
-    internal fun add(
+    public fun add(
         name: String,
         value: String?,
     ): QueryParametersBuilder {
@@ -44,8 +47,11 @@ internal class QueryParametersBuilder internal constructor(
      * Replace-first / remove-rest / keep-position (SPEC §10.3.2, [QUERY-16]): replaces the value of
      * the **first** pair named [name] in place, removes every later pair named [name], and appends
      * `(name, value)` when no pair has the name.
+     *
+     * @param name the decoded name to set, matched case-sensitively.
+     * @param value the decoded value, or `null` for a name with no `=`.
      */
-    internal fun set(
+    public fun set(
         name: String,
         value: String?,
     ): QueryParametersBuilder {
@@ -63,8 +69,10 @@ internal class QueryParametersBuilder internal constructor(
     /**
      * Removes every pair named [name], preserving the order of the rest (SPEC §10.3.2, [QUERY-17]).
      * A no-op when no pair matches.
+     *
+     * @param name the decoded name whose pairs are removed, matched case-sensitively.
      */
-    internal fun removeAll(name: String): QueryParametersBuilder {
+    public fun removeAll(name: String): QueryParametersBuilder {
         pairs.removeAll { it.first == name }
         check(pairs.none { it.first == name }) { "removeAll must drop every pair named $name" }
         return this
@@ -77,15 +85,19 @@ internal class QueryParametersBuilder internal constructor(
      * BMP character rather than by raw UTF-16 unit. Equal names keep their pre-sort order, so the
      * relative order of their values is preserved; values are never compared.
      */
-    internal fun sort(): QueryParametersBuilder {
+    public fun sort(): QueryParametersBuilder {
         val before = pairs.size
         pairs.sortWith { left, right -> compareByCodePoint(left.first, right.first) }
         check(pairs.size == before) { "sort must not change the pair count" }
         return this
     }
 
-    /** Materializes an immutable [QueryParameters] from the current pairs (SPEC §10.3.2). */
-    internal fun build(): QueryParameters = QueryParameters(pairs.toList())
+    /**
+     * Materializes an immutable [QueryParameters] from the current pairs (SPEC §10.3.2).
+     *
+     * @return a snapshot of the accumulated pairs; later mutation of this builder does not affect it.
+     */
+    public fun build(): QueryParameters = QueryParameters(pairs.toList())
 
     /** Removes pairs named [name] strictly after [firstIndex], scanning back to front ([QUERY-16]). */
     private fun removeAfter(
@@ -101,8 +113,12 @@ internal class QueryParametersBuilder internal constructor(
     }
 }
 
-/** A pre-filled [QueryParametersBuilder] over this snapshot's pairs (SPEC §10.3.2, [QUERY-19]). */
-internal fun QueryParameters.newBuilder(): QueryParametersBuilder = QueryParametersBuilder(entries)
+/**
+ * A pre-filled [QueryParametersBuilder] over this snapshot's pairs (SPEC §10.3.2, [QUERY-19]).
+ *
+ * @return a builder seeded with this snapshot's pairs, so an unmodified `build()` reproduces it.
+ */
+public fun QueryParameters.newBuilder(): QueryParametersBuilder = QueryParametersBuilder(entries)
 
 /**
  * Compares [left] and [right] by Unicode code point sequence, surrogate-aware ([QUERY-18]).

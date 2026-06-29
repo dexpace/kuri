@@ -13,7 +13,7 @@ package org.dexpace.kuri.error
  * ([ERR-11]). The set is `sealed`/closed so a `when` over it is exhaustive without
  * an `else` and adding a cause is an intentional, reviewable change.
  */
-internal enum class HostError {
+public enum class HostError {
     /** UTS-46 ToASCII/ToUnicode produced an error (§7.4 IDNA pipeline). */
     IdnaFailed,
 

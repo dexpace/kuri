@@ -22,7 +22,7 @@ package org.dexpace.kuri.error
  * metadata from §12.3 is carried by the parser-side record that wraps this kind;
  * this enum is just the closed classification.
  */
-internal enum class ValidationError {
+public enum class ValidationError {
     /** An ASCII tab/LF/CR (U+0009/U+000A/U+000D) was stripped from the input ([ERR-19]). */
     TAB_OR_NEWLINE_REMOVED,
 
