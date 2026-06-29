@@ -17,9 +17,6 @@
 
 kuri parses, builds, normalizes, and serializes URIs and URLs as two value types over one engine: `Uri` (**RFC 3986**, the governing authority) and `Url` (the **WHATWG URL Standard**), with each web-platform deviation documented. It is pure Kotlin Multiplatform: Punycode, UTS-46 (Unicode 16.0), and NFC are bundled in Kotlin, so behavior is identical across the JVM, JavaScript, WebAssembly, and native, with Java interop on the JVM.
 
-> [!NOTE]
-> Early development: kuri is a pre-release `0.1.0-SNAPSHOT`, and the public API may still change before `1.0.0`. The normative behavior is specified in [`docs/SPEC.md`](docs/SPEC.md).
-
 ## Contents
 
 [Installation](#installation) ·
