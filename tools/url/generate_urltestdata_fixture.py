@@ -121,6 +121,7 @@ def case_lines(case):
     lines.append("                failure = %s," % ("true" if case.get("failure") else "false"))
     for field in EXPECTED_FIELDS:
         lines += field_lines(field, "" if case.get("failure") else case.get(field, ""), 16)
+    lines += field_lines("href", "" if case.get("failure") else case.get("href", ""), 16)
     lines.append("            ),")
     return lines
 
@@ -143,7 +144,8 @@ def emit_data_class():
         " * A [failure] case asserts the parse must fail; otherwise the expected getter strings",
         " * (`protocol` = scheme + `:`, `hostname` = serialized host, `port` = string with `\"\"`",
         " * for none, `search`/`hash` including their leading `?`/`#`) are compared against the",
-        " * parsed [org.dexpace.kuri.parser.ParsedComponents]. [base] is the optional base URL the",
+        " * parsed [org.dexpace.kuri.parser.ParsedComponents]. [href] is the full WHATWG-serialized",
+        " * URL (the parse -> serialize round-trip target). [base] is the optional base URL the",
         " * input resolves against (`null` for an absolute parse).",
         " */",
         "internal data class UrlCase(",
@@ -158,6 +160,7 @@ def emit_data_class():
         "    val pathname: String,",
         "    val search: String,",
         "    val hash: String,",
+        "    val href: String,",
         ")",
     ]
 
