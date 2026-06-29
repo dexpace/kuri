@@ -1,3 +1,12 @@
+public final class org/dexpace/kuri/JavaNetInteropKt {
+	public static final fun toJavaUri (Lorg/dexpace/kuri/Uri;)Ljava/net/URI;
+	public static final fun toJavaUri (Lorg/dexpace/kuri/Url;)Ljava/net/URI;
+	public static final fun toJavaUrl (Lorg/dexpace/kuri/Url;)Ljava/net/URL;
+	public static final fun toKuriUri (Ljava/net/URI;)Lorg/dexpace/kuri/error/ParseResult;
+	public static final fun toKuriUrl (Ljava/net/URI;)Lorg/dexpace/kuri/error/ParseResult;
+	public static final fun toKuriUrl (Ljava/net/URL;)Lorg/dexpace/kuri/error/ParseResult;
+}
+
 public final class org/dexpace/kuri/Kuri {
 	public static final field INSTANCE Lorg/dexpace/kuri/Kuri;
 	public static final field VERSION Ljava/lang/String;
