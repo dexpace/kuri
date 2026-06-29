@@ -1,11 +1,9 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/kuri-dark.svg">
-    <img alt="kuri" src="docs/assets/kuri-light.svg" width="420">
+    <img alt="kuri" src="docs/assets/kuri-light.svg" width="1000">
   </picture>
 </p>
-
-<h1 align="center">kuri</h1>
 
 <p align="center">A standards-faithful URI and URL library for Kotlin and Java.</p>
 
