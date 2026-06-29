@@ -4,6 +4,51 @@ public final class org/dexpace/kuri/Kuri {
 	public final fun version ()Ljava/lang/String;
 }
 
+public final class org/dexpace/kuri/Uri {
+	public static final field Companion Lorg/dexpace/kuri/Uri$Companion;
+	public final fun authority ()Ljava/lang/String;
+	public static final fun canParse (Ljava/lang/String;)Z
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun fragment ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun host ()Lorg/dexpace/kuri/host/Host;
+	public final fun hostName ()Ljava/lang/String;
+	public final fun newBuilder ()Lorg/dexpace/kuri/Uri$Builder;
+	public final fun normalized ()Lorg/dexpace/kuri/Uri;
+	public final fun normalizedEquals (Lorg/dexpace/kuri/Uri;)Z
+	public static final fun parse (Ljava/lang/String;)Lorg/dexpace/kuri/error/ParseResult;
+	public static final fun parseOrNull (Ljava/lang/String;)Lorg/dexpace/kuri/Uri;
+	public final fun path ()Ljava/lang/String;
+	public final fun pathSegments ()Ljava/util/List;
+	public final fun port ()Ljava/lang/Integer;
+	public final fun query ()Ljava/lang/String;
+	public final fun resolve (Ljava/lang/String;)Lorg/dexpace/kuri/error/ParseResult;
+	public final fun scheme ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+	public final fun toUrl ()Lorg/dexpace/kuri/error/ParseResult;
+	public final fun uriString ()Ljava/lang/String;
+	public final fun userInfo ()Ljava/lang/String;
+}
+
+public final class org/dexpace/kuri/Uri$Builder {
+	public fun <init> ()V
+	public final fun build ()Lorg/dexpace/kuri/Uri;
+	public final fun encodedPath (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun fragment (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun host (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun path (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun port (Ljava/lang/Integer;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun query (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun scheme (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun userInfo (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+}
+
+public final class org/dexpace/kuri/Uri$Companion {
+	public final fun canParse (Ljava/lang/String;)Z
+	public final fun parse (Ljava/lang/String;)Lorg/dexpace/kuri/error/ParseResult;
+	public final fun parseOrNull (Ljava/lang/String;)Lorg/dexpace/kuri/Uri;
+}
+
 public final class org/dexpace/kuri/Url {
 	public static final field Companion Lorg/dexpace/kuri/Url$Companion;
 	public final fun authority ()Ljava/lang/String;
@@ -30,6 +75,7 @@ public final class org/dexpace/kuri/Url {
 	public final fun resolve (Ljava/lang/String;)Lorg/dexpace/kuri/error/ParseResult;
 	public final fun scheme ()Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
+	public final fun toUri ()Lorg/dexpace/kuri/Uri;
 	public final fun username ()Ljava/lang/String;
 }
 

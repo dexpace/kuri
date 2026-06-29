@@ -8,6 +8,7 @@ import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriSyntaxException
 import org.dexpace.kuri.error.fold
 import org.dexpace.kuri.error.getOrNull
+import org.dexpace.kuri.error.getOrThrow
 import org.dexpace.kuri.error.isOk
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.Host
@@ -169,6 +170,18 @@ public class Url internal constructor(
      * @return [ParseResult.Ok] with the resolved [Url], or [ParseResult.Err] when resolution fails.
      */
     public fun resolve(reference: String): ParseResult<Url> = parse(reference, this)
+
+    /**
+     * Converts this WHATWG URL to a generic RFC 3986 [Uri] (SPEC §11.5; profile bridge).
+     *
+     * This is near-lossless and does not fail: a canonical WHATWG [href] is always a valid RFC 3986
+     * URI, so the conversion re-parses [href] under the `Uri` profile and returns the value directly
+     * rather than a [ParseResult]. The resulting [Uri] preserves this URL's canonical form (the
+     * WHATWG canonicalization has already been applied), so it carries a non-null `scheme`.
+     *
+     * @return the equivalent generic [Uri].
+     */
+    public fun toUri(): Uri = Uri.parse(href).getOrThrow()
 
     /** The canonical [href]; a parsed `Url` round-trips through `toString` then [parse] ([NORM-25]). */
     override fun toString(): String = href
