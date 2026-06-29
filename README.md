@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/kuri-dark.svg">
-    <img alt="kuri" src="docs/assets/kuri-light.svg" width="1000">
+    <img alt="kuri" src="docs/assets/kuri-light.svg" width="600">
   </picture>
 </p>
 
