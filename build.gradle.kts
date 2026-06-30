@@ -8,11 +8,11 @@ plugins {
 
 // --- Fixture & lookup-table code generation ----------------------------------
 // Thin Gradle wrappers over the Go code generators under tools/, so every fixture and lookup
-// table regenerates via `./gradlew` rather than invoking the Go tool by hand. Each task runs a
-// `tools/cmd/codegen` subcommand, which reads reference corpora vendored under tools/ and (for the
-// IDNA tables) the untracked Unicode/WPT data under .claude/references/. They are developer
-// tooling: grouped under "codegen" and deliberately NOT wired into `check`/`build`. Override the
-// Go toolchain with `-Pgo=/path/to/go`.
+// table regenerates via `./gradlew` rather than invoking the Go tool by hand. Each task runs the
+// `codegen` command (tools/main.go) via `go run . <name>` in tools/, which reads reference corpora
+// vendored under tools/ and (for the IDNA tables) the untracked Unicode/WPT data under
+// .claude/references/. They are developer tooling: grouped under "codegen" and deliberately NOT
+// wired into `check`/`build`. Override the Go toolchain with `-Pgo=/path/to/go`.
 val goTool: String = (findProperty("go") as String?) ?: "go"
 val toolsDir = file("tools")
 

@@ -146,8 +146,8 @@ func KotlinExprUTF16(units []uint16) string {
 // MaxCols, otherwise wraps the literal using the URL generator's two-tier
 // indentation: the first operand at indent+4 and continuation operands at
 // indent+8. It is shorthand for FieldLinesIndented with those offsets.
-func FieldLines(name, value string, indent int) []string {
-	return FieldLinesIndented(name, value, indent, indent+4, indent+8)
+func FieldLines(name string, units []uint16, indent int) []string {
+	return FieldLinesIndented(name, units, indent, indent+4, indent+8)
 }
 
 // FieldLinesIndented is the general column-aware field emitter. When the single
@@ -161,14 +161,24 @@ func FieldLines(name, value string, indent int) []string {
 // firstIndent and contIndent are parameters because the sibling generators wrap
 // differently: the URL generator uses indent+4 then indent+8, whereas the idna
 // conformance generator uses a single continuation indent (indent+4 for both).
-func FieldLinesIndented(name, value string, indent, firstIndent, contIndent int) []string {
+//
+// The value is a UTF-16 unit sequence so an unpaired surrogate survives. Such a
+// value is emitted as a runtime `"a" + Char(0xHHHH) + "b"` expression on a single
+// line (via KotlinExprUTF16), because a lone surrogate in a string literal does
+// not round-trip through Kotlin/JS compilation of the generated fixture. An
+// over-long lone-surrogate line trips ktlint loudly rather than silently folding
+// the surrogate to '?'.
+func FieldLinesIndented(name string, units []uint16, indent, firstIndent, contIndent int) []string {
 	pad := strings.Repeat(" ", indent)
-	single := pad + name + " = " + KotlinString(value) + ","
+	if HasLoneSurrogate(units) {
+		return []string{pad + name + " = " + KotlinExprUTF16(units) + ","}
+	}
+	single := pad + name + " = " + KotlinStringUTF16(units) + ","
 	if len(single) <= MaxCols {
 		return []string{single}
 	}
 	budget := MaxCols - contIndent - len(" +")
-	segments := packSegments(EscapeTokens(value), budget)
+	segments := packSegments(EscapeTokensUTF16(units), budget)
 	firstPad := strings.Repeat(" ", firstIndent)
 	contPad := strings.Repeat(" ", contIndent)
 	lines := make([]string, 0, len(segments)+1)
@@ -231,6 +241,60 @@ func FileSuppress(names ...string) string {
 		quoted[i] = `"` + name + `"`
 	}
 	return "@file:Suppress(" + strings.Join(quoted, ", ") + ")"
+}
+
+// bulkDataComments are the two header comment lines the chunked-builder fixtures
+// share, explaining why the generated file deliberately trips detekt's size
+// heuristics. The nfc-tables generator uses a slightly different wording (string
+// tables rather than builders) and supplies its own.
+var bulkDataComments = []string{
+	"// Generated bulk data, not hand-written logic: the chunked builders intentionally exceed",
+	"// detekt's method/class-size heuristics to stay within the 64 KB JVM method limit.",
+}
+
+// FileSuppressBlock renders a generated-file header block: the given comment
+// lines, the `@file:Suppress(...)` annotation for names, then a trailing blank
+// line. The comment lines vary between generators, so the caller supplies them.
+func FileSuppressBlock(comments []string, names ...string) []string {
+	block := make([]string, 0, len(comments)+2)
+	block = append(block, comments...)
+	return append(block, FileSuppress(names...), "")
+}
+
+// PartSumExpression renders the `part0() +\n            part1() + ... partN()`
+// accessor body shared by the chunked fixture generators: the caller emits the
+// first term at 8 spaces and each subsequent term wraps to its own line at 12
+// spaces with a trailing " +". A single part collapses to "part0()".
+func PartSumExpression(count int) string {
+	terms := make([]string, count)
+	for i := range terms {
+		terms[i] = fmt.Sprintf("part%d()", i)
+	}
+	return strings.Join(terms, " +\n            ")
+}
+
+// ChunkBlobByEscape slices blob into chunks whose escaped width stays within
+// budget. It iterates one rune at a time, escaping each via escape, and greedily
+// packs the escaped units, breaking before a unit that would overflow a non-empty
+// chunk so an escape sequence is never split across chunks.
+func ChunkBlobByEscape(blob string, budget int, escape func(rune) string) []string {
+	var chunks []string
+	var current strings.Builder
+	width := 0
+	for _, point := range blob {
+		escaped := escape(point)
+		if width+len(escaped) > budget && current.Len() > 0 {
+			chunks = append(chunks, current.String())
+			current.Reset()
+			width = 0
+		}
+		current.WriteString(escaped)
+		width += len(escaped)
+	}
+	if current.Len() > 0 {
+		chunks = append(chunks, current.String())
+	}
+	return chunks
 }
 
 // JoinLines joins lines with newlines and appends exactly one trailing newline,

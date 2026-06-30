@@ -24,6 +24,16 @@ const hexRadix = 16
 // which fits comfortably in 32 bits and mirrors the Python ports' int(tok, 16).
 const scalarBitSize = 32
 
+// Unicode scalar-value bounds: a valid scalar lies in [0, maxScalar] and excludes
+// the UTF-16 surrogate block [firstSurrogate, lastSurrogate]. ScalarsToString
+// rejects anything outside this set so an invalid code point can never silently
+// become U+FFFD via WriteRune.
+const (
+	maxScalar      = 0x10FFFF
+	firstSurrogate = 0xD800
+	lastSurrogate  = 0xDFFF
+)
+
 // rangeSeparator delimits the inclusive bounds of a UCD code-point range field,
 // e.g. the ".." in "0000..002C".
 const rangeSeparator = ".."
@@ -124,13 +134,17 @@ func exclusionsPath() (string, error) {
 // Whitespace handling matches Python's no-argument str.split: runs of whitespace
 // are collapsed and empty tokens dropped, so an empty or all-whitespace field
 // yields the empty string. Tokens are bare hex (no "0x" prefix); a token that is
-// not valid hex is returned as an error rather than silently skipped.
+// not valid hex, out of range, or a surrogate code point is returned as an error
+// rather than silently skipped or folded to U+FFFD by WriteRune.
 func ScalarsToString(field string) (string, error) {
 	var builder strings.Builder
 	for _, token := range strings.Fields(field) {
 		code, err := strconv.ParseInt(token, hexRadix, scalarBitSize)
 		if err != nil {
 			return "", fmt.Errorf("ucd: parsing hex scalar %q: %w", token, err)
+		}
+		if code > maxScalar || (code >= firstSurrogate && code <= lastSurrogate) {
+			return "", fmt.Errorf("ucd: %q is not a valid Unicode scalar value", token)
 		}
 		builder.WriteRune(rune(code))
 	}

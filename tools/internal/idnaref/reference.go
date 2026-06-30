@@ -9,6 +9,7 @@
 package idnaref
 
 import (
+	"slices"
 	"unicode/utf16"
 
 	"github.com/dexpace/kuri/tools/internal/ucd"
@@ -63,7 +64,7 @@ func (r *Reference) CaseFails(input, expected []uint16) bool {
 	if expected == nil {
 		return ok
 	}
-	return !ok || !equalUnits(result, expected)
+	return !ok || !slices.Equal(result, expected)
 }
 
 // domainToAscii ports Idna.domainToAscii: map -> NFC -> split labels -> per-label
@@ -192,19 +193,6 @@ func hasACEPrefix(label []uint16) bool {
 	}
 	for i := 0; i < acePrefixLength; i++ {
 		if label[i] != acePrefix[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// equalUnits reports whether two UTF-16 sequences are identical unit-for-unit.
-func equalUnits(a, b []uint16) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
 			return false
 		}
 	}

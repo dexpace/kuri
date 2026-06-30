@@ -1,7 +1,7 @@
 // Copyright (c) 2026 dexpace and Omar Aljarrah
 // SPDX-License-Identifier: MIT
 
-// The nfc-tables generator ports tools/idna/generate_nfc_tables.py: it renders the
+// The nfc-tables generator ports the former Python generator: it renders the
 // combining-class, canonical-decomposition, and UAX #15 primary-composite maps
 // (loaded by ucd from the vendored UnicodeData.txt and CompositionExclusions.txt)
 // into the Kotlin NfcData.kt fixture byte-for-byte. Three compact, chunked string
@@ -39,7 +39,7 @@ func generateNfcTables() (string, error) {
 // encodeCCC renders the combining-class blob: "<cpHex>:<cccHex>" records sorted
 // by integer code point and joined by ';'.
 func encodeCCC(ccc map[int]int) string {
-	keys := sortedIntMapKeys(ccc)
+	keys := sortedKeys(ccc)
 	records := make([]string, len(keys))
 	for i, cp := range keys {
 		records[i] = hx(cp) + ":" + hx(ccc[cp])
@@ -89,19 +89,18 @@ func encodeComposition(composition map[[2]int]int) string {
 // fixed order (CCC, decomposition, composition), terminated by exactly one
 // newline. The structure mirrors the Python render_kotlin exactly.
 func emitKotlin(cccBlob, decompBlob, compBlob string) string {
-	lines := []string{
-		LicenseHeader,
-		"",
+	lines := []string{LicenseHeader, ""}
+	lines = append(lines, FileSuppressBlock([]string{
 		"// Generated bulk data, not hand-written logic: the chunked string tables intentionally",
 		"// exceed detekt's size heuristics to stay within the 64 KB JVM string-constant limit.",
-		FileSuppress("MatchingDeclarationName"),
-		"",
+	}, "MatchingDeclarationName")...)
+	lines = append(lines,
 		"package org.dexpace.kuri.idna",
 		"",
 		"// Compact, generated NFC table data (Unicode 16.0), derived from UnicodeData.txt and",
-		"// CompositionExclusions.txt by tools/idna/generate_nfc_tables.py. Do not edit by hand;",
+		"// CompositionExclusions.txt by ./gradlew generateNfcTables. Do not edit by hand;",
 		"// re-run the generator instead. See Normalizer for the decoder and the UAX #15 contract.",
-	}
+	)
 	lines = append(lines, renderVal(
 		"NFC_CCC_CHUNKS",
 		"Canonical Combining Class records `cpHex:cccHex` (non-zero only), joined by ';'.",
@@ -154,20 +153,9 @@ func hx(value int) string {
 	return strconv.FormatInt(int64(value), hexRadix)
 }
 
-// sortedKeys returns the keys of a decomposition map sorted ascending by integer
-// code point.
-func sortedKeys(m map[int][]int) []int {
-	keys := make([]int, 0, len(m))
-	for key := range m {
-		keys = append(keys, key)
-	}
-	sort.Ints(keys)
-	return keys
-}
-
-// sortedIntMapKeys returns the keys of an int-valued map sorted ascending by
-// integer code point.
-func sortedIntMapKeys(m map[int]int) []int {
+// sortedKeys returns the integer code-point keys of m sorted ascending,
+// regardless of the map's value type (combining classes or decomposition lists).
+func sortedKeys[V any](m map[int]V) []int {
 	keys := make([]int, 0, len(m))
 	for key := range m {
 		keys = append(keys, key)
