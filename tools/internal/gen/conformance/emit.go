@@ -64,8 +64,10 @@ func caseLines(c idnaCase) []string {
 		expected = kotlinlit.KotlinStringUTF16(c.expected)
 	}
 	single := fmt.Sprintf("%sIdnaCase(%s, %s),",
-		strings.Repeat(" ", caseBaseIndent), kotlinlit.KotlinStringUTF16(c.input), expected)
-	if len(single) <= kotlinlit.MaxCols {
+		strings.Repeat(" ", caseBaseIndent), kotlinlit.KotlinExprUTF16(c.input), expected)
+	// A lone-surrogate input is emitted as a runtime concatenation (it cannot survive
+	// as a string literal on Kotlin/JS); such inputs are short, so keep them one-line.
+	if len(single) <= kotlinlit.MaxCols || kotlinlit.HasLoneSurrogate(c.input) {
 		return []string{single}
 	}
 	lines := []string{strings.Repeat(" ", caseBaseIndent) + "IdnaCase("}

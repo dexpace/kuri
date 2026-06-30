@@ -90,6 +90,58 @@ func isHighSurrogate(u uint16) bool { return u >= 0xD800 && u <= 0xDBFF }
 // isLowSurrogate reports whether u is a UTF-16 low (trailing) surrogate.
 func isLowSurrogate(u uint16) bool { return u >= 0xDC00 && u <= 0xDFFF }
 
+// HasLoneSurrogate reports whether units contains an unpaired surrogate code
+// unit. A lone surrogate cannot survive as a Kotlin string literal in a large
+// generated Kotlin/JS fixture (the compiler folds it to '?'), so callers must
+// emit such a value via a runtime expression instead of a literal.
+func HasLoneSurrogate(units []uint16) bool {
+	for i := 0; i < len(units); i++ {
+		if isHighSurrogate(units[i]) && i+1 < len(units) && isLowSurrogate(units[i+1]) {
+			i++ // a valid high+low pair is fine
+			continue
+		}
+		if isHighSurrogate(units[i]) || isLowSurrogate(units[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+// KotlinExprUTF16 returns a Kotlin String expression for units. With no lone
+// surrogate it is the plain quoted literal (identical to KotlinStringUTF16). When
+// a lone surrogate is present it is a runtime concatenation that splices each
+// unpaired surrogate as Char(0xHHHH) -- e.g. `"a" + Char(0xd900) + "z"` -- because
+// a lone surrogate in a string literal does not round-trip through Kotlin/JS
+// compilation of the generated fixture, whereas a runtime Char does.
+func KotlinExprUTF16(units []uint16) string {
+	if !HasLoneSurrogate(units) {
+		return KotlinStringUTF16(units)
+	}
+	var parts []string
+	var segment []uint16
+	flush := func() {
+		if len(segment) > 0 {
+			parts = append(parts, KotlinStringUTF16(segment))
+			segment = nil
+		}
+	}
+	for i := 0; i < len(units); i++ {
+		if isHighSurrogate(units[i]) && i+1 < len(units) && isLowSurrogate(units[i+1]) {
+			segment = append(segment, units[i], units[i+1])
+			i++
+			continue
+		}
+		if isHighSurrogate(units[i]) || isLowSurrogate(units[i]) {
+			flush()
+			parts = append(parts, fmt.Sprintf("Char(0x%04x)", units[i]))
+			continue
+		}
+		segment = append(segment, units[i])
+	}
+	flush()
+	return strings.Join(parts, " + ")
+}
+
 // FieldLines emits `<indent>name = "<value>",` on one line when it fits within
 // MaxCols, otherwise wraps the literal using the URL generator's two-tier
 // indentation: the first operand at indent+4 and continuation operands at
