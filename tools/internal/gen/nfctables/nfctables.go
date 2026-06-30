@@ -124,6 +124,38 @@ func Run(stdout bool) error {
 	return os.WriteFile(out, []byte(source), 0o644)
 }
 
+// LoadNfc parses the vendored UCD inputs and returns the combining-class,
+// canonical-decomposition, and UAX #15 primary-composite maps (Unicode 16.0) —
+// the same data Normalizer decodes at runtime, so the conformance reference
+// reproduces NFC exactly (verified byte-for-byte against NfcData.kt).
+func LoadNfc() (ccc map[int]int, decomposition map[int][]int, composition map[[2]int]int, err error) {
+	dataPath, err := unicodeDataPath()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	dataBytes, err := os.ReadFile(dataPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	ccc, decomposition, err = loadUnicodeData(dataBytes)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	exclPath, err := exclusionsPath()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	exclBytes, err := os.ReadFile(exclPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	exclusions, err := loadExclusions(exclBytes)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return ccc, decomposition, buildComposition(ccc, decomposition, exclusions), nil
+}
+
 // loadUnicodeData parses UnicodeData.txt into the non-zero combining-class map
 // and the canonical-only decomposition map, mirroring the Python load_unicode_data
 // exactly. Lines are split only on '\n' (Python line.rstrip("\n")), then on ';'.

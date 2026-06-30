@@ -69,6 +69,21 @@ func KotlinString(value string) string {
 	return `"` + strings.Join(EscapeTokens(value), "") + `"`
 }
 
+// KotlinStringUTF16 returns the full double-quoted Kotlin literal for a sequence
+// of UTF-16 code units, preserving lone surrogates (escaped as a single \uHHHH).
+// Use this over KotlinString when the value may carry an unpaired surrogate that
+// a round-trip through Go runes would replace with U+FFFD.
+func KotlinStringUTF16(units []uint16) string {
+	return `"` + strings.Join(EscapeTokensUTF16(units), "") + `"`
+}
+
+// PackSegments greedily groups escape tokens into quoted-literal segments, each
+// kept within budget and never splitting a token. It is the wrapping primitive
+// shared by the column-aware field emitters and the conformance literal wrapper.
+func PackSegments(tokens []string, budget int) []string {
+	return packSegments(tokens, budget)
+}
+
 // isHighSurrogate reports whether u is a UTF-16 high (leading) surrogate.
 func isHighSurrogate(u uint16) bool { return u >= 0xD800 && u <= 0xDBFF }
 

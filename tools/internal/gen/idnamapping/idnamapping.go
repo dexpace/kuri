@@ -158,6 +158,48 @@ func Run(stdout bool) error {
 	return os.WriteFile(out, []byte(source), 0o644)
 }
 
+// Range is the exported form of one merged inclusive code-point range: its
+// canonicalized UTS-46 kind ("V", "I", "D", "M", "Y") and, for "M", the mapped
+// replacement. It lets the conformance reference reproduce IdnaMappingTable.map
+// over the same Unicode 16.0 data this package encodes into the runtime table
+// (verified byte-for-byte against IdnaMappingTableData.kt).
+type Range struct {
+	Start       int
+	End         int
+	Kind        string
+	Replacement string
+}
+
+// LoadTable parses the vendored IdnaMappingTable.txt and returns the merged,
+// gap-free ranges covering 0..0x10FFFF in start order — the same data the
+// generated runtime table decodes, so a binary search over the starts yields the
+// identical mapping outcome the kuri runtime computes.
+func LoadTable() ([]Range, error) {
+	path, err := inputPath()
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	ranges, err := loadRanges(data)
+	if err != nil {
+		return nil, err
+	}
+	merged := mergeAdjacent(ranges)
+	out := make([]Range, len(merged))
+	for index, current := range merged {
+		out[index] = Range{
+			Start:       current.start,
+			End:         current.end,
+			Kind:        current.kind,
+			Replacement: current.replacement,
+		}
+	}
+	return out, nil
+}
+
 // loadRanges parses every data line, sorts the ranges by start, and validates
 // that they cover 0..maxCodePoint with no gap or overlap, mirroring the Python
 // load_ranges exactly.

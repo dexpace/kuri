@@ -27,18 +27,21 @@ import (
 // generators maps a subcommand name to its generator entry point. Each entry
 // point writes its fixture (or prints it when stdout is true) and is fully
 // self-contained in its own package, so generators evolve independently.
+//
+// conformance is handled separately in run: it emits TWO files and therefore
+// accepts its own --stdout-data / --stdout-known selectors via conformance.RunCLI.
 var generators = map[string]func(stdout bool) error{
 	"url":           urlgen.Run,
 	"idna-mapping":  idnamapping.Run,
 	"idna-validity": idnavalidity.Run,
 	"nfc-tables":    nfctables.Run,
 	"nfc-test":      nfctest.Run,
-	"conformance":   conformance.Run,
 }
 
 // usage describes the command line for error messages.
 const usage = "usage: codegen <name> [--stdout]\n" +
-	"  names: url, idna-mapping, idna-validity, nfc-tables, nfc-test, conformance"
+	"  names: url, idna-mapping, idna-validity, nfc-tables, nfc-test, conformance\n" +
+	"  conformance also accepts --stdout-data / --stdout-known to print one of its two files"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -54,6 +57,9 @@ func run(args []string) error {
 		return fmt.Errorf(usage)
 	}
 	name := args[0]
+	if name == "conformance" {
+		return conformance.RunCLI(args[1:])
+	}
 	gen, ok := generators[name]
 	if !ok {
 		return fmt.Errorf("codegen: unknown generator %q\n%s", name, usage)

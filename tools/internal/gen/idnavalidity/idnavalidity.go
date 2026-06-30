@@ -179,6 +179,70 @@ func Run(stdout bool) error {
 	return os.WriteFile(out, []byte(source), 0o644)
 }
 
+// PlainRange is the exported form of one merged inclusive Mark/Virama range.
+type PlainRange struct {
+	Start int
+	End   int
+}
+
+// TypedRange is the exported form of one merged Joining_Type range, carrying its
+// L/D/R/T type letter.
+type TypedRange struct {
+	Start int
+	End   int
+	Type  string
+}
+
+// LoadValidity parses the vendored UCD inputs and returns the merged Mark,
+// Virama, and Joining_Type ranges (Unicode 16.0) in start order — the same data
+// IdnaValidity decodes at runtime, so the conformance reference reproduces the
+// leading-combining-mark and ContextJ checks exactly.
+func LoadValidity() (marks, viramas []PlainRange, joining []TypedRange, err error) {
+	unicodePath, err := unicodeDataPath()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	unicodeData, err := os.ReadFile(unicodePath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	rawMarks, rawViramas, err := loadUnicodeData(unicodeData)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	joinPath, err := joiningPath()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	joinData, err := os.ReadFile(joinPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	rawJoining, err := loadJoining(joinData)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return toPlain(mergeSetRanges(rawMarks)), toPlain(mergeSetRanges(rawViramas)), toTyped(mergeTypedRanges(rawJoining)), nil
+}
+
+// toPlain converts internal plain ranges to their exported form.
+func toPlain(ranges []plainRange) []PlainRange {
+	out := make([]PlainRange, len(ranges))
+	for index, current := range ranges {
+		out[index] = PlainRange{Start: current.start, End: current.end}
+	}
+	return out
+}
+
+// toTyped converts internal typed ranges to their exported form.
+func toTyped(ranges []typedRange) []TypedRange {
+	out := make([]TypedRange, len(ranges))
+	for index, current := range ranges {
+		out[index] = TypedRange{Start: current.start, End: current.end, Type: current.jtype}
+	}
+	return out
+}
+
 // loadUnicodeData parses the Mark and Virama (start, end) ranges from
 // UnicodeData.txt, expanding <..., First>/<..., Last> blocks so the whole
 // enclosed run is covered. It mirrors the Python load_unicode_data exactly,
