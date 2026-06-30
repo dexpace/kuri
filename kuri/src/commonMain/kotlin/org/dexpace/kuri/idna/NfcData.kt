@@ -10,7 +10,7 @@
 package org.dexpace.kuri.idna
 
 // Compact, generated NFC table data (Unicode 16.0), derived from UnicodeData.txt and
-// CompositionExclusions.txt by tools/idna/generate_nfc_tables.py. Do not edit by hand;
+// CompositionExclusions.txt by ./gradlew generateNfcTables. Do not edit by hand;
 // re-run the generator instead. See Normalizer for the decoder and the UAX #15 contract.
 
 /** Canonical Combining Class records `cpHex:cccHex` (non-zero only), joined by ';'. */

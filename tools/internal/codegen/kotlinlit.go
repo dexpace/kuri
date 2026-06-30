@@ -1,0 +1,305 @@
+// Copyright (c) 2026 dexpace and Omar Aljarrah
+// SPDX-License-Identifier: MIT
+
+// The kotlinlit helpers emit ASCII-only Kotlin source fragments shared by the
+// generators: string-literal escaping, column-aware field wrapping, chunking,
+// and the boilerplate headers. Every helper produces bytes that match the Python
+// generators line-for-line so the regenerated fixtures stay byte-identical.
+
+package codegen
+
+import (
+	"fmt"
+	"strings"
+	"unicode/utf16"
+)
+
+// MaxCols is the hard column limit the generated Kotlin must respect (ktlint's
+// 120-column rule). Field wrapping keys its budget off this value.
+const MaxCols = 120
+
+// LicenseHeader is the MIT block comment that opens every generated file. It has
+// no trailing newline; the line joiner supplies the separators.
+const LicenseHeader = "/*\n" +
+	" * Copyright (c) 2026 dexpace and Omar Aljarrah\n" +
+	" * SPDX-License-Identifier: MIT\n" +
+	" */"
+
+// EscapeTokensUTF16 escapes a sequence of UTF-16 code units into ASCII-only
+// Kotlin string tokens. Each returned token is indivisible: a surrogate pair
+// becomes a single `\uHHHH\uHHHH` token so line wrapping can never split it,
+// and a lone surrogate falls through to a single `\uHHHH` escape. The escape
+// order mirrors the Python generators exactly: surrogate pair, then `"`, `\`,
+// `$`, then printable ASCII verbatim, then `\uHHHH` for everything else
+// (including tab/newline/CR). All hex is lowercase and zero-padded to 4 digits.
+func EscapeTokensUTF16(units []uint16) []string {
+	tokens := make([]string, 0, len(units))
+	for i := 0; i < len(units); i++ {
+		u := units[i]
+		if isHighSurrogate(u) && i+1 < len(units) && isLowSurrogate(units[i+1]) {
+			tokens = append(tokens, fmt.Sprintf("\\u%04x\\u%04x", u, units[i+1]))
+			i++
+			continue
+		}
+		switch {
+		case u == '"':
+			tokens = append(tokens, "\\\"")
+		case u == '\\':
+			tokens = append(tokens, "\\\\")
+		case u == '$':
+			tokens = append(tokens, "\\$")
+		case u >= 0x20 && u <= 0x7E:
+			tokens = append(tokens, string(rune(u)))
+		default:
+			tokens = append(tokens, fmt.Sprintf("\\u%04x", u))
+		}
+	}
+	return tokens
+}
+
+// EscapeTokens escapes a Go string into Kotlin string tokens by first encoding
+// it to UTF-16. encoding/json has already merged JSON surrogate pairs into
+// single runes, so this reproduces Python's per-code-point iteration.
+func EscapeTokens(value string) []string {
+	return EscapeTokensUTF16(utf16.Encode([]rune(value)))
+}
+
+// KotlinString returns the full double-quoted Kotlin literal for value.
+func KotlinString(value string) string {
+	return `"` + strings.Join(EscapeTokens(value), "") + `"`
+}
+
+// KotlinStringUTF16 returns the full double-quoted Kotlin literal for a sequence
+// of UTF-16 code units, preserving lone surrogates (escaped as a single \uHHHH).
+// Use this over KotlinString when the value may carry an unpaired surrogate that
+// a round-trip through Go runes would replace with U+FFFD.
+func KotlinStringUTF16(units []uint16) string {
+	return `"` + strings.Join(EscapeTokensUTF16(units), "") + `"`
+}
+
+// PackSegments greedily groups escape tokens into quoted-literal segments, each
+// kept within budget and never splitting a token. It is the wrapping primitive
+// shared by the column-aware field emitters and the conformance literal wrapper.
+func PackSegments(tokens []string, budget int) []string {
+	return packSegments(tokens, budget)
+}
+
+// isHighSurrogate reports whether u is a UTF-16 high (leading) surrogate.
+func isHighSurrogate(u uint16) bool { return u >= 0xD800 && u <= 0xDBFF }
+
+// isLowSurrogate reports whether u is a UTF-16 low (trailing) surrogate.
+func isLowSurrogate(u uint16) bool { return u >= 0xDC00 && u <= 0xDFFF }
+
+// HasLoneSurrogate reports whether units contains an unpaired surrogate code
+// unit. A lone surrogate cannot survive as a Kotlin string literal in a large
+// generated Kotlin/JS fixture (the compiler folds it to '?'), so callers must
+// emit such a value via a runtime expression instead of a literal.
+func HasLoneSurrogate(units []uint16) bool {
+	for i := 0; i < len(units); i++ {
+		if isHighSurrogate(units[i]) && i+1 < len(units) && isLowSurrogate(units[i+1]) {
+			i++ // a valid high+low pair is fine
+			continue
+		}
+		if isHighSurrogate(units[i]) || isLowSurrogate(units[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+// KotlinExprUTF16 returns a Kotlin String expression for units. With no lone
+// surrogate it is the plain quoted literal (identical to KotlinStringUTF16). When
+// a lone surrogate is present it is a runtime concatenation that splices each
+// unpaired surrogate as Char(0xHHHH) -- e.g. `"a" + Char(0xd900) + "z"` -- because
+// a lone surrogate in a string literal does not round-trip through Kotlin/JS
+// compilation of the generated fixture, whereas a runtime Char does.
+func KotlinExprUTF16(units []uint16) string {
+	if !HasLoneSurrogate(units) {
+		return KotlinStringUTF16(units)
+	}
+	var parts []string
+	var segment []uint16
+	flush := func() {
+		if len(segment) > 0 {
+			parts = append(parts, KotlinStringUTF16(segment))
+			segment = nil
+		}
+	}
+	for i := 0; i < len(units); i++ {
+		if isHighSurrogate(units[i]) && i+1 < len(units) && isLowSurrogate(units[i+1]) {
+			segment = append(segment, units[i], units[i+1])
+			i++
+			continue
+		}
+		if isHighSurrogate(units[i]) || isLowSurrogate(units[i]) {
+			flush()
+			parts = append(parts, fmt.Sprintf("Char(0x%04x)", units[i]))
+			continue
+		}
+		segment = append(segment, units[i])
+	}
+	flush()
+	return strings.Join(parts, " + ")
+}
+
+// FieldLines emits `<indent>name = "<value>",` on one line when it fits within
+// MaxCols, otherwise wraps the literal using the URL generator's two-tier
+// indentation: the first operand at indent+4 and continuation operands at
+// indent+8. It is shorthand for FieldLinesIndented with those offsets.
+func FieldLines(name string, units []uint16, indent int) []string {
+	return FieldLinesIndented(name, units, indent, indent+4, indent+8)
+}
+
+// FieldLinesIndented is the general column-aware field emitter. When the single
+// line `<indent>name = "<value>",` (trailing comma included) is at most MaxCols
+// it is emitted as-is. Otherwise it emits `<indent>name =`, then the value's
+// escape tokens greedily packed into quoted operands: the first operand at
+// firstIndent, the rest at contIndent. The packing budget is keyed to
+// contIndent (MaxCols - contIndent - len(" +")) and never splits a token; every
+// operand carries a " +" tail except the last, which carries ",".
+//
+// firstIndent and contIndent are parameters because the sibling generators wrap
+// differently: the URL generator uses indent+4 then indent+8, whereas the idna
+// conformance generator uses a single continuation indent (indent+4 for both).
+//
+// The value is a UTF-16 unit sequence so an unpaired surrogate survives. Such a
+// value is emitted as a runtime `"a" + Char(0xHHHH) + "b"` expression on a single
+// line (via KotlinExprUTF16), because a lone surrogate in a string literal does
+// not round-trip through Kotlin/JS compilation of the generated fixture. An
+// over-long lone-surrogate line trips ktlint loudly rather than silently folding
+// the surrogate to '?'.
+func FieldLinesIndented(name string, units []uint16, indent, firstIndent, contIndent int) []string {
+	pad := strings.Repeat(" ", indent)
+	if HasLoneSurrogate(units) {
+		return []string{pad + name + " = " + KotlinExprUTF16(units) + ","}
+	}
+	single := pad + name + " = " + KotlinStringUTF16(units) + ","
+	if len(single) <= MaxCols {
+		return []string{single}
+	}
+	budget := MaxCols - contIndent - len(" +")
+	segments := packSegments(EscapeTokensUTF16(units), budget)
+	firstPad := strings.Repeat(" ", firstIndent)
+	contPad := strings.Repeat(" ", contIndent)
+	lines := make([]string, 0, len(segments)+1)
+	lines = append(lines, pad+name+" =")
+	for index, segment := range segments {
+		head := contPad
+		if index == 0 {
+			head = firstPad
+		}
+		tail := " +"
+		if index == len(segments)-1 {
+			tail = ","
+		}
+		lines = append(lines, head+`"`+segment+`"`+tail)
+	}
+	return lines
+}
+
+// packSegments greedily groups tokens so each quoted segment stays within
+// budget, never splitting a token. A segment is flushed only when the current
+// run is non-empty and adding the next token would exceed budget, so there is
+// always at least one (possibly empty) segment.
+func packSegments(tokens []string, budget int) []string {
+	var segments []string
+	current := ""
+	for _, token := range tokens {
+		if current != "" && len(`"`+current+token+`"`) > budget {
+			segments = append(segments, current)
+			current = token
+		} else {
+			current += token
+		}
+	}
+	return append(segments, current)
+}
+
+// Chunk splits items into consecutive, order-preserving slices of at most size
+// elements. The final slice holds the remainder. A non-positive size yields a
+// single chunk holding everything, which keeps callers from looping forever.
+func Chunk[T any](items []T, size int) [][]T {
+	if size <= 0 {
+		return [][]T{items}
+	}
+	chunks := make([][]T, 0, (len(items)+size-1)/size)
+	for start := 0; start < len(items); start += size {
+		end := start + size
+		if end > len(items) {
+			end = len(items)
+		}
+		chunks = append(chunks, items[start:end])
+	}
+	return chunks
+}
+
+// FileSuppress renders a `@file:Suppress(...)` annotation with each name quoted
+// and comma-separated, matching the layout the generators emit.
+func FileSuppress(names ...string) string {
+	quoted := make([]string, len(names))
+	for i, name := range names {
+		quoted[i] = `"` + name + `"`
+	}
+	return "@file:Suppress(" + strings.Join(quoted, ", ") + ")"
+}
+
+// bulkDataComments are the two header comment lines the chunked-builder fixtures
+// share, explaining why the generated file deliberately trips detekt's size
+// heuristics. The nfc-tables generator uses a slightly different wording (string
+// tables rather than builders) and supplies its own.
+var bulkDataComments = []string{
+	"// Generated bulk data, not hand-written logic: the chunked builders intentionally exceed",
+	"// detekt's method/class-size heuristics to stay within the 64 KB JVM method limit.",
+}
+
+// FileSuppressBlock renders a generated-file header block: the given comment
+// lines, the `@file:Suppress(...)` annotation for names, then a trailing blank
+// line. The comment lines vary between generators, so the caller supplies them.
+func FileSuppressBlock(comments []string, names ...string) []string {
+	block := make([]string, 0, len(comments)+2)
+	block = append(block, comments...)
+	return append(block, FileSuppress(names...), "")
+}
+
+// PartSumExpression renders the `part0() +\n            part1() + ... partN()`
+// accessor body shared by the chunked fixture generators: the caller emits the
+// first term at 8 spaces and each subsequent term wraps to its own line at 12
+// spaces with a trailing " +". A single part collapses to "part0()".
+func PartSumExpression(count int) string {
+	terms := make([]string, count)
+	for i := range terms {
+		terms[i] = fmt.Sprintf("part%d()", i)
+	}
+	return strings.Join(terms, " +\n            ")
+}
+
+// ChunkBlobByEscape slices blob into chunks whose escaped width stays within
+// budget. It iterates one rune at a time, escaping each via escape, and greedily
+// packs the escaped units, breaking before a unit that would overflow a non-empty
+// chunk so an escape sequence is never split across chunks.
+func ChunkBlobByEscape(blob string, budget int, escape func(rune) string) []string {
+	var chunks []string
+	var current strings.Builder
+	width := 0
+	for _, point := range blob {
+		escaped := escape(point)
+		if width+len(escaped) > budget && current.Len() > 0 {
+			chunks = append(chunks, current.String())
+			current.Reset()
+			width = 0
+		}
+		current.WriteString(escaped)
+		width += len(escaped)
+	}
+	if current.Len() > 0 {
+		chunks = append(chunks, current.String())
+	}
+	return chunks
+}
+
+// JoinLines joins lines with newlines and appends exactly one trailing newline,
+// reproducing Python's `"\n".join(lines) + "\n"`. Elements may themselves span
+// multiple lines (e.g. the license header); their internal newlines are kept.
+func JoinLines(lines []string) string {
+	return strings.Join(lines, "\n") + "\n"
+}
