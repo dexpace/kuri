@@ -701,6 +701,34 @@ private object UrlConformanceCaseData {
                 href = "http://a:b@c:29/d",
             ),
             UrlCase(
+                input = "http://\u00e9@\u00e9",
+                base = null,
+                failure = false,
+                protocol = "http:",
+                username = "%C3%A9",
+                password = "",
+                hostname = "xn--9ca",
+                port = "",
+                pathname = "/",
+                search = "",
+                hash = "",
+                href = "http://%C3%A9@xn--9ca/",
+            ),
+            UrlCase(
+                input = "http://\u00e9@example.com",
+                base = null,
+                failure = false,
+                protocol = "http:",
+                username = "%C3%A9",
+                password = "",
+                hostname = "example.com",
+                port = "",
+                pathname = "/",
+                search = "",
+                hash = "",
+                href = "http://%C3%A9@example.com/",
+            ),
+            UrlCase(
                 input = "http::@c:29",
                 base = "http://example.org/foo/bar",
                 failure = false,
@@ -868,6 +896,10 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "foo://///////",
             ),
+        )
+
+    private fun part1(): List<UrlCase> =
+        listOf(
             UrlCase(
                 input = "foo://///////bar.com/",
                 base = "http://example.org/foo/bar",
@@ -896,10 +928,6 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "foo:////://///",
             ),
-        )
-
-    private fun part1(): List<UrlCase> =
-        listOf(
             UrlCase(
                 input = "c:/foo",
                 base = "http://example.org/foo/bar",
@@ -1712,6 +1740,10 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "file://server/file",
             ),
+        )
+
+    private fun part2(): List<UrlCase> =
+        listOf(
             UrlCase(
                 input = "\\\\server\\file",
                 base = "file:///tmp/mock/path",
@@ -1740,10 +1772,6 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "file://server/file",
             ),
-        )
-
-    private fun part2(): List<UrlCase> =
-        listOf(
             UrlCase(
                 input = "file:///foo/bar.txt",
                 base = "file:///tmp/mock/path",
@@ -2556,6 +2584,10 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "http://www/foo%2Ehtml",
             ),
+        )
+
+    private fun part3(): List<UrlCase> =
+        listOf(
             UrlCase(
                 input = "http://www/foo/%2E/html",
                 base = null,
@@ -2584,10 +2616,6 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "",
             ),
-        )
-
-    private fun part3(): List<UrlCase> =
-        listOf(
             UrlCase(
                 input = "http://%25DOMAIN:foobar@foodomain.com/",
                 base = null,
@@ -3400,6 +3428,10 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "",
             ),
+        )
+
+    private fun part4(): List<UrlCase> =
+        listOf(
             UrlCase(
                 input = "http://@/www.example.com",
                 base = null,
@@ -3428,10 +3460,6 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "",
             ),
-        )
-
-    private fun part4(): List<UrlCase> =
-        listOf(
             UrlCase(
                 input = "http:a:b@/www.example.com",
                 base = null,
@@ -4149,86 +4177,86 @@ private object UrlConformanceCaseData {
             UrlCase(
                 input = "http://a.b.c.xn--pokxncvks",
                 base = null,
-                failure = true,
-                protocol = "",
+                failure = false,
+                protocol = "http:",
                 username = "",
                 password = "",
-                hostname = "",
+                hostname = "a.b.c.xn--pokxncvks",
                 port = "",
-                pathname = "",
+                pathname = "/",
                 search = "",
                 hash = "",
-                href = "",
+                href = "http://a.b.c.xn--pokxncvks/",
             ),
             UrlCase(
                 input = "http://10.0.0.xn--pokxncvks",
                 base = null,
-                failure = true,
-                protocol = "",
+                failure = false,
+                protocol = "http:",
                 username = "",
                 password = "",
-                hostname = "",
+                hostname = "10.0.0.xn--pokxncvks",
                 port = "",
-                pathname = "",
+                pathname = "/",
                 search = "",
                 hash = "",
-                href = "",
+                href = "http://10.0.0.xn--pokxncvks/",
             ),
             UrlCase(
                 input = "http://a.b.c.XN--pokxncvks",
                 base = null,
-                failure = true,
-                protocol = "",
+                failure = false,
+                protocol = "http:",
                 username = "",
                 password = "",
-                hostname = "",
+                hostname = "a.b.c.xn--pokxncvks",
                 port = "",
-                pathname = "",
+                pathname = "/",
                 search = "",
                 hash = "",
-                href = "",
+                href = "http://a.b.c.xn--pokxncvks/",
             ),
             UrlCase(
                 input = "http://a.b.c.Xn--pokxncvks",
                 base = null,
-                failure = true,
-                protocol = "",
+                failure = false,
+                protocol = "http:",
                 username = "",
                 password = "",
-                hostname = "",
+                hostname = "a.b.c.xn--pokxncvks",
                 port = "",
-                pathname = "",
+                pathname = "/",
                 search = "",
                 hash = "",
-                href = "",
+                href = "http://a.b.c.xn--pokxncvks/",
             ),
             UrlCase(
                 input = "http://10.0.0.XN--pokxncvks",
                 base = null,
-                failure = true,
-                protocol = "",
+                failure = false,
+                protocol = "http:",
                 username = "",
                 password = "",
-                hostname = "",
+                hostname = "10.0.0.xn--pokxncvks",
                 port = "",
-                pathname = "",
+                pathname = "/",
                 search = "",
                 hash = "",
-                href = "",
+                href = "http://10.0.0.xn--pokxncvks/",
             ),
             UrlCase(
                 input = "http://10.0.0.xN--pokxncvks",
                 base = null,
-                failure = true,
-                protocol = "",
+                failure = false,
+                protocol = "http:",
                 username = "",
                 password = "",
-                hostname = "",
+                hostname = "10.0.0.xn--pokxncvks",
                 port = "",
-                pathname = "",
+                pathname = "/",
                 search = "",
                 hash = "",
-                href = "",
+                href = "http://10.0.0.xn--pokxncvks/",
             ),
             UrlCase(
                 input = "http://\uff27\uff4f.com",
@@ -4244,6 +4272,10 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "http://go.com/",
             ),
+        )
+
+    private fun part5(): List<UrlCase> =
+        listOf(
             UrlCase(
                 input = "http://\uff05\uff14\uff11.com",
                 base = "http://other.com/",
@@ -4272,10 +4304,6 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "",
             ),
-        )
-
-    private fun part5(): List<UrlCase> =
-        listOf(
             UrlCase(
                 input = "http://\uff05\uff10\uff10.com",
                 base = "http://other.com/",
@@ -5088,6 +5116,10 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "sc:/i",
             ),
+        )
+
+    private fun part6(): List<UrlCase> =
+        listOf(
             UrlCase(
                 input = "/i",
                 base = "sc://ho/pa",
@@ -5116,10 +5148,6 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "sc:///i",
             ),
-        )
-
-    private fun part6(): List<UrlCase> =
-        listOf(
             UrlCase(
                 input = "?i",
                 base = "sc:sd",
@@ -5932,6 +5960,10 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "",
             ),
+        )
+
+    private fun part7(): List<UrlCase> =
+        listOf(
             UrlCase(
                 input = "http://a\u0017b/",
                 base = null,
@@ -5960,10 +5992,6 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "",
             ),
-        )
-
-    private fun part7(): List<UrlCase> =
-        listOf(
             UrlCase(
                 input = "http://a\u0019b/",
                 base = null,
@@ -6776,6 +6804,10 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "",
             ),
+        )
+
+    private fun part8(): List<UrlCase> =
+        listOf(
             UrlCase(
                 input = "http://ho%3Fst/",
                 base = null,
@@ -6804,10 +6836,6 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "",
             ),
-        )
-
-    private fun part8(): List<UrlCase> =
-        listOf(
             UrlCase(
                 input = "http://ho%5Bst/",
                 base = null,
@@ -6903,15 +6931,15 @@ private object UrlConformanceCaseData {
                 username = "",
                 password = "",
                 hostname =
-                    "%01%02%03%04%05%06%07%08%0B%0C%0E%0F%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F%7F!" +
-                        "\"\$%&'()*+,-.;=_`{}~",
+                    "%01%02%03%04%05%06%07%08%0B%0C%0E%0F%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F%7F!\"\$" +
+                        "%&'()*+,-.;=_`{}~",
                 port = "",
                 pathname = "/",
                 search = "",
                 hash = "",
                 href =
-                    "sc://%01%02%03%04%05%06%07%08%0B%0C%0E%0F%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F%7F!" +
-                        "\"\$%&'()*+,-.;=_`{}~/",
+                    "sc://%01%02%03%04%05%06%07%08%0B%0C%0E%0F%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F%7F" +
+                        "!\"\$%&'()*+,-.;=_`{}~/",
             ),
             UrlCase(
                 input = "ftp://example.com%80/",
@@ -7629,6 +7657,10 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "",
             ),
+        )
+
+    private fun part9(): List<UrlCase> =
+        listOf(
             UrlCase(
                 input = "file://%43%7C/",
                 base = null,
@@ -7657,10 +7689,6 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "",
             ),
-        )
-
-    private fun part9(): List<UrlCase> =
-        listOf(
             UrlCase(
                 input = "asdf://%43|/",
                 base = null,
@@ -8473,6 +8501,10 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "file:///C:/",
             ),
+        )
+
+    private fun part10(): List<UrlCase> =
+        listOf(
             UrlCase(
                 input = "file://C:/",
                 base = "file://host/",
@@ -8501,10 +8533,6 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "file:///C:/",
             ),
-        )
-
-    private fun part10(): List<UrlCase> =
-        listOf(
             UrlCase(
                 input = "file:///C:/",
                 base = "file://host/",
@@ -9317,6 +9345,10 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "irc://myserver.com:6999/channel?passwd",
             ),
+        )
+
+    private fun part11(): List<UrlCase> =
+        listOf(
             UrlCase(
                 input = "dns://fw.example.org:9999/foo.bar.org?type=TXT",
                 base = null,
@@ -9345,10 +9377,6 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "ldap://localhost:389/ou=People,o=JNDITutorial",
             ),
-        )
-
-    private fun part11(): List<UrlCase> =
-        listOf(
             UrlCase(
                 input = "git+https://github.com/foo/bar",
                 base = null,
@@ -10161,6 +10189,10 @@ private object UrlConformanceCaseData {
                 hash = "#b%00c",
                 href = "http://example.org/test?a#b%00c",
             ),
+        )
+
+    private fun part12(): List<UrlCase> =
+        listOf(
             UrlCase(
                 input = "non-spec://example.org/test?a#b\u0000c",
                 base = null,
@@ -10189,10 +10221,6 @@ private object UrlConformanceCaseData {
                 hash = "#b%00c",
                 href = "non-spec:/test?a#b%00c",
             ),
-        )
-
-    private fun part12(): List<UrlCase> =
-        listOf(
             UrlCase(
                 input = "10.0.0.7:8080/foo.html",
                 base = "file:///some/dir/bar.html",
@@ -10308,16 +10336,16 @@ private object UrlConformanceCaseData {
             UrlCase(
                 input = "file://xn--/p",
                 base = null,
-                failure = true,
-                protocol = "",
+                failure = false,
+                protocol = "file:",
                 username = "",
                 password = "",
-                hostname = "",
+                hostname = "xn--",
                 port = "",
-                pathname = "",
+                pathname = "/p",
                 search = "",
                 hash = "",
-                href = "",
+                href = "file://xn--/p",
             ),
             UrlCase(
                 input = "#link",
@@ -11005,6 +11033,10 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "http://foo.09../",
             ),
+        )
+
+    private fun part13(): List<UrlCase> =
+        listOf(
             UrlCase(
                 input = "http://0999999999999999999/",
                 base = null,
@@ -11033,10 +11065,6 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "",
             ),
-        )
-
-    private fun part13(): List<UrlCase> =
-        listOf(
             UrlCase(
                 input = "http://foo.0XFfFfFfFfFfFfFfFfFfAcE123",
                 base = null,
@@ -11362,16 +11390,16 @@ private object UrlConformanceCaseData {
             UrlCase(
                 input = "https://xn--/",
                 base = null,
-                failure = true,
-                protocol = "",
+                failure = false,
+                protocol = "https:",
                 username = "",
                 password = "",
-                hostname = "",
+                hostname = "xn--",
                 port = "",
-                pathname = "",
+                pathname = "/",
                 search = "",
                 hash = "",
-                href = "",
+                href = "https://xn--/",
             ),
             UrlCase(
                 input = "data://example.com:8080/pathname?search#hash",
@@ -11849,6 +11877,10 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "",
             ),
+        )
+
+    private fun part14(): List<UrlCase> =
+        listOf(
             UrlCase(
                 input = "turn://test:test",
                 base = null,
@@ -11877,10 +11909,6 @@ private object UrlConformanceCaseData {
                 hash = "",
                 href = "",
             ),
-        )
-
-    private fun part14(): List<UrlCase> =
-        listOf(
             UrlCase(
                 input = "stun://example.com:8080/pathname?search#hash",
                 base = null,
@@ -12512,8 +12540,8 @@ private object UrlConformanceCaseData {
                 search = "",
                 hash = "#%00%01%1F%20!%22#\$%&'()*+,-./09:;%3C=%3E?@AZ[\\]^_%60az{|}~%7F%C2%80%C2%81%C3%89%C3%A9",
                 href =
-                    "data:text/plain,test#%00%01%1F%20!%22#\$%&'()*+,-./09:;%3C=%3E?@AZ[\\]^_%60az{|}~%7F%C2%80%C2" +
-                        "%81%C3%89%C3%A9",
+                    "data:text/plain,test#%00%01%1F%20!%22#\$%&'()*+,-./09:;%3C=%3E?@AZ[\\]^_%60az{|}~%7F%C2%80%C" +
+                        "2%81%C3%89%C3%A9",
             ),
             UrlCase(
                 input =
@@ -12530,8 +12558,8 @@ private object UrlConformanceCaseData {
                 search = "",
                 hash = "#%00%01%1F%20!%22#\$%&'()*+,-./09:;%3C=%3E?@AZ[\\]^_%60az{|}~%7F%C2%80%C2%81%C3%89%C3%A9",
                 href =
-                    "about:blank#%00%01%1F%20!%22#\$%&'()*+,-./09:;%3C=%3E?@AZ[\\]^_%60az{|}~%7F%C2%80%C2%81%C3%89" +
-                        "%C3%A9",
+                    "about:blank#%00%01%1F%20!%22#\$%&'()*+,-./09:;%3C=%3E?@AZ[\\]^_%60az{|}~%7F%C2%80%C2%81%C3%8" +
+                        "9%C3%A9",
             ),
         )
 }

@@ -3,10 +3,13 @@
 # SPDX-License-Identifier: MIT
 r"""Generate kuri's WPT urltestdata conformance fixture for the `Url` profile.
 
-Offline build tool. It reads the official WPT URL corpus shipped in the ada
-reference checkout:
+Offline build tool. It reads the canonical WPT URL corpus, vendored verbatim next
+to this tool for a reproducible regeneration:
 
-    .claude/references/ada/tests/wpt/urltestdata.json
+    tools/url/urltestdata.json
+
+That file is the upstream web-platform-tests corpus copied byte-for-byte from the
+master branch (see UPSTREAM_URL below); refresh it from there and re-run this tool.
 
 and emits one multiplatform-safe Kotlin test data file:
 
@@ -31,9 +34,13 @@ import os
 import sys
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-CORPUS = os.path.join(
-    REPO_ROOT, ".claude", "references", "ada", "tests", "wpt", "urltestdata.json"
+# Canonical WPT corpus, vendored verbatim alongside this tool. Refresh it from the
+# upstream master branch and re-run; the generated fixture is the committed artifact.
+UPSTREAM_URL = (
+    "https://raw.githubusercontent.com/web-platform-tests/wpt/"
+    "refs/heads/master/url/resources/urltestdata.json"
 )
+CORPUS = os.path.join(os.path.dirname(__file__), "urltestdata.json")
 TEST_DIR = os.path.join(
     REPO_ROOT, "kuri", "src", "commonTest", "kotlin", "org", "dexpace",
     "kuri", "parser",
@@ -83,16 +90,21 @@ def kotlin_string(value):
 
 
 def field_lines(name, value, indent):
-    """Emit `name = "value",` at [indent], wrapping over-long literals as `"a" +` / `"b",`."""
+    """Emit `name = "value",` at [indent]; wrap an over-long literal onto its own indented lines.
+
+    ktlint's `multiline-expression-wrapping` requires a value that spans lines to begin on the line
+    after `name =`, so the wrapped form is `name =` / `"a" +` / `"b",`. ktlint then indents the first
+    operand one level (4 spaces) past the field and every subsequent `+` operand a further level
+    (8 spaces); the segment budget targets the deeper indent so no line exceeds the column limit.
+    A value that fits stays on a single line.
+    """
     pad = " " * indent
-    prefix = "%s%s = " % (pad, name)
-    one = prefix + kotlin_string(value) + ","
+    one = "%s%s = %s," % (pad, name, kotlin_string(value))
     if len(one) <= MAX_COLS:
         return [one]
-    cont = " " * (indent + 4)  # ktlint indents a wrapped binary-expression operand by 4
-    # The first line carries `name = ` and is wider than a continuation; budget for the
-    # tighter of the two so neither the head nor any `+`-continued operand exceeds MAX_COLS.
-    budget = MAX_COLS - max(len(prefix), indent + 4) - len(" +")
+    first = " " * (indent + 4)
+    cont = " " * (indent + 8)
+    budget = MAX_COLS - (indent + 8) - len(" +")
     segments, current = [], ""
     for token in escape_tokens(value):
         if current and len('"' + current + token + '"') > budget:
@@ -101,9 +113,9 @@ def field_lines(name, value, indent):
         else:
             current += token
     segments.append(current)
-    lines = []
+    lines = ["%s%s =" % (pad, name)]
     for index, segment in enumerate(segments):
-        head = prefix if index == 0 else cont
+        head = first if index == 0 else cont
         tail = " +" if index < len(segments) - 1 else ","
         lines.append(head + '"' + segment + '"' + tail)
     return lines
