@@ -9,12 +9,14 @@ import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * Exercises [Idna.domainToAscii] / [Idna.domainToUnicode] over the mapping table + Punycode under
- * the `Url`-profile parameter set (SPEC §7.4, [HOST-26]/[HOST-28]). Broad NFC, ContextJ, Bidi, and
- * decoded-A-label re-validation coverage lives in the WPT corpora ([IdnaConformanceTest]); this
- * suite focuses on the mapping/Punycode round-trips.
+ * the `Url`-profile parameter set (SPEC §7.4, [HOST-26]/[HOST-28]). Broad NFC, ContextJ, and Bidi
+ * coverage lives in the WPT corpora ([IdnaConformanceTest]); this suite covers the mapping/Punycode
+ * round-trips and the decoded-A-label re-validation branches ([Idna.isValidDecodedALabel]).
  */
 class IdnaTest {
     private fun ascii(domain: String): String {
@@ -90,5 +92,38 @@ class IdnaTest {
     fun `leaves an undecodable xn-- label unchanged in ToUnicode`() {
         // ToUnicode is best-effort: a payload that is not valid Punycode is returned verbatim.
         assertEquals("xn--é", Idna.domainToUnicode("xn--é"))
+    }
+
+    @Test
+    fun `rejects a decoded A-label that is empty`() {
+        assertFalse(Idna.isValidDecodedALabel(""))
+    }
+
+    @Test
+    fun `rejects a decoded A-label that is all ASCII`() {
+        // An all-ASCII U-label should never have been ACE-encoded (whatwg/url#760).
+        assertFalse(Idna.isValidDecodedALabel("abc"))
+    }
+
+    @Test
+    fun `rejects a decoded A-label that is not in NFC`() {
+        // "e" + U+0301 COMBINING ACUTE ACCENT is the decomposed e-acute; NFC composes it, so V1 rejects.
+        val notNfc = "e" + Char(0x0301)
+        assertFalse(Idna.isValidDecodedALabel(notNfc))
+    }
+
+    @Test
+    fun `rejects a decoded A-label that is itself an A-label`() {
+        // A decoded label beginning with the ACE prefix is double-encoded (whatwg/url#803). U+00E9 is
+        // non-empty, non-ASCII, and in NFC, so the leading "xn--" is the only conjunct that rejects it.
+        val doubleEncoded = "xn--" + Char(0x00E9)
+        assertFalse(Idna.isValidDecodedALabel(doubleEncoded))
+    }
+
+    @Test
+    fun `accepts a well-formed decoded A-label`() {
+        // Non-empty, carries a non-ASCII code point (U+00FC), already in NFC, and not ACE-prefixed.
+        val uLabel = "b" + Char(0x00FC) + "cher"
+        assertTrue(Idna.isValidDecodedALabel(uLabel))
     }
 }

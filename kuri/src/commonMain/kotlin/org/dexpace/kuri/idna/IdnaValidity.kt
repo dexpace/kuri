@@ -220,11 +220,13 @@ internal object IdnaValidity {
     /**
      * Applies the RFC 5893 Bidi rule to [label] (SPEC §7.4, [HOST-28] `CheckBidi = true`).
      *
-     * A label with no R/AL/AN code point is exempt (it is not part of a Bidi domain name) and passes;
-     * otherwise it must satisfy the six RFC 5893 §2 conditions, evaluated as an LTR or RTL label by
-     * the Bidi_Class of its first code point. The check is per-label: a pure-LTR label trivially
-     * satisfies the LTR conditions, so restricting evaluation to labels that themselves carry an RTL
-     * code point yields the same verdict as the whole-domain formulation.
+     * A label with no R/AL/AN code point is exempt and passes; otherwise it must satisfy the six
+     * RFC 5893 §2 conditions, evaluated as an LTR or RTL label by the Bidi_Class of its first code
+     * point. The trigger is per-label, matching ada and the WHATWG-URL conformance corpus: a label
+     * carrying no R/AL/AN is not re-checked even when a sibling label makes the whole domain a Bidi
+     * domain. This is intentionally more lenient than the strict whole-domain reading of RFC 5893
+     * §1.4 — e.g. an EN-only label such as `"1"` beside an RTL label is accepted here, though its
+     * leading EN would fail condition 1 in the whole-domain formulation.
      *
      * @param label a single, already-mapped label (for a decoded A-label, also NFC-normalized).
      * @return `true` when the label satisfies the Bidi rule (an empty or non-Bidi label trivially does).
@@ -267,7 +269,15 @@ internal object IdnaValidity {
         return index
     }
 
-    /** RFC 5893 conditions 5 & 6 for an LTR label (first code point already known to be L). */
+    /**
+     * RFC 5893 conditions 5 & 6 for an LTR label (first code point already known to be L).
+     *
+     * Reached only for a label that carries an R/AL/AN code point ([checkBidi]'s trigger); since
+     * condition 5 ([isLtrAllowed]) forbids those three classes, that triggering code point always
+     * fails the loop, so in practice every LTR Bidi label is rejected here. The condition-6 end-check
+     * is kept verbatim for faithful parity with RFC 5893 and the Go conformance reference, but is
+     * unreachable under the per-label trigger and so cannot be exercised in isolation.
+     */
     private fun isBidiLtrValid(
         codePoints: IntArray,
         lastNonNsm: Int,

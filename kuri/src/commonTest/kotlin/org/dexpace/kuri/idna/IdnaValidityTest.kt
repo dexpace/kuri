@@ -122,4 +122,17 @@ class IdnaValidityTest {
         // U+05D0 (R), '9' (EN), U+0667 ARABIC-INDIC DIGIT SEVEN (AN): condition 4 forbids EN with AN.
         assertFalse(IdnaValidity.checkBidi("\u05d09\u0667"))
     }
+
+    @Test
+    fun `rejects a right-to-left label with an embedded left-to-right letter`() {
+        // U+05D0 ALEF (R), ASCII 'a' (L), U+05D0 ALEF (R): condition 2 forbids an L inside an RTL label.
+        assertFalse(IdnaValidity.checkBidi("\u05d0a\u05d0"))
+    }
+
+    @Test
+    fun `rejects a right-to-left label ending in a separator`() {
+        // U+05D0 ALEF (R) then U+002D HYPHEN-MINUS (ES): condition 3 requires the last non-NSM code
+        // point to be R, AL, EN, or AN, so an ES end (permitted mid-label by condition 2) is rejected.
+        assertFalse(IdnaValidity.checkBidi("\u05d0-"))
+    }
 }

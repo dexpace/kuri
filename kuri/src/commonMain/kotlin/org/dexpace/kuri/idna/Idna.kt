@@ -224,7 +224,7 @@ internal object Idna {
      * ACE prefix (a double-encoded label, whatwg/url#803). The top-level NFC pass ([normalizeNfc])
      * runs before Punycode decoding, so this is the only point the decoded label's NFC form is checked.
      */
-    private fun isValidDecodedALabel(decoded: String): Boolean =
+    internal fun isValidDecodedALabel(decoded: String): Boolean =
         decoded.isNotEmpty() &&
             decoded.any { it.code >= NON_ASCII_MIN } &&
             decoded == Normalizer.nfc(decoded) &&
