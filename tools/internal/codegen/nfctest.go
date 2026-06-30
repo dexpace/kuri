@@ -14,7 +14,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/dexpace/kuri/tools/internal/ucd"
@@ -47,15 +46,11 @@ type nfcCase struct {
 	nfc    string
 }
 
-// nfcTestInputPath returns the absolute path of the vendored NormalizationTest.txt.
+// nfcTestInputPath returns the absolute path of the vendored NormalizationTest.txt,
+// resolved through ucd so it tracks the same bundled Unicode version as every
+// other UCD input.
 func nfcTestInputPath() (string, error) {
-	root, err := Root()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(
-		root, ".claude", "references", "unicode-16.0", "NormalizationTest.txt",
-	), nil
+	return ucd.NormalizationTestPath()
 }
 
 // generateNfcTest reads the corpus and returns the complete Kotlin source string.

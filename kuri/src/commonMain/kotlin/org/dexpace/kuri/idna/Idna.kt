@@ -55,10 +55,11 @@ private const val LOW_SURROGATE_START: Int = 0xDC00
  *  - **map** (step 2) — fully implemented via [IdnaMappingTable].
  *  - **NFC normalize** (step 3) — fully implemented via [Normalizer.nfc] (UAX #15), applied after
  *    mapping and before label splitting per the UTS-46 processing order.
- *  - **label split / Punycode / re-assemble** (steps 4 & 6) — fully implemented via [Punycode].
+ *  - **label split / Punycode / re-assemble** (steps 4 & 6) — fully implemented via [Punycode],
+ *    including re-validation of a decoded `xn--` label as a fresh U-label ([isValidDecodedALabel]).
  *  - **validate** (step 5) — enforces "valid code points only" (mapping table) plus the
- *    leading-combining-mark rule and ContextJ `CheckJoiners` via [IdnaValidity]. `CheckBidi` is
- *    intentionally not implemented (the conformance corpus is run with `--exclude-bidi`).
+ *    leading-combining-mark rule, ContextJ `CheckJoiners`, and the `CheckBidi` RFC 5893 rule via
+ *    [IdnaValidity].
  *
  * Both transforms are pure: input string in, value out, no shared mutable state.
  */
@@ -197,9 +198,10 @@ internal object Idna {
     }
 
     /**
-     * Processes one already-mapped label: an `xn--` label is Punycode-decoded first, then every
-     * label is validated and re-encoded to ASCII ([HOST-26] steps 4 & 5). `CheckHyphens = false`,
-     * so a 3rd/4th-character hyphen is permitted.
+     * Processes one already-mapped label: an `xn--` label is Punycode-decoded and re-validated as a
+     * freshly produced U-label ([isValidDecodedALabel]) first, then every label is validated and
+     * re-encoded to ASCII ([HOST-26] steps 4 & 5). `CheckHyphens = false`, so a 3rd/4th-character
+     * hyphen is permitted.
      */
     private fun processLabel(
         label: String,
@@ -209,22 +211,36 @@ internal object Idna {
         val decoded = if (wasPunycode) Punycode.decode(label.substring(ACE_PREFIX_LENGTH)) else label
         return when {
             decoded == null -> idnaError(domain)
+            wasPunycode && !isValidDecodedALabel(decoded) -> idnaError(domain)
             !validateLabel(decoded) -> idnaError(domain)
             else -> encodeLabel(decoded, domain)
         }
     }
 
     /**
+     * Re-validates a freshly Punycode-decoded A-label (UTS-46 V1 / P4): the decoded U-label must be
+     * non-empty, must carry a non-ASCII code point (an all-ASCII result should never have been
+     * ACE-encoded, whatwg/url#760), must already be in NFC (V1), and must not itself begin with the
+     * ACE prefix (a double-encoded label, whatwg/url#803). The top-level NFC pass ([normalizeNfc])
+     * runs before Punycode decoding, so this is the only point the decoded label's NFC form is checked.
+     */
+    private fun isValidDecodedALabel(decoded: String): Boolean =
+        decoded.isNotEmpty() &&
+            decoded.any { it.code >= NON_ASCII_MIN } &&
+            decoded == Normalizer.nfc(decoded) &&
+            !decoded.startsWith(ACE_PREFIX)
+
+    /**
      * UTS-46 validity check on the decoded Unicode [label] (SPEC §7.4): rejects a leading combining
-     * mark and any RFC 5892 ContextJ violation ([IdnaValidity]), then requires every code point to
-     * map to [IdnaMapping.Valid] or [IdnaMapping.Deviation]. Empty labels pass (`VerifyDnsLength =
-     * false`; DNS length / emptiness is [HOST-31]). `CheckBidi` is intentionally not implemented
-     * (the conformance corpus is run with `--exclude-bidi`).
+     * mark, any RFC 5892 ContextJ violation, and any RFC 5893 Bidi-rule violation ([IdnaValidity]),
+     * then requires every code point to map to [IdnaMapping.Valid] or [IdnaMapping.Deviation]. Empty
+     * labels pass (`VerifyDnsLength = false`; DNS length / emptiness is [HOST-31]).
      */
     private fun validateLabel(label: String): Boolean =
         !IdnaValidity.startsWithCombiningMark(label) &&
             IdnaValidity.checkJoiners(label) &&
-            codePointsOf(label).all { isValidLabelCodePoint(it) }
+            codePointsOf(label).all { isValidLabelCodePoint(it) } &&
+            IdnaValidity.checkBidi(label)
 
     /** True when [codePoint] is permitted unchanged in a validated label (valid or deviation). */
     private fun isValidLabelCodePoint(codePoint: Int): Boolean =

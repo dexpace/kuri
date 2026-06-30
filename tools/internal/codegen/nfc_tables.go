@@ -97,7 +97,7 @@ func emitKotlin(cccBlob, decompBlob, compBlob string) string {
 	lines = append(lines,
 		"package org.dexpace.kuri.idna",
 		"",
-		"// Compact, generated NFC table data (Unicode 16.0), derived from UnicodeData.txt and",
+		"// Compact, generated NFC table data (Unicode 17.0), derived from UnicodeData.txt and",
 		"// CompositionExclusions.txt by ./gradlew generateNfcTables. Do not edit by hand;",
 		"// re-run the generator instead. See Normalizer for the decoder and the UAX #15 contract.",
 	)

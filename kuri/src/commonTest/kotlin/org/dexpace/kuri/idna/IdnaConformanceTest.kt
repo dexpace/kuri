@@ -11,18 +11,18 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Runs [Idna.domainToAscii] against the official WPT IDNA corpora (IdnaTestV2 + toascii, generated
- * with `--exclude-std3 --exclude-bidi`) modelled as [IDNA_CONFORMANCE_CASES]: a non-null
- * [IdnaCase.expected] is the required ToASCII output, a null one means the input must be rejected
- * (SPEC §7.4, [HOST-26]/[HOST-28]).
+ * Runs [Idna.domainToAscii] against the official WPT IDNA corpora (IdnaTestV2 + toascii) modelled as
+ * [IDNA_CONFORMANCE_CASES]: a non-null [IdnaCase.expected] is the required ToASCII output, a null one
+ * means the input must be rejected (SPEC §7.4, [HOST-26]/[HOST-28]). IdnaTestV2 is generated with
+ * `--exclude-std3`; the hand-authored `toascii` corpus carries the explicit `CheckBidi` cases.
  *
- * kuri implements the UTS-46 map / NFC / ContextJ `CheckJoiners` / leading-combining-mark /
- * Punycode / re-assemble pipeline against the Unicode 16.0 tables. The small residual that still
- * fails is tracked in [IDNA_KNOWN_FAILURES]; each entry is a UTS-46 criterion this `Url`-profile
- * run does not apply (CheckBidi, decoded-A-label re-validation, host-layer forbidden code points,
- * empty-domain length) or a corpus/Unicode-version corner -- none reflect a Punycode/mapping/NFC
- * output defect. The suite ratchets: it fails if any *other* case regresses and if a known failure
- * starts passing without the baseline being updated to the live residual.
+ * kuri implements the full UTS-46 map / NFC / ContextJ `CheckJoiners` / leading-combining-mark /
+ * RFC 5893 `CheckBidi` / decoded-A-label re-validation / Punycode / re-assemble pipeline against the
+ * Unicode 17.0 tables. The small residual that still fails is tracked in [IDNA_KNOWN_FAILURES]; each
+ * entry is a check the URL host layer applies on top of UTS-46 ToASCII (a forbidden host code point
+ * or the empty domain), not a defect inside [Idna.domainToAscii]. The suite ratchets: it fails if any
+ * *other* case regresses and if a known failure starts passing without the baseline being updated to
+ * the live residual.
  */
 class IdnaConformanceTest {
     private val knownFailures: Set<String> = IDNA_KNOWN_FAILURES
@@ -47,7 +47,7 @@ class IdnaConformanceTest {
     @Test
     fun `the known-failures set exactly equals the live failing set`() {
         // Ratchet: a fixed gap (known failure now passing) or a brand-new failure breaks this until
-        // the baseline is regenerated, so the deferred-step debt can never drift silently.
+        // the baseline is regenerated, so the residual can never drift silently.
         assertEquals(knownFailures, liveFailingInputs())
     }
 
@@ -61,6 +61,6 @@ class IdnaConformanceTest {
     @Test
     fun `the corpus and known-failures set are non-trivially populated`() {
         assertTrue(IDNA_CONFORMANCE_CASES.size > knownFailures.size, "passing cases should dwarf known failures")
-        assertTrue(knownFailures.isNotEmpty(), "deferred steps should yield a tracked baseline")
+        assertTrue(knownFailures.isNotEmpty(), "the host-layer residual should yield a tracked baseline")
     }
 }

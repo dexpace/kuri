@@ -12,8 +12,9 @@ import kotlin.test.assertEquals
 
 /**
  * Exercises [Idna.domainToAscii] / [Idna.domainToUnicode] over the mapping table + Punycode under
- * the `Url`-profile parameter set (SPEC §7.4, [HOST-26]/[HOST-28]). NFC- and Bidi-dependent cases
- * are out of scope this increment (NFC is deferred; the corpus is run `--exclude-bidi`).
+ * the `Url`-profile parameter set (SPEC §7.4, [HOST-26]/[HOST-28]). Broad NFC, ContextJ, Bidi, and
+ * decoded-A-label re-validation coverage lives in the WPT corpora ([IdnaConformanceTest]); this
+ * suite focuses on the mapping/Punycode round-trips.
  */
 class IdnaTest {
     private fun ascii(domain: String): String {

@@ -24,7 +24,7 @@ const (
 const canonicalPairLength = 2
 
 // LoadNfc parses the vendored UCD inputs and returns the combining-class,
-// canonical-decomposition, and UAX #15 primary-composite maps (Unicode 16.0) —
+// canonical-decomposition, and UAX #15 primary-composite maps (Unicode 17.0) —
 // the same data Normalizer decodes at runtime, so the conformance reference
 // reproduces NFC exactly (verified byte-for-byte against NfcData.kt).
 func LoadNfc() (ccc map[int]int, decomposition map[int][]int, composition map[[2]int]int, err error) {
@@ -135,7 +135,7 @@ func loadExclusions(data []byte) (map[int]bool, error) {
 // unless cp is an explicit exclusion, the mapping is not a pair, or a is a
 // non-starter (CCC != 0). Decomposition entries are iterated in ascending
 // code-point order so last-write-wins on any duplicate key matches Python dict
-// insertion order (file order); no duplicates exist in 16.0.
+// insertion order (file order); no duplicates exist in 17.0.
 func buildComposition(ccc map[int]int, decomposition map[int][]int, exclusions map[int]bool) map[[2]int]int {
 	composition := map[[2]int]int{}
 	for _, codePoint := range sortedKeys(decomposition) {
