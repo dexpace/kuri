@@ -37,6 +37,26 @@ private const val JOIN_TRANSPARENT: Char = 'T'
 /** Sentinel returned for any code point with no tabled Joining_Type (Non_Joining / Join_Causing). */
 private const val JOIN_OTHER: Char = 'U'
 
+// RFC 5893 Bidi_Class record codes: each multi-letter class the rule consults is folded to one
+// char by the generator (see codegen's bidiClassCode) and decoded back here. The codes are
+// L=Left, R=Right, A=Arabic_Letter (AL), N=Arabic_Number (AN), E=European_Number (EN),
+// S=European_Separator (ES), T=European_Terminator (ET), C=Common_Separator (CS),
+// M=Nonspacing_Mark (NSM), B=Boundary_Neutral (BN), O=Other_Neutral (ON).
+private const val BIDI_L: Char = 'L'
+private const val BIDI_R: Char = 'R'
+private const val BIDI_AL: Char = 'A'
+private const val BIDI_AN: Char = 'N'
+private const val BIDI_EN: Char = 'E'
+private const val BIDI_ES: Char = 'S'
+private const val BIDI_ET: Char = 'T'
+private const val BIDI_CS: Char = 'C'
+private const val BIDI_NSM: Char = 'M'
+private const val BIDI_BN: Char = 'B'
+private const val BIDI_ON: Char = 'O'
+
+/** Sentinel for a code point with no Bidi_Class the rule consults; it satisfies no condition. */
+private const val BIDI_NONE: Char = '\u0000'
+
 /** First UTF-16 high-surrogate code unit (`U+D800`). */
 private const val HIGH_SURROGATE_START: Int = 0xD800
 
@@ -50,18 +70,22 @@ private const val SURROGATE_SHIFT: Int = 10
 private const val SUPPLEMENTARY_BASE: Int = 0x10000
 
 /**
- * Two deferred UTS-46 label-validity rules (SPEC §7.4, [HOST-28] `CheckJoiners = true`):
+ * UTS-46 label-validity rules beyond the mapping table (SPEC §7.4, [HOST-28] `CheckJoiners = true`,
+ * `CheckBidi = true`):
  *
  *  - **leading combining mark** ([startsWithCombiningMark]) — a label whose first code point is a
  *    General_Category Mark (Mn/Mc/Me) is invalid (UTS-46 validity criterion 7).
  *  - **ContextJ join controls** ([checkJoiners]) — each U+200C / U+200D must satisfy its RFC 5892
  *    A.1 / A.2 context, otherwise the label is invalid.
+ *  - **Bidi rule** ([checkBidi]) — a label carrying a right-to-left code point must satisfy the six
+ *    RFC 5893 §2 conditions (UTS-46 validity criterion 6).
  *
- * Backing range tables come from [IdnaValidityData] (Unicode 16.0.0). Predicates are pure: a
+ * Backing range tables come from [IdnaValidityData] (Unicode 17.0.0). Predicates are pure: a
  * string in, a boolean out, with no shared mutable state.
  */
 @Suppress("TooManyFunctions") // One cohesive validity check decomposed into small helpers (decode,
-// binary search, code-point split, the two RFC 5892 scans) to honour the 60-line cap; mirrors Idna.
+// binary search, code-point split, the RFC 5892 ContextJ scans, the RFC 5893 Bidi conditions) to
+// honour the 60-line cap; mirrors Idna.
 internal object IdnaValidity {
     /** A sorted set of inclusive code-point ranges with O(log n) membership. */
     private class RangeSet(
@@ -75,22 +99,28 @@ internal object IdnaValidity {
         }
     }
 
-    /** A sorted Joining_Type table: range `i` carries [types]`[i]` over `starts[i]..ends[i]`. */
-    private class JoiningTable(
+    /**
+     * A sorted table mapping each code point to a one-char record code over `starts[i]..ends[i]`,
+     * returning [absent] for any code point no range covers. Backs both the Joining_Type and
+     * Bidi_Class lookups (their data shares the `<START>-<END>;<CODE>` record layout).
+     */
+    private class TypedRangeTable(
         val starts: IntArray,
         val ends: IntArray,
-        val types: CharArray,
+        val codes: CharArray,
+        val absent: Char,
     ) {
-        /** The Joining_Type of [codePoint], or [JOIN_OTHER] when no range covers it. */
-        fun typeOf(codePoint: Int): Char {
+        /** The record code covering [codePoint], or [absent] when no range covers it. */
+        fun codeAt(codePoint: Int): Char {
             val index = floorIndex(starts, codePoint)
-            return if (index >= 0 && codePoint <= ends[index]) types[index] else JOIN_OTHER
+            return if (index >= 0 && codePoint <= ends[index]) codes[index] else absent
         }
     }
 
     private val markRanges: RangeSet by lazy { decodeRanges(MARK_RANGE_CHUNKS) }
     private val viramaRanges: RangeSet by lazy { decodeRanges(VIRAMA_RANGE_CHUNKS) }
-    private val joiningTypes: JoiningTable by lazy { decodeJoining(JOINING_TYPE_CHUNKS) }
+    private val joiningTypes: TypedRangeTable by lazy { decodeTyped(JOINING_TYPE_CHUNKS, JOIN_OTHER) }
+    private val bidiClasses: TypedRangeTable by lazy { decodeTyped(BIDI_CLASS_CHUNKS, BIDI_NONE) }
 
     /**
      * True when the first code point of [label] is a General_Category Mark (Mn/Mc/Me); such a label
@@ -162,10 +192,10 @@ internal object IdnaValidity {
     ): Boolean {
         require(index in codePoints.indices) { "index out of bounds: $index" }
         var cursor = index - 1
-        while (cursor >= 0 && joiningTypes.typeOf(codePoints[cursor]) == JOIN_TRANSPARENT) {
+        while (cursor >= 0 && joiningTypes.codeAt(codePoints[cursor]) == JOIN_TRANSPARENT) {
             cursor -= 1
         }
-        return cursor >= 0 && isLeftJoining(joiningTypes.typeOf(codePoints[cursor]))
+        return cursor >= 0 && isLeftJoining(joiningTypes.codeAt(codePoints[cursor]))
     }
 
     /** Scans right over Transparent chars; the first non-Transparent must be R- or D-joining. */
@@ -175,10 +205,10 @@ internal object IdnaValidity {
     ): Boolean {
         require(index in codePoints.indices) { "index out of bounds: $index" }
         var cursor = index + 1
-        while (cursor < codePoints.size && joiningTypes.typeOf(codePoints[cursor]) == JOIN_TRANSPARENT) {
+        while (cursor < codePoints.size && joiningTypes.codeAt(codePoints[cursor]) == JOIN_TRANSPARENT) {
             cursor += 1
         }
-        return cursor < codePoints.size && isRightJoining(joiningTypes.typeOf(codePoints[cursor]))
+        return cursor < codePoints.size && isRightJoining(joiningTypes.codeAt(codePoints[cursor]))
     }
 
     /** True for the left side of the ZWNJ context: Left_Joining or Dual_Joining. */
@@ -186,6 +216,124 @@ internal object IdnaValidity {
 
     /** True for the right side of the ZWNJ context: Right_Joining or Dual_Joining. */
     private fun isRightJoining(type: Char): Boolean = type == JOIN_RIGHT || type == JOIN_DUAL
+
+    /**
+     * Applies the RFC 5893 Bidi rule to [label] (SPEC §7.4, [HOST-28] `CheckBidi = true`).
+     *
+     * A label with no R/AL/AN code point is exempt and passes; otherwise it must satisfy the six
+     * RFC 5893 §2 conditions, evaluated as an LTR or RTL label by the Bidi_Class of its first code
+     * point. The trigger is per-label, matching ada and the WHATWG-URL conformance corpus: a label
+     * carrying no R/AL/AN is not re-checked even when a sibling label makes the whole domain a Bidi
+     * domain. This is intentionally more lenient than the strict whole-domain reading of RFC 5893
+     * §1.4 — e.g. an EN-only label such as `"1"` beside an RTL label is accepted here, though its
+     * leading EN would fail condition 1 in the whole-domain formulation.
+     *
+     * @param label a single, already-mapped label (for a decoded A-label, also NFC-normalized).
+     * @return `true` when the label satisfies the Bidi rule (an empty or non-Bidi label trivially does).
+     */
+    internal fun checkBidi(label: String): Boolean {
+        val codePoints = codePoints(label)
+        if (!isRtlLabel(codePoints)) {
+            return true
+        }
+        // An RTL label has an R/AL/AN code point, which is never NSM, so lastNonNsm is always >= 0
+        // here; the guard is defensive. (An all-NSM label is non-RTL, and is anyway rejected upstream
+        // by startsWithCombiningMark before validation reaches this rule.)
+        val lastNonNsm = lastNonNsmIndex(codePoints)
+        return lastNonNsm >= 0 && isBidiSequenceValid(codePoints, lastNonNsm)
+    }
+
+    /** RFC 5893 condition 1: the first code point's direction selects the LTR or RTL conditions. */
+    private fun isBidiSequenceValid(
+        codePoints: IntArray,
+        lastNonNsm: Int,
+    ): Boolean =
+        if (bidiClasses.codeAt(codePoints[0]) == BIDI_L) {
+            isBidiLtrValid(codePoints, lastNonNsm)
+        } else {
+            isBidiRtlValid(codePoints, lastNonNsm)
+        }
+
+    /** True when [codePoints] holds an R, AL, or AN code point, making the label subject to the rule. */
+    private fun isRtlLabel(codePoints: IntArray): Boolean = codePoints.any { isRtlClass(bidiClasses.codeAt(it)) }
+
+    /** True for the Bidi classes that make a label RTL: R, AL, or AN. */
+    private fun isRtlClass(code: Char): Boolean = code == BIDI_R || code == BIDI_AL || code == BIDI_AN
+
+    /** Index of the last non-NSM code point of [codePoints], or `-1` when every one is NSM. */
+    private fun lastNonNsmIndex(codePoints: IntArray): Int {
+        var index = codePoints.size - 1
+        while (index >= 0 && bidiClasses.codeAt(codePoints[index]) == BIDI_NSM) {
+            index -= 1
+        }
+        return index
+    }
+
+    /**
+     * RFC 5893 conditions 5 & 6 for an LTR label (first code point already known to be L).
+     *
+     * Reached only for a label that carries an R/AL/AN code point ([checkBidi]'s trigger); since
+     * condition 5 ([isLtrAllowed]) forbids those three classes, that triggering code point always
+     * fails the loop, so in practice every LTR Bidi label is rejected here. The condition-6 end-check
+     * is kept verbatim for faithful parity with RFC 5893 and the Go conformance reference, but is
+     * unreachable under the per-label trigger and so cannot be exercised in isolation.
+     */
+    private fun isBidiLtrValid(
+        codePoints: IntArray,
+        lastNonNsm: Int,
+    ): Boolean {
+        require(lastNonNsm in codePoints.indices) { "lastNonNsm out of bounds: $lastNonNsm" }
+        for (index in 0..lastNonNsm) {
+            if (!isLtrAllowed(bidiClasses.codeAt(codePoints[index]))) {
+                return false
+            }
+        }
+        val last = bidiClasses.codeAt(codePoints[lastNonNsm])
+        return last == BIDI_L || last == BIDI_EN
+    }
+
+    /** RFC 5893 condition 5: the Bidi classes permitted anywhere in an LTR label. */
+    private fun isLtrAllowed(code: Char): Boolean =
+        when (code) {
+            BIDI_L, BIDI_EN, BIDI_ES, BIDI_CS, BIDI_ET, BIDI_ON, BIDI_BN, BIDI_NSM -> true
+            else -> false
+        }
+
+    /** RFC 5893 conditions 1–4 for an RTL label (first code point is not L). */
+    private fun isBidiRtlValid(
+        codePoints: IntArray,
+        lastNonNsm: Int,
+    ): Boolean {
+        require(lastNonNsm in codePoints.indices) { "lastNonNsm out of bounds: $lastNonNsm" }
+        val first = bidiClasses.codeAt(codePoints[0])
+        if (first != BIDI_R && first != BIDI_AL) {
+            return false
+        }
+        var hasArabicNumber = false
+        var hasEuropeanNumber = false
+        var valid = true
+        var index = 0
+        while (index <= lastNonNsm && valid) {
+            val code = bidiClasses.codeAt(codePoints[index])
+            hasEuropeanNumber = hasEuropeanNumber || code == BIDI_EN
+            hasArabicNumber = hasArabicNumber || code == BIDI_AN
+            // Condition 2 (allowed class) and condition 4 (EN and AN are mutually exclusive).
+            valid = isRtlAllowed(code) && !(hasArabicNumber && hasEuropeanNumber)
+            index += 1
+        }
+        return valid && isRtlLabelEnd(bidiClasses.codeAt(codePoints[lastNonNsm]))
+    }
+
+    /** RFC 5893 condition 2: the Bidi classes permitted anywhere in an RTL label. */
+    private fun isRtlAllowed(code: Char): Boolean =
+        when (code) {
+            BIDI_R, BIDI_AL, BIDI_AN, BIDI_EN, BIDI_ES, BIDI_CS, BIDI_ET, BIDI_ON, BIDI_BN, BIDI_NSM -> true
+            else -> false
+        }
+
+    /** RFC 5893 condition 3: an RTL label's last non-NSM code point must be R, AL, EN, or AN. */
+    private fun isRtlLabelEnd(code: Char): Boolean =
+        code == BIDI_R || code == BIDI_AL || code == BIDI_EN || code == BIDI_AN
 
     /** Decodes a `<START>-<END>` range blob into a [RangeSet]. */
     private fun decodeRanges(chunks: List<String>): RangeSet {
@@ -202,22 +350,25 @@ internal object IdnaValidity {
         return RangeSet(starts, ends)
     }
 
-    /** Decodes a `<START>-<END>;<TYPE>` blob into a [JoiningTable]. */
-    private fun decodeJoining(chunks: List<String>): JoiningTable {
+    /** Decodes a `<START>-<END>;<CODE>` blob into a [TypedRangeTable] returning [absent] off-table. */
+    private fun decodeTyped(
+        chunks: List<String>,
+        absent: Char,
+    ): TypedRangeTable {
         val records = chunks.joinToString(separator = "").split(RECORD_SEPARATOR)
-        check(records.isNotEmpty()) { "joining table data is empty" }
+        check(records.isNotEmpty()) { "typed range table data is empty" }
         val starts = IntArray(records.size)
         val ends = IntArray(records.size)
-        val types = CharArray(records.size)
+        val codes = CharArray(records.size)
         records.forEachIndexed { index, record ->
             val dash = record.indexOf(RANGE_SEPARATOR)
             val semi = record.indexOf(TYPE_SEPARATOR)
-            check(dash in 1 until semi) { "malformed joining record: $record" }
+            check(dash in 1 until semi) { "malformed typed range record: $record" }
             starts[index] = record.substring(0, dash).toInt(RADIX_HEX)
             ends[index] = record.substring(dash + 1, semi).toInt(RADIX_HEX)
-            types[index] = record[semi + 1]
+            codes[index] = record[semi + 1]
         }
-        return JoiningTable(starts, ends, types)
+        return TypedRangeTable(starts, ends, codes, absent)
     }
 
     /** Greatest index whose `starts` value is `<= codePoint`, or `-1` when none is. */

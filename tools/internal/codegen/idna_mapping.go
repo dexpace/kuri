@@ -45,7 +45,7 @@ const (
 
 // unicodeVersion is interpolated into the generated KDoc; bump it together with
 // the source file when retargeting a different Unicode release.
-const unicodeVersion = "16.0.0"
+const unicodeVersion = "17.0.0"
 
 // generateIdnaMapping loads the merged ranges and returns the complete Kotlin
 // source string.

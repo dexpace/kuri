@@ -61,7 +61,7 @@ type TypedRange struct {
 }
 
 // LoadValidity parses the vendored UCD inputs and returns the merged Mark,
-// Virama, and Joining_Type ranges (Unicode 16.0) in start order — the same data
+// Virama, and Joining_Type ranges (Unicode 17.0) in start order — the same data
 // IdnaValidity decodes at runtime, so the conformance reference reproduces the
 // leading-combining-mark and ContextJ checks exactly.
 func LoadValidity() (marks, viramas []PlainRange, joining []TypedRange, err error) {

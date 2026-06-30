@@ -67,7 +67,8 @@ private object NfcCaseData {
             part46() +
             part47() +
             part48() +
-            part49()
+            part49() +
+            part50()
 
     private fun part0(): List<NfcCase> =
         listOf(
@@ -2481,6 +2482,7 @@ private object NfcCaseData {
             NfcCase("\ua69c", "\ua69c"),
             NfcCase("\ua69d", "\ua69d"),
             NfcCase("\ua770", "\ua770"),
+            NfcCase("\ua7f1", "\ua7f1"),
             NfcCase("\ua7f2", "\ua7f2"),
             NfcCase("\ua7f3", "\ua7f3"),
             NfcCase("\ua7f4", "\ua7f4"),
@@ -2496,11 +2498,11 @@ private object NfcCaseData {
             NfcCase("\uac02", "\uac02"),
             NfcCase("\uac03", "\uac03"),
             NfcCase("\uac04", "\uac04"),
-            NfcCase("\uac05", "\uac05"),
         )
 
     private fun part6(): List<NfcCase> =
         listOf(
+            NfcCase("\uac05", "\uac05"),
             NfcCase("\uac06", "\uac06"),
             NfcCase("\uac07", "\uac07"),
             NfcCase("\uac08", "\uac08"),
@@ -2900,11 +2902,11 @@ private object NfcCaseData {
             NfcCase("\uad92", "\uad92"),
             NfcCase("\uad93", "\uad93"),
             NfcCase("\uad94", "\uad94"),
-            NfcCase("\uad95", "\uad95"),
         )
 
     private fun part7(): List<NfcCase> =
         listOf(
+            NfcCase("\uad95", "\uad95"),
             NfcCase("\uad96", "\uad96"),
             NfcCase("\uad97", "\uad97"),
             NfcCase("\uad98", "\uad98"),
@@ -3304,11 +3306,11 @@ private object NfcCaseData {
             NfcCase("\uaf22", "\uaf22"),
             NfcCase("\uaf23", "\uaf23"),
             NfcCase("\uaf24", "\uaf24"),
-            NfcCase("\uaf25", "\uaf25"),
         )
 
     private fun part8(): List<NfcCase> =
         listOf(
+            NfcCase("\uaf25", "\uaf25"),
             NfcCase("\uaf26", "\uaf26"),
             NfcCase("\uaf27", "\uaf27"),
             NfcCase("\uaf28", "\uaf28"),
@@ -3708,11 +3710,11 @@ private object NfcCaseData {
             NfcCase("\ub0b2", "\ub0b2"),
             NfcCase("\ub0b3", "\ub0b3"),
             NfcCase("\ub0b4", "\ub0b4"),
-            NfcCase("\ub0b5", "\ub0b5"),
         )
 
     private fun part9(): List<NfcCase> =
         listOf(
+            NfcCase("\ub0b5", "\ub0b5"),
             NfcCase("\ub0b6", "\ub0b6"),
             NfcCase("\ub0b7", "\ub0b7"),
             NfcCase("\ub0b8", "\ub0b8"),
@@ -4112,11 +4114,11 @@ private object NfcCaseData {
             NfcCase("\ub242", "\ub242"),
             NfcCase("\ub243", "\ub243"),
             NfcCase("\ub244", "\ub244"),
-            NfcCase("\ub245", "\ub245"),
         )
 
     private fun part10(): List<NfcCase> =
         listOf(
+            NfcCase("\ub245", "\ub245"),
             NfcCase("\ub246", "\ub246"),
             NfcCase("\ub247", "\ub247"),
             NfcCase("\ub248", "\ub248"),
@@ -4516,11 +4518,11 @@ private object NfcCaseData {
             NfcCase("\ub3d2", "\ub3d2"),
             NfcCase("\ub3d3", "\ub3d3"),
             NfcCase("\ub3d4", "\ub3d4"),
-            NfcCase("\ub3d5", "\ub3d5"),
         )
 
     private fun part11(): List<NfcCase> =
         listOf(
+            NfcCase("\ub3d5", "\ub3d5"),
             NfcCase("\ub3d6", "\ub3d6"),
             NfcCase("\ub3d7", "\ub3d7"),
             NfcCase("\ub3d8", "\ub3d8"),
@@ -4920,11 +4922,11 @@ private object NfcCaseData {
             NfcCase("\ub562", "\ub562"),
             NfcCase("\ub563", "\ub563"),
             NfcCase("\ub564", "\ub564"),
-            NfcCase("\ub565", "\ub565"),
         )
 
     private fun part12(): List<NfcCase> =
         listOf(
+            NfcCase("\ub565", "\ub565"),
             NfcCase("\ub566", "\ub566"),
             NfcCase("\ub567", "\ub567"),
             NfcCase("\ub568", "\ub568"),
@@ -5324,11 +5326,11 @@ private object NfcCaseData {
             NfcCase("\ub6f2", "\ub6f2"),
             NfcCase("\ub6f3", "\ub6f3"),
             NfcCase("\ub6f4", "\ub6f4"),
-            NfcCase("\ub6f5", "\ub6f5"),
         )
 
     private fun part13(): List<NfcCase> =
         listOf(
+            NfcCase("\ub6f5", "\ub6f5"),
             NfcCase("\ub6f6", "\ub6f6"),
             NfcCase("\ub6f7", "\ub6f7"),
             NfcCase("\ub6f8", "\ub6f8"),
@@ -5728,11 +5730,11 @@ private object NfcCaseData {
             NfcCase("\ub882", "\ub882"),
             NfcCase("\ub883", "\ub883"),
             NfcCase("\ub884", "\ub884"),
-            NfcCase("\ub885", "\ub885"),
         )
 
     private fun part14(): List<NfcCase> =
         listOf(
+            NfcCase("\ub885", "\ub885"),
             NfcCase("\ub886", "\ub886"),
             NfcCase("\ub887", "\ub887"),
             NfcCase("\ub888", "\ub888"),
@@ -6132,11 +6134,11 @@ private object NfcCaseData {
             NfcCase("\uba12", "\uba12"),
             NfcCase("\uba13", "\uba13"),
             NfcCase("\uba14", "\uba14"),
-            NfcCase("\uba15", "\uba15"),
         )
 
     private fun part15(): List<NfcCase> =
         listOf(
+            NfcCase("\uba15", "\uba15"),
             NfcCase("\uba16", "\uba16"),
             NfcCase("\uba17", "\uba17"),
             NfcCase("\uba18", "\uba18"),
@@ -6536,11 +6538,11 @@ private object NfcCaseData {
             NfcCase("\ubba2", "\ubba2"),
             NfcCase("\ubba3", "\ubba3"),
             NfcCase("\ubba4", "\ubba4"),
-            NfcCase("\ubba5", "\ubba5"),
         )
 
     private fun part16(): List<NfcCase> =
         listOf(
+            NfcCase("\ubba5", "\ubba5"),
             NfcCase("\ubba6", "\ubba6"),
             NfcCase("\ubba7", "\ubba7"),
             NfcCase("\ubba8", "\ubba8"),
@@ -6940,11 +6942,11 @@ private object NfcCaseData {
             NfcCase("\ubd32", "\ubd32"),
             NfcCase("\ubd33", "\ubd33"),
             NfcCase("\ubd34", "\ubd34"),
-            NfcCase("\ubd35", "\ubd35"),
         )
 
     private fun part17(): List<NfcCase> =
         listOf(
+            NfcCase("\ubd35", "\ubd35"),
             NfcCase("\ubd36", "\ubd36"),
             NfcCase("\ubd37", "\ubd37"),
             NfcCase("\ubd38", "\ubd38"),
@@ -7344,11 +7346,11 @@ private object NfcCaseData {
             NfcCase("\ubec2", "\ubec2"),
             NfcCase("\ubec3", "\ubec3"),
             NfcCase("\ubec4", "\ubec4"),
-            NfcCase("\ubec5", "\ubec5"),
         )
 
     private fun part18(): List<NfcCase> =
         listOf(
+            NfcCase("\ubec5", "\ubec5"),
             NfcCase("\ubec6", "\ubec6"),
             NfcCase("\ubec7", "\ubec7"),
             NfcCase("\ubec8", "\ubec8"),
@@ -7748,11 +7750,11 @@ private object NfcCaseData {
             NfcCase("\uc052", "\uc052"),
             NfcCase("\uc053", "\uc053"),
             NfcCase("\uc054", "\uc054"),
-            NfcCase("\uc055", "\uc055"),
         )
 
     private fun part19(): List<NfcCase> =
         listOf(
+            NfcCase("\uc055", "\uc055"),
             NfcCase("\uc056", "\uc056"),
             NfcCase("\uc057", "\uc057"),
             NfcCase("\uc058", "\uc058"),
@@ -8152,11 +8154,11 @@ private object NfcCaseData {
             NfcCase("\uc1e2", "\uc1e2"),
             NfcCase("\uc1e3", "\uc1e3"),
             NfcCase("\uc1e4", "\uc1e4"),
-            NfcCase("\uc1e5", "\uc1e5"),
         )
 
     private fun part20(): List<NfcCase> =
         listOf(
+            NfcCase("\uc1e5", "\uc1e5"),
             NfcCase("\uc1e6", "\uc1e6"),
             NfcCase("\uc1e7", "\uc1e7"),
             NfcCase("\uc1e8", "\uc1e8"),
@@ -8556,11 +8558,11 @@ private object NfcCaseData {
             NfcCase("\uc372", "\uc372"),
             NfcCase("\uc373", "\uc373"),
             NfcCase("\uc374", "\uc374"),
-            NfcCase("\uc375", "\uc375"),
         )
 
     private fun part21(): List<NfcCase> =
         listOf(
+            NfcCase("\uc375", "\uc375"),
             NfcCase("\uc376", "\uc376"),
             NfcCase("\uc377", "\uc377"),
             NfcCase("\uc378", "\uc378"),
@@ -8960,11 +8962,11 @@ private object NfcCaseData {
             NfcCase("\uc502", "\uc502"),
             NfcCase("\uc503", "\uc503"),
             NfcCase("\uc504", "\uc504"),
-            NfcCase("\uc505", "\uc505"),
         )
 
     private fun part22(): List<NfcCase> =
         listOf(
+            NfcCase("\uc505", "\uc505"),
             NfcCase("\uc506", "\uc506"),
             NfcCase("\uc507", "\uc507"),
             NfcCase("\uc508", "\uc508"),
@@ -9364,11 +9366,11 @@ private object NfcCaseData {
             NfcCase("\uc692", "\uc692"),
             NfcCase("\uc693", "\uc693"),
             NfcCase("\uc694", "\uc694"),
-            NfcCase("\uc695", "\uc695"),
         )
 
     private fun part23(): List<NfcCase> =
         listOf(
+            NfcCase("\uc695", "\uc695"),
             NfcCase("\uc696", "\uc696"),
             NfcCase("\uc697", "\uc697"),
             NfcCase("\uc698", "\uc698"),
@@ -9768,11 +9770,11 @@ private object NfcCaseData {
             NfcCase("\uc822", "\uc822"),
             NfcCase("\uc823", "\uc823"),
             NfcCase("\uc824", "\uc824"),
-            NfcCase("\uc825", "\uc825"),
         )
 
     private fun part24(): List<NfcCase> =
         listOf(
+            NfcCase("\uc825", "\uc825"),
             NfcCase("\uc826", "\uc826"),
             NfcCase("\uc827", "\uc827"),
             NfcCase("\uc828", "\uc828"),
@@ -10172,11 +10174,11 @@ private object NfcCaseData {
             NfcCase("\uc9b2", "\uc9b2"),
             NfcCase("\uc9b3", "\uc9b3"),
             NfcCase("\uc9b4", "\uc9b4"),
-            NfcCase("\uc9b5", "\uc9b5"),
         )
 
     private fun part25(): List<NfcCase> =
         listOf(
+            NfcCase("\uc9b5", "\uc9b5"),
             NfcCase("\uc9b6", "\uc9b6"),
             NfcCase("\uc9b7", "\uc9b7"),
             NfcCase("\uc9b8", "\uc9b8"),
@@ -10576,11 +10578,11 @@ private object NfcCaseData {
             NfcCase("\ucb42", "\ucb42"),
             NfcCase("\ucb43", "\ucb43"),
             NfcCase("\ucb44", "\ucb44"),
-            NfcCase("\ucb45", "\ucb45"),
         )
 
     private fun part26(): List<NfcCase> =
         listOf(
+            NfcCase("\ucb45", "\ucb45"),
             NfcCase("\ucb46", "\ucb46"),
             NfcCase("\ucb47", "\ucb47"),
             NfcCase("\ucb48", "\ucb48"),
@@ -10980,11 +10982,11 @@ private object NfcCaseData {
             NfcCase("\uccd2", "\uccd2"),
             NfcCase("\uccd3", "\uccd3"),
             NfcCase("\uccd4", "\uccd4"),
-            NfcCase("\uccd5", "\uccd5"),
         )
 
     private fun part27(): List<NfcCase> =
         listOf(
+            NfcCase("\uccd5", "\uccd5"),
             NfcCase("\uccd6", "\uccd6"),
             NfcCase("\uccd7", "\uccd7"),
             NfcCase("\uccd8", "\uccd8"),
@@ -11384,11 +11386,11 @@ private object NfcCaseData {
             NfcCase("\uce62", "\uce62"),
             NfcCase("\uce63", "\uce63"),
             NfcCase("\uce64", "\uce64"),
-            NfcCase("\uce65", "\uce65"),
         )
 
     private fun part28(): List<NfcCase> =
         listOf(
+            NfcCase("\uce65", "\uce65"),
             NfcCase("\uce66", "\uce66"),
             NfcCase("\uce67", "\uce67"),
             NfcCase("\uce68", "\uce68"),
@@ -11788,11 +11790,11 @@ private object NfcCaseData {
             NfcCase("\ucff2", "\ucff2"),
             NfcCase("\ucff3", "\ucff3"),
             NfcCase("\ucff4", "\ucff4"),
-            NfcCase("\ucff5", "\ucff5"),
         )
 
     private fun part29(): List<NfcCase> =
         listOf(
+            NfcCase("\ucff5", "\ucff5"),
             NfcCase("\ucff6", "\ucff6"),
             NfcCase("\ucff7", "\ucff7"),
             NfcCase("\ucff8", "\ucff8"),
@@ -12192,11 +12194,11 @@ private object NfcCaseData {
             NfcCase("\ud182", "\ud182"),
             NfcCase("\ud183", "\ud183"),
             NfcCase("\ud184", "\ud184"),
-            NfcCase("\ud185", "\ud185"),
         )
 
     private fun part30(): List<NfcCase> =
         listOf(
+            NfcCase("\ud185", "\ud185"),
             NfcCase("\ud186", "\ud186"),
             NfcCase("\ud187", "\ud187"),
             NfcCase("\ud188", "\ud188"),
@@ -12596,11 +12598,11 @@ private object NfcCaseData {
             NfcCase("\ud312", "\ud312"),
             NfcCase("\ud313", "\ud313"),
             NfcCase("\ud314", "\ud314"),
-            NfcCase("\ud315", "\ud315"),
         )
 
     private fun part31(): List<NfcCase> =
         listOf(
+            NfcCase("\ud315", "\ud315"),
             NfcCase("\ud316", "\ud316"),
             NfcCase("\ud317", "\ud317"),
             NfcCase("\ud318", "\ud318"),
@@ -13000,11 +13002,11 @@ private object NfcCaseData {
             NfcCase("\ud4a2", "\ud4a2"),
             NfcCase("\ud4a3", "\ud4a3"),
             NfcCase("\ud4a4", "\ud4a4"),
-            NfcCase("\ud4a5", "\ud4a5"),
         )
 
     private fun part32(): List<NfcCase> =
         listOf(
+            NfcCase("\ud4a5", "\ud4a5"),
             NfcCase("\ud4a6", "\ud4a6"),
             NfcCase("\ud4a7", "\ud4a7"),
             NfcCase("\ud4a8", "\ud4a8"),
@@ -13404,11 +13406,11 @@ private object NfcCaseData {
             NfcCase("\ud632", "\ud632"),
             NfcCase("\ud633", "\ud633"),
             NfcCase("\ud634", "\ud634"),
-            NfcCase("\ud635", "\ud635"),
         )
 
     private fun part33(): List<NfcCase> =
         listOf(
+            NfcCase("\ud635", "\ud635"),
             NfcCase("\ud636", "\ud636"),
             NfcCase("\ud637", "\ud637"),
             NfcCase("\ud638", "\ud638"),
@@ -13808,11 +13810,11 @@ private object NfcCaseData {
             NfcCase("\uf91e", "\u721b"),
             NfcCase("\uf91f", "\u862d"),
             NfcCase("\uf920", "\u9e1e"),
-            NfcCase("\uf921", "\u5d50"),
         )
 
     private fun part34(): List<NfcCase> =
         listOf(
+            NfcCase("\uf921", "\u5d50"),
             NfcCase("\uf922", "\u6feb"),
             NfcCase("\uf923", "\u85cd"),
             NfcCase("\uf924", "\u8964"),
@@ -14212,11 +14214,11 @@ private object NfcCaseData {
             NfcCase("\ufabc", "\u8b01"),
             NfcCase("\ufabd", "\u8afe"),
             NfcCase("\ufabe", "\u8aed"),
-            NfcCase("\ufabf", "\u8b39"),
         )
 
     private fun part35(): List<NfcCase> =
         listOf(
+            NfcCase("\ufabf", "\u8b39"),
             NfcCase("\ufac0", "\u8b8a"),
             NfcCase("\ufac1", "\u8d08"),
             NfcCase("\ufac2", "\u8f38"),
@@ -14616,11 +14618,11 @@ private object NfcCaseData {
             NfcCase("\ufcaa", "\ufcaa"),
             NfcCase("\ufcab", "\ufcab"),
             NfcCase("\ufcac", "\ufcac"),
-            NfcCase("\ufcad", "\ufcad"),
         )
 
     private fun part36(): List<NfcCase> =
         listOf(
+            NfcCase("\ufcad", "\ufcad"),
             NfcCase("\ufcae", "\ufcae"),
             NfcCase("\ufcaf", "\ufcaf"),
             NfcCase("\ufcb0", "\ufcb0"),
@@ -15020,11 +15022,11 @@ private object NfcCaseData {
             NfcCase("\ufea9", "\ufea9"),
             NfcCase("\ufeaa", "\ufeaa"),
             NfcCase("\ufeab", "\ufeab"),
-            NfcCase("\ufeac", "\ufeac"),
         )
 
     private fun part37(): List<NfcCase> =
         listOf(
+            NfcCase("\ufeac", "\ufeac"),
             NfcCase("\ufead", "\ufead"),
             NfcCase("\ufeae", "\ufeae"),
             NfcCase("\ufeaf", "\ufeaf"),
@@ -15424,11 +15426,11 @@ private object NfcCaseData {
             NfcCase("\ud833\udcd8", "\ud833\udcd8"),
             NfcCase("\ud833\udcd9", "\ud833\udcd9"),
             NfcCase("\ud833\udcda", "\ud833\udcda"),
-            NfcCase("\ud833\udcdb", "\ud833\udcdb"),
         )
 
     private fun part38(): List<NfcCase> =
         listOf(
+            NfcCase("\ud833\udcdb", "\ud833\udcdb"),
             NfcCase("\ud833\udcdc", "\ud833\udcdc"),
             NfcCase("\ud833\udcdd", "\ud833\udcdd"),
             NfcCase("\ud833\udcde", "\ud833\udcde"),
@@ -15828,11 +15830,11 @@ private object NfcCaseData {
             NfcCase("\ud835\udd79", "\ud835\udd79"),
             NfcCase("\ud835\udd7a", "\ud835\udd7a"),
             NfcCase("\ud835\udd7b", "\ud835\udd7b"),
-            NfcCase("\ud835\udd7c", "\ud835\udd7c"),
         )
 
     private fun part39(): List<NfcCase> =
         listOf(
+            NfcCase("\ud835\udd7c", "\ud835\udd7c"),
             NfcCase("\ud835\udd7d", "\ud835\udd7d"),
             NfcCase("\ud835\udd7e", "\ud835\udd7e"),
             NfcCase("\ud835\udd7f", "\ud835\udd7f"),
@@ -16232,11 +16234,11 @@ private object NfcCaseData {
             NfcCase("\ud835\udf0b", "\ud835\udf0b"),
             NfcCase("\ud835\udf0c", "\ud835\udf0c"),
             NfcCase("\ud835\udf0d", "\ud835\udf0d"),
-            NfcCase("\ud835\udf0e", "\ud835\udf0e"),
         )
 
     private fun part40(): List<NfcCase> =
         listOf(
+            NfcCase("\ud835\udf0e", "\ud835\udf0e"),
             NfcCase("\ud835\udf0f", "\ud835\udf0f"),
             NfcCase("\ud835\udf10", "\ud835\udf10"),
             NfcCase("\ud835\udf11", "\ud835\udf11"),
@@ -16636,11 +16638,11 @@ private object NfcCaseData {
             NfcCase("\ud83b\ude86", "\ud83b\ude86"),
             NfcCase("\ud83b\ude87", "\ud83b\ude87"),
             NfcCase("\ud83b\ude88", "\ud83b\ude88"),
-            NfcCase("\ud83b\ude89", "\ud83b\ude89"),
         )
 
     private fun part41(): List<NfcCase> =
         listOf(
+            NfcCase("\ud83b\ude89", "\ud83b\ude89"),
             NfcCase("\ud83b\ude8b", "\ud83b\ude8b"),
             NfcCase("\ud83b\ude8c", "\ud83b\ude8c"),
             NfcCase("\ud83b\ude8d", "\ud83b\ude8d"),
@@ -17040,11 +17042,11 @@ private object NfcCaseData {
             NfcCase("\ud87e\udcd0", "\u3b08"),
             NfcCase("\ud87e\udcd1", "\u3ae4"),
             NfcCase("\ud87e\udcd2", "\u5192"),
-            NfcCase("\ud87e\udcd3", "\u5195"),
         )
 
     private fun part42(): List<NfcCase> =
         listOf(
+            NfcCase("\ud87e\udcd3", "\u5195"),
             NfcCase("\ud87e\udcd4", "\u6700"),
             NfcCase("\ud87e\udcd5", "\u669c"),
             NfcCase("\ud87e\udcd6", "\u80ad"),
@@ -17444,11 +17446,11 @@ private object NfcCaseData {
             NfcCase("a\u1dce\u0321\u0f74\u0321b", "a\u0f74\u0321\u0321\u1dceb"),
             NfcCase("a\u0321\u1dce\u0321\u0f74b", "a\u0f74\u0321\u0321\u1dceb"),
             NfcCase("a\u1dce\u0321\u0f74\u0322b", "a\u0f74\u0321\u0322\u1dceb"),
-            NfcCase("a\u0322\u1dce\u0321\u0f74b", "a\u0f74\u0322\u0321\u1dceb"),
         )
 
     private fun part43(): List<NfcCase> =
         listOf(
+            NfcCase("a\u0322\u1dce\u0321\u0f74b", "a\u0f74\u0322\u0321\u1dceb"),
             NfcCase("a\u059a\u0316\u1dfa\u0323b", "a\u1dfa\u0316\u0323\u059ab"),
             NfcCase("a\u0323\u059a\u0316\u1dfab", "\u1ea1\u1dfa\u0316\u059ab"),
             NfcCase("a\u059a\u0316\u1dfa\u0324b", "a\u1dfa\u0316\u0324\u059ab"),
@@ -17848,11 +17850,11 @@ private object NfcCaseData {
             NfcCase("a\u0315\u0300\u05ae\u073db", "\u00e0\u05ae\u073d\u0315b"),
             NfcCase("a\u073d\u0315\u0300\u05aeb", "a\u05ae\u073d\u0300\u0315b"),
             NfcCase("a\u059a\u0316\u1dfa\u073eb", "a\u1dfa\u0316\u073e\u059ab"),
-            NfcCase("a\u073e\u059a\u0316\u1dfab", "a\u1dfa\u073e\u0316\u059ab"),
         )
 
     private fun part44(): List<NfcCase> =
         listOf(
+            NfcCase("a\u073e\u059a\u0316\u1dfab", "a\u1dfa\u073e\u0316\u059ab"),
             NfcCase("a\u0315\u0300\u05ae\u073fb", "\u00e0\u05ae\u073f\u0315b"),
             NfcCase("a\u073f\u0315\u0300\u05aeb", "a\u05ae\u073f\u0300\u0315b"),
             NfcCase("a\u0315\u0300\u05ae\u0740b", "\u00e0\u05ae\u0740\u0315b"),
@@ -18252,11 +18254,11 @@ private object NfcCaseData {
             NfcCase("a\u0315\u0300\u05ae\u1ab3b", "\u00e0\u05ae\u1ab3\u0315b"),
             NfcCase("a\u1ab3\u0315\u0300\u05aeb", "a\u05ae\u1ab3\u0300\u0315b"),
             NfcCase("a\u0315\u0300\u05ae\u1ab4b", "\u00e0\u05ae\u1ab4\u0315b"),
-            NfcCase("a\u1ab4\u0315\u0300\u05aeb", "a\u05ae\u1ab4\u0300\u0315b"),
         )
 
     private fun part45(): List<NfcCase> =
         listOf(
+            NfcCase("a\u1ab4\u0315\u0300\u05aeb", "a\u05ae\u1ab4\u0300\u0315b"),
             NfcCase("a\u059a\u0316\u1dfa\u1ab5b", "a\u1dfa\u0316\u1ab5\u059ab"),
             NfcCase("a\u1ab5\u059a\u0316\u1dfab", "a\u1dfa\u1ab5\u0316\u059ab"),
             NfcCase("a\u059a\u0316\u1dfa\u1ab6b", "a\u1dfa\u0316\u1ab6\u059ab"),
@@ -18307,6 +18309,60 @@ private object NfcCaseData {
             NfcCase("a\u1acd\u0315\u0300\u05aeb", "a\u05ae\u1acd\u0300\u0315b"),
             NfcCase("a\u0315\u0300\u05ae\u1aceb", "\u00e0\u05ae\u1ace\u0315b"),
             NfcCase("a\u1ace\u0315\u0300\u05aeb", "a\u05ae\u1ace\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1acfb", "\u00e0\u05ae\u1acf\u0315b"),
+            NfcCase("a\u1acf\u0315\u0300\u05aeb", "a\u05ae\u1acf\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ad0b", "\u00e0\u05ae\u1ad0\u0315b"),
+            NfcCase("a\u1ad0\u0315\u0300\u05aeb", "a\u05ae\u1ad0\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ad1b", "\u00e0\u05ae\u1ad1\u0315b"),
+            NfcCase("a\u1ad1\u0315\u0300\u05aeb", "a\u05ae\u1ad1\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ad2b", "\u00e0\u05ae\u1ad2\u0315b"),
+            NfcCase("a\u1ad2\u0315\u0300\u05aeb", "a\u05ae\u1ad2\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ad3b", "\u00e0\u05ae\u1ad3\u0315b"),
+            NfcCase("a\u1ad3\u0315\u0300\u05aeb", "a\u05ae\u1ad3\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ad4b", "\u00e0\u05ae\u1ad4\u0315b"),
+            NfcCase("a\u1ad4\u0315\u0300\u05aeb", "a\u05ae\u1ad4\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ad5b", "\u00e0\u05ae\u1ad5\u0315b"),
+            NfcCase("a\u1ad5\u0315\u0300\u05aeb", "a\u05ae\u1ad5\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ad6b", "\u00e0\u05ae\u1ad6\u0315b"),
+            NfcCase("a\u1ad6\u0315\u0300\u05aeb", "a\u05ae\u1ad6\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ad7b", "\u00e0\u05ae\u1ad7\u0315b"),
+            NfcCase("a\u1ad7\u0315\u0300\u05aeb", "a\u05ae\u1ad7\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ad8b", "\u00e0\u05ae\u1ad8\u0315b"),
+            NfcCase("a\u1ad8\u0315\u0300\u05aeb", "a\u05ae\u1ad8\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ad9b", "\u00e0\u05ae\u1ad9\u0315b"),
+            NfcCase("a\u1ad9\u0315\u0300\u05aeb", "a\u05ae\u1ad9\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1adab", "\u00e0\u05ae\u1ada\u0315b"),
+            NfcCase("a\u1ada\u0315\u0300\u05aeb", "a\u05ae\u1ada\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1adbb", "\u00e0\u05ae\u1adb\u0315b"),
+            NfcCase("a\u1adb\u0315\u0300\u05aeb", "a\u05ae\u1adb\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1adcb", "\u00e0\u05ae\u1adc\u0315b"),
+            NfcCase("a\u1adc\u0315\u0300\u05aeb", "a\u05ae\u1adc\u0300\u0315b"),
+            NfcCase("a\u059a\u0316\u1dfa\u1addb", "a\u1dfa\u0316\u1add\u059ab"),
+            NfcCase("a\u1add\u059a\u0316\u1dfab", "a\u1dfa\u1add\u0316\u059ab"),
+            NfcCase("a\u0315\u0300\u05ae\u1ae0b", "\u00e0\u05ae\u1ae0\u0315b"),
+            NfcCase("a\u1ae0\u0315\u0300\u05aeb", "a\u05ae\u1ae0\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ae1b", "\u00e0\u05ae\u1ae1\u0315b"),
+            NfcCase("a\u1ae1\u0315\u0300\u05aeb", "a\u05ae\u1ae1\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ae2b", "\u00e0\u05ae\u1ae2\u0315b"),
+            NfcCase("a\u1ae2\u0315\u0300\u05aeb", "a\u05ae\u1ae2\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ae3b", "\u00e0\u05ae\u1ae3\u0315b"),
+            NfcCase("a\u1ae3\u0315\u0300\u05aeb", "a\u05ae\u1ae3\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ae4b", "\u00e0\u05ae\u1ae4\u0315b"),
+            NfcCase("a\u1ae4\u0315\u0300\u05aeb", "a\u05ae\u1ae4\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ae5b", "\u00e0\u05ae\u1ae5\u0315b"),
+            NfcCase("a\u1ae5\u0315\u0300\u05aeb", "a\u05ae\u1ae5\u0300\u0315b"),
+            NfcCase("a\u059a\u0316\u1dfa\u1ae6b", "a\u1dfa\u0316\u1ae6\u059ab"),
+            NfcCase("a\u1ae6\u059a\u0316\u1dfab", "a\u1dfa\u1ae6\u0316\u059ab"),
+            NfcCase("a\u0315\u0300\u05ae\u1ae7b", "\u00e0\u05ae\u1ae7\u0315b"),
+            NfcCase("a\u1ae7\u0315\u0300\u05aeb", "a\u05ae\u1ae7\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ae8b", "\u00e0\u05ae\u1ae8\u0315b"),
+            NfcCase("a\u1ae8\u0315\u0300\u05aeb", "a\u05ae\u1ae8\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1ae9b", "\u00e0\u05ae\u1ae9\u0315b"),
+            NfcCase("a\u1ae9\u0315\u0300\u05aeb", "a\u05ae\u1ae9\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\u1aeab", "\u00e0\u05ae\u1aea\u0315b"),
+            NfcCase("a\u1aea\u0315\u0300\u05aeb", "a\u05ae\u1aea\u0300\u0315b"),
+            NfcCase("a\u0345\u035d\u035c\u1aebb", "a\u035c\u035d\u1aeb\u0345b"),
+            NfcCase("a\u1aeb\u0345\u035d\u035cb", "a\u035c\u1aeb\u035d\u0345b"),
             NfcCase("a\u3099\u093c\ud81b\udff0\u1b34b", "a\ud81b\udff0\u093c\u1b34\u3099b"),
             NfcCase("a\u1b34\u3099\u093c\ud81b\udff0b", "a\ud81b\udff0\u1b34\u093c\u3099b"),
             NfcCase("a\u05b0\u094d\u3099\u1b44b", "a\u3099\u094d\u1b44\u05b0b"),
@@ -18602,6 +18658,10 @@ private object NfcCaseData {
             NfcCase("a\u0315\u0300\u05ae\u2de8b", "\u00e0\u05ae\u2de8\u0315b"),
             NfcCase("a\u2de8\u0315\u0300\u05aeb", "a\u05ae\u2de8\u0300\u0315b"),
             NfcCase("a\u0315\u0300\u05ae\u2de9b", "\u00e0\u05ae\u2de9\u0315b"),
+        )
+
+    private fun part46(): List<NfcCase> =
+        listOf(
             NfcCase("a\u2de9\u0315\u0300\u05aeb", "a\u05ae\u2de9\u0300\u0315b"),
             NfcCase("a\u0315\u0300\u05ae\u2deab", "\u00e0\u05ae\u2dea\u0315b"),
             NfcCase("a\u2dea\u0315\u0300\u05aeb", "a\u05ae\u2dea\u0300\u0315b"),
@@ -18657,10 +18717,6 @@ private object NfcCaseData {
             NfcCase("a\u302d\u302e\u059a\u0316b", "a\u0316\u302d\u059a\u302eb"),
             NfcCase("a\ud834\udd6d\u302e\u059a\u302eb", "a\u059a\u302e\u302e\ud834\udd6db"),
             NfcCase("a\u302e\ud834\udd6d\u302e\u059ab", "a\u059a\u302e\u302e\ud834\udd6db"),
-        )
-
-    private fun part46(): List<NfcCase> =
-        listOf(
             NfcCase("a\ud834\udd6d\u302e\u059a\u302fb", "a\u059a\u302e\u302f\ud834\udd6db"),
             NfcCase("a\u302f\ud834\udd6d\u302e\u059ab", "a\u059a\u302f\u302e\ud834\udd6db"),
             NfcCase("a\u094d\u3099\u093c\u3099b", "a\u093c\u3099\u3099\u094db"),
@@ -18859,6 +18915,10 @@ private object NfcCaseData {
             NfcCase("a\ud803\udeab\u0315\u0300\u05aeb", "a\u05ae\ud803\udeab\u0300\u0315b"),
             NfcCase("a\u0315\u0300\u05ae\ud803\udeacb", "\u00e0\u05ae\ud803\udeac\u0315b"),
             NfcCase("a\ud803\udeac\u0315\u0300\u05aeb", "a\u05ae\ud803\udeac\u0300\u0315b"),
+            NfcCase("a\u059a\u0316\u1dfa\ud803\udefab", "a\u1dfa\u0316\ud803\udefa\u059ab"),
+            NfcCase("a\ud803\udefa\u059a\u0316\u1dfab", "a\u1dfa\ud803\udefa\u0316\u059ab"),
+            NfcCase("a\u059a\u0316\u1dfa\ud803\udefbb", "a\u1dfa\u0316\ud803\udefb\u059ab"),
+            NfcCase("a\ud803\udefb\u059a\u0316\u1dfab", "a\u1dfa\ud803\udefb\u0316\u059ab"),
             NfcCase("a\u059a\u0316\u1dfa\ud803\udefdb", "a\u1dfa\u0316\ud803\udefd\u059ab"),
             NfcCase("a\ud803\udefd\u059a\u0316\u1dfab", "a\u1dfa\ud803\udefd\u0316\u059ab"),
             NfcCase("a\u059a\u0316\u1dfa\ud803\udefeb", "a\u1dfa\u0316\ud803\udefe\u059ab"),
@@ -19002,6 +19062,10 @@ private object NfcCaseData {
             NfcCase("a\u05b0\u094d\u3099\ud806\ude34b", "a\u3099\u094d\ud806\ude34\u05b0b"),
             NfcCase("a\ud806\ude34\u05b0\u094d\u3099b", "a\u3099\ud806\ude34\u094d\u05b0b"),
             NfcCase("a\u05b0\u094d\u3099\ud806\ude47b", "a\u3099\u094d\ud806\ude47\u05b0b"),
+        )
+
+    private fun part47(): List<NfcCase> =
+        listOf(
             NfcCase("a\ud806\ude47\u05b0\u094d\u3099b", "a\u3099\ud806\ude47\u094d\u05b0b"),
             NfcCase("a\u05b0\u094d\u3099\ud806\ude99b", "a\u3099\u094d\ud806\ude99\u05b0b"),
             NfcCase("a\ud806\ude99\u05b0\u094d\u3099b", "a\u3099\ud806\ude99\u094d\u05b0b"),
@@ -19061,10 +19125,6 @@ private object NfcCaseData {
             NfcCase("a\ud834\udd68\ud81b\udff0\u0334b", "a\ud834\udd68\u0334\ud81b\udff0b"),
             NfcCase("a\ud81b\udff0\u0334\ud834\udd69b", "a\u0334\ud834\udd69\ud81b\udff0b"),
             NfcCase("a\ud834\udd69\ud81b\udff0\u0334b", "a\ud834\udd69\u0334\ud81b\udff0b"),
-        )
-
-    private fun part47(): List<NfcCase> =
-        listOf(
             NfcCase("a\u05ae\ud834\udd6d\u302e\ud834\udd6db", "a\u302e\ud834\udd6d\ud834\udd6d\u05aeb"),
             NfcCase("a\ud834\udd6d\u05ae\ud834\udd6d\u302eb", "a\u302e\ud834\udd6d\ud834\udd6d\u05aeb"),
             NfcCase("a\u1dfa\u031b\u1dce\ud834\udd6eb", "a\u1dce\u031b\ud834\udd6e\u1dfab"),
@@ -19235,6 +19295,16 @@ private object NfcCaseData {
             NfcCase("a\ud839\uddee\u0315\u0300\u05aeb", "a\u05ae\ud839\uddee\u0300\u0315b"),
             NfcCase("a\u059a\u0316\u1dfa\ud839\uddefb", "a\u1dfa\u0316\ud839\uddef\u059ab"),
             NfcCase("a\ud839\uddef\u059a\u0316\u1dfab", "a\u1dfa\ud839\uddef\u0316\u059ab"),
+            NfcCase("a\u0315\u0300\u05ae\ud839\udee3b", "\u00e0\u05ae\ud839\udee3\u0315b"),
+            NfcCase("a\ud839\udee3\u0315\u0300\u05aeb", "a\u05ae\ud839\udee3\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\ud839\udee6b", "\u00e0\u05ae\ud839\udee6\u0315b"),
+            NfcCase("a\ud839\udee6\u0315\u0300\u05aeb", "a\u05ae\ud839\udee6\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\ud839\udeeeb", "\u00e0\u05ae\ud839\udeee\u0315b"),
+            NfcCase("a\ud839\udeee\u0315\u0300\u05aeb", "a\u05ae\ud839\udeee\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\ud839\udeefb", "\u00e0\u05ae\ud839\udeef\u0315b"),
+            NfcCase("a\ud839\udeef\u0315\u0300\u05aeb", "a\u05ae\ud839\udeef\u0300\u0315b"),
+            NfcCase("a\u0315\u0300\u05ae\ud839\udef5b", "\u00e0\u05ae\ud839\udef5\u0315b"),
+            NfcCase("a\ud839\udef5\u0315\u0300\u05aeb", "a\u05ae\ud839\udef5\u0300\u0315b"),
             NfcCase("a\u059a\u0316\u1dfa\ud83a\udcd0b", "a\u1dfa\u0316\ud83a\udcd0\u059ab"),
             NfcCase("a\ud83a\udcd0\u059a\u0316\u1dfab", "a\u1dfa\ud83a\udcd0\u0316\u059ab"),
             NfcCase("a\u059a\u0316\u1dfa\ud83a\udcd1b", "a\u1dfa\u0316\ud83a\udcd1\u059ab"),
@@ -19396,6 +19466,10 @@ private object NfcCaseData {
             NfcCase("\uc694\u0334\u11bc", "\uc694\u0334\u11bc"),
             NfcCase("\uc758\u0334\u11ae", "\uc758\u0334\u11ae"),
             NfcCase("\uc7ac\u0334\u11b5", "\uc7ac\u0334\u11b5"),
+        )
+
+    private fun part48(): List<NfcCase> =
+        listOf(
             NfcCase("\uc800\u0334\u11bc", "\uc800\u0334\u11bc"),
             NfcCase("\uc8c4\u0334\u11ae", "\uc8c4\u0334\u11ae"),
             NfcCase("\uc918\u0334\u11b5", "\uc918\u0334\u11b5"),
@@ -19465,10 +19539,6 @@ private object NfcCaseData {
             NfcCase("u\u0344", "\u01d8"),
             NfcCase("\u00fc\u0301", "\u01d8"),
             NfcCase("\u00fc\u0341", "\u01d8"),
-        )
-
-    private fun part48(): List<NfcCase> =
-        listOf(
             NfcCase("\u00dc\u030c", "\u01d9"),
             NfcCase("\u00fc\u030c", "\u01da"),
             NfcCase("\u00dc\u0300", "\u01db"),
@@ -19800,6 +19870,10 @@ private object NfcCaseData {
             NfcCase("\u1f68\u0342", "\u1f6e"),
             NfcCase("\u1f69\u0342", "\u1f6f"),
             NfcCase("\u1f00\u0345", "\u1f80"),
+        )
+
+    private fun part49(): List<NfcCase> =
+        listOf(
             NfcCase("\u1fb3\u0313", "\u1f80"),
             NfcCase("\u1fb3\u0343", "\u1f80"),
             NfcCase("\u1f01\u0345", "\u1f81"),
@@ -19869,10 +19943,6 @@ private object NfcCaseData {
             NfcCase("\u1f08\u0345\u0340", "\u1f8a"),
             NfcCase("\u1fbc\u0313\u0300", "\u1f8a"),
             NfcCase("\u1fbc\u0313\u0340", "\u1f8a"),
-        )
-
-    private fun part49(): List<NfcCase> =
-        listOf(
             NfcCase("\u1fbc\u0343\u0300", "\u1f8a"),
             NfcCase("\u1fbc\u0343\u0340", "\u1f8a"),
             NfcCase("\u1f0b\u0345", "\u1f8b"),
@@ -20204,6 +20274,10 @@ private object NfcCaseData {
             NfcCase("\ud804\udfc2\ud804\udfc7", "\ud804\udfc5\ud804\udfb8"),
             NfcCase("\ud804\udf8b\ud804\udfc5", "\ud804\udf8e\ud804\udfc2"),
             NfcCase("\ud804\udf8b\ud804\udfc5\ud804\udfc2", "\ud804\udf8e\ud804\udfc5"),
+        )
+
+    private fun part50(): List<NfcCase> =
+        listOf(
             NfcCase("\ud804\udf8b\ud804\udfc5\ud804\udfb8", "\ud804\udf8e\ud804\udfc7"),
             NfcCase("\ud804\udf8b\ud804\udfc5\ud804\udfc9", "\ud804\udf8e\ud804\udfc8"),
             NfcCase("\ud804\udfc2\ud804\udfc5", "\ud804\udfc5\ud804\udfc2"),

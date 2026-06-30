@@ -4,7 +4,7 @@
 // Package ucd parses the Unicode Character Database corpora the codegen
 // generators consume and exposes the in-memory lookup tables the IDNA reference
 // reads: semicolon-delimited records, code-point ranges, hex-scalar fields, and
-// the merged mapping / label-validity / NFC tables (Unicode 16.0). It is the
+// the merged mapping / label-validity / NFC tables (Unicode 17.0). It is the
 // data layer; it imports nothing else in this module.
 package ucd
 
@@ -51,6 +51,13 @@ const fieldCodePoint = 0
 // it is the root.
 const rootMarker = "settings.gradle.kts"
 
+// unicodeVersionDir is the single source of truth for the vendored Unicode
+// release the generators read. Bumping the bundled UTS-46 / NFC tables to a new
+// Unicode version is a one-line change here, paired with vendoring that release's
+// UCD files under .claude/references/<unicodeVersionDir>/ and regenerating the
+// embedded Kotlin tables. See docs/idna-unicode-update.md for the full procedure.
+const unicodeVersionDir = "unicode-17.0"
+
 // repoRoot walks up from the current working directory and returns the first
 // ancestor directory that contains settings.gradle.kts, so the loaders resolve
 // their inputs the same way whether invoked from Gradle (CWD = repo root) or
@@ -81,7 +88,7 @@ func mappingTablePath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(
-		root, ".claude", "references", "unicode-16.0", "IdnaMappingTable.txt",
+		root, ".claude", "references", unicodeVersionDir, "IdnaMappingTable.txt",
 	), nil
 }
 
@@ -93,7 +100,7 @@ func unicodeDataPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(
-		root, ".claude", "references", "unicode-16.0", "UnicodeData.txt",
+		root, ".claude", "references", unicodeVersionDir, "UnicodeData.txt",
 	), nil
 }
 
@@ -105,7 +112,7 @@ func joiningPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(root, ".claude", "references", "unicode-16.0")
+	dir := filepath.Join(root, ".claude", "references", unicodeVersionDir)
 	candidates := []string{
 		filepath.Join(dir, "extracted", "DerivedJoiningType.txt"),
 		filepath.Join(dir, "DerivedJoiningType.txt"),
@@ -118,13 +125,25 @@ func joiningPath() (string, error) {
 	return "", fmt.Errorf("ucd: none of these inputs exist: %v", candidates)
 }
 
+// NormalizationTestPath returns the absolute path of the vendored
+// NormalizationTest.txt for the bundled Unicode version ([unicodeVersionDir]),
+// so the NFC-test fixture generator resolves it through the same version pin as
+// every other UCD input.
+func NormalizationTestPath() (string, error) {
+	root, err := repoRoot()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, ".claude", "references", unicodeVersionDir, "NormalizationTest.txt"), nil
+}
+
 // exclusionsPath returns the absolute path of the vendored CompositionExclusions.txt.
 func exclusionsPath() (string, error) {
 	root, err := repoRoot()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(root, ".claude", "references", "unicode-16.0", "CompositionExclusions.txt"), nil
+	return filepath.Join(root, ".claude", "references", unicodeVersionDir, "CompositionExclusions.txt"), nil
 }
 
 // ScalarsToString parses a whitespace-separated list of hexadecimal Unicode

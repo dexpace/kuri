@@ -10,7 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Validates [Normalizer.nfc] against Unicode's own NormalizationTest.txt (Unicode 16.0), modelled as
+ * Validates [Normalizer.nfc] against Unicode's own NormalizationTest.txt (Unicode 17.0), modelled as
  * [NFC_CASES] (`source` -> required NFC form). Every case is checked, plus the NFC idempotence
  * invariant (`nfc(nfc(x)) == nfc(x)`) and targeted algorithmic-Hangul cases (UAX #15).
  */

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // Package idnaref is a faithful Go port of kuri's Idna.domainToAscii (UTS-46
-// ToASCII under the Url profile), built on the very Unicode 16.0 data the runtime
+// ToASCII under the Url profile), built on the very Unicode 17.0 data the runtime
 // tables decode. The codegen conformance generator runs it over the WPT corpora
 // to derive the tracked known-failures baseline. It depends only on internal/ucd
 // for its table data.
@@ -16,16 +16,19 @@ import (
 )
 
 // Reference is a faithful Go port of kuri's Idna.domainToAscii under the Url
-// profile, built on the very Unicode 16.0 data the runtime tables decode (mapping
-// table, NFC tables, validity ranges). It deliberately reproduces kuri's
-// omissions — no CheckBidi, no re-validation of an already-decoded A-label, no
-// host-layer forbidden-code-point or empty-domain checks — so the inputs it fails
-// equal kuri's live failing set over the corpus.
+// profile, built on the very Unicode 17.0 data the runtime tables decode (mapping
+// table, NFC tables, validity + Bidi_Class ranges). It reproduces the same UTS-46
+// pipeline kuri runs — mapping, NFC, ContextJ, leading-combining-mark, RFC 5893
+// CheckBidi, and decoded-A-label re-validation — and the same omissions (no
+// host-layer forbidden-code-point or empty-domain checks, which the URL host
+// layer applies), so the inputs it fails equal kuri's live failing set over the
+// corpus.
 type Reference struct {
 	table     *mappingTable
 	marks     *rangeSet
 	viramas   *rangeSet
 	joining   *joiningTable
+	bidi      *bidiTable
 	ccc       map[int]int
 	decompose map[int][]int
 	compose   map[[2]int]int
@@ -45,11 +48,16 @@ func NewReference() (*Reference, error) {
 	if err != nil {
 		return nil, err
 	}
+	bidi, err := ucd.LoadBidi()
+	if err != nil {
+		return nil, err
+	}
 	return &Reference{
 		table:     newMappingTable(ranges),
 		marks:     newRangeSet(marks),
 		viramas:   newRangeSet(viramas),
 		joining:   newJoiningTable(joining),
+		bidi:      newBidiTable(bidi),
 		ccc:       ccc,
 		decompose: decomposition,
 		compose:   composition,
@@ -110,13 +118,14 @@ func (r *Reference) mapAll(domain []uint16) ([]uint16, bool) {
 }
 
 // processLabel ports Idna.processLabel: an xn-- label is Punycode-decoded first,
-// then every label is validated and re-encoded to ASCII.
+// re-validated as a freshly produced U-label, then every label is validated and
+// re-encoded to ASCII.
 func (r *Reference) processLabel(label []uint16) ([]uint16, bool) {
 	decoded := label
 	if hasACEPrefix(label) {
 		var ok bool
 		decoded, ok = r.punycodeDecode(label[acePrefixLength:])
-		if !ok {
+		if !ok || !r.revalidateDecodedALabel(decoded) {
 			return nil, false
 		}
 	}
@@ -126,10 +135,36 @@ func (r *Reference) processLabel(label []uint16) ([]uint16, bool) {
 	return r.encodeLabel(decoded)
 }
 
+// revalidateDecodedALabel ports ada's post-Punycode re-validation (UTS-46
+// V1/P4): a decoded A-label must not be empty, must contain a non-ASCII code
+// point (whatwg/url#760), must already be in NFC (V1), and must not itself begin
+// with the ACE prefix (whatwg/url#803 — a double-encoded label). kuri's top-level
+// NFC pass runs before Punycode decoding, so the decoded label is never otherwise
+// normalized; this is where its NFC form is enforced.
+func (r *Reference) revalidateDecodedALabel(decoded []uint16) bool {
+	if len(decoded) == 0 {
+		return false
+	}
+	allASCII := true
+	for _, unit := range decoded {
+		if unit >= nonASCIIMin {
+			allASCII = false
+			break
+		}
+	}
+	if allASCII {
+		return false
+	}
+	if !slices.Equal(decoded, r.nfc(decoded)) {
+		return false
+	}
+	return !hasACEPrefix(decoded)
+}
+
 // validateLabel ports Idna.validateLabel: reject a leading combining mark, any
-// ContextJ violation, or any code point that is not valid/deviation. kuri does
-// not re-apply the mapping rejection here beyond the valid-code-point check, and
-// it implements no CheckBidi — both reproduced.
+// ContextJ violation, any code point that is not valid/deviation, or any RFC 5893
+// Bidi-rule violation. kuri does not re-apply the mapping rejection here beyond
+// the valid-code-point check; that omission is reproduced.
 func (r *Reference) validateLabel(label []uint16) bool {
 	if r.startsWithCombiningMark(label) {
 		return false
@@ -137,13 +172,14 @@ func (r *Reference) validateLabel(label []uint16) bool {
 	if !r.checkJoiners(label) {
 		return false
 	}
-	for _, codePoint := range codePointsOf(label) {
+	codePoints := codePointsOf(label)
+	for _, codePoint := range codePoints {
 		kind := r.table.lookup(codePoint).Kind
 		if kind != kindValid && kind != kindDeviation {
 			return false
 		}
 	}
-	return true
+	return r.checkBidi(codePoints)
 }
 
 // encodeLabel ports Idna.encodeLabel: an all-ASCII label passes through; a label

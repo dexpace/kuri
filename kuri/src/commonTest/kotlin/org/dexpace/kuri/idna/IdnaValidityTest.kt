@@ -9,10 +9,11 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Verifies the two deferred UTS-46 label-validity rules (SPEC 7.4): the leading-combining-mark
- * rule via [IdnaValidity.startsWithCombiningMark] and the RFC 5892 ContextJ join-control rules
- * (A.1 ZWNJ / A.2 ZWJ) via [IdnaValidity.checkJoiners]. Code points use `\u` escapes because the
- * controls (U+200C ZWNJ, U+200D ZWJ) and the marks are zero-width or non-spacing.
+ * Verifies the UTS-46 label-validity rules beyond the mapping table (SPEC 7.4): the
+ * leading-combining-mark rule via [IdnaValidity.startsWithCombiningMark], the RFC 5892 ContextJ
+ * join-control rules (A.1 ZWNJ / A.2 ZWJ) via [IdnaValidity.checkJoiners], and the RFC 5893 Bidi
+ * rule via [IdnaValidity.checkBidi]. Code points use `\u` escapes because the controls (U+200C
+ * ZWNJ, U+200D ZWJ), the marks, and the RTL letters are zero-width, non-spacing, or non-Latin.
  */
 class IdnaValidityTest {
     @Test
@@ -74,5 +75,64 @@ class IdnaValidityTest {
     @Test
     fun `accepts a label with no join controls`() {
         assertTrue(IdnaValidity.checkJoiners("example"))
+    }
+
+    @Test
+    fun `accepts a label with no right-to-left code point as exempt from the Bidi rule`() {
+        assertTrue(IdnaValidity.checkBidi("example"))
+    }
+
+    @Test
+    fun `accepts an empty label under the Bidi rule`() {
+        assertTrue(IdnaValidity.checkBidi(""))
+    }
+
+    @Test
+    fun `rejects an LTR label containing a right-to-left letter`() {
+        // 'a' is L, U+05D0 HEBREW ALEF is R: RFC 5893 condition 5 forbids R in an LTR label.
+        assertFalse(IdnaValidity.checkBidi("a\u05d0"))
+    }
+
+    @Test
+    fun `accepts a valid right-to-left label`() {
+        // U+05D0 ALEF, U+05D1 BET are both R: first R, all R, ends R.
+        assertTrue(IdnaValidity.checkBidi("\u05d0\u05d1"))
+    }
+
+    @Test
+    fun `accepts a right-to-left label ending in trailing combining marks`() {
+        // U+0591 HEBREW ACCENT ETNAHTA is NSM: condition 3 permits trailing NSM after the R end.
+        assertTrue(IdnaValidity.checkBidi("\u05d0\u0591"))
+    }
+
+    @Test
+    fun `accepts a right-to-left label ending in a European number`() {
+        // U+05D0 ALEF (R) then ASCII '9' (EN): condition 3 permits an EN end in an RTL label.
+        assertTrue(IdnaValidity.checkBidi("\u05d09"))
+    }
+
+    @Test
+    fun `rejects a Bidi label starting with a European number`() {
+        // '1' is EN, U+0627 ARABIC ALEF is AL: condition 1 requires an L, R, or AL first code point.
+        assertFalse(IdnaValidity.checkBidi("1\u0627"))
+    }
+
+    @Test
+    fun `rejects a right-to-left label mixing European and Arabic numbers`() {
+        // U+05D0 (R), '9' (EN), U+0667 ARABIC-INDIC DIGIT SEVEN (AN): condition 4 forbids EN with AN.
+        assertFalse(IdnaValidity.checkBidi("\u05d09\u0667"))
+    }
+
+    @Test
+    fun `rejects a right-to-left label with an embedded left-to-right letter`() {
+        // U+05D0 ALEF (R), ASCII 'a' (L), U+05D0 ALEF (R): condition 2 forbids an L inside an RTL label.
+        assertFalse(IdnaValidity.checkBidi("\u05d0a\u05d0"))
+    }
+
+    @Test
+    fun `rejects a right-to-left label ending in a separator`() {
+        // U+05D0 ALEF (R) then U+002D HYPHEN-MINUS (ES): condition 3 requires the last non-NSM code
+        // point to be R, AL, EN, or AN, so an ES end (permitted mid-label by condition 2) is rejected.
+        assertFalse(IdnaValidity.checkBidi("\u05d0-"))
     }
 }

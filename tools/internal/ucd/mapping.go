@@ -25,7 +25,7 @@ const (
 
 // statusToKind maps each IdnaMappingTable.txt status keyword to a runtime kind
 // under UseSTD3ASCIIRules = false, Transitional_Processing = false. The
-// disallowed_STD3_* keywords do not occur in the Unicode 16.0 input but are kept
+// disallowed_STD3_* keywords do not occur in the Unicode 17.0 input but are kept
 // for correctness against other releases.
 var statusToKind = map[string]string{
 	"valid":                  kindValid,
@@ -53,7 +53,7 @@ type idnaRange struct {
 // Range is the merged form of one inclusive code-point range: its canonicalized
 // UTS-46 kind ("V", "I", "D", "M", "Y") and, for "M", the mapped replacement. It
 // lets the conformance reference reproduce IdnaMappingTable.map over the same
-// Unicode 16.0 data the runtime table encodes (verified byte-for-byte against
+// Unicode 17.0 data the runtime table encodes (verified byte-for-byte against
 // IdnaMappingTableData.kt).
 type Range struct {
 	Start       int

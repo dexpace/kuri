@@ -70,6 +70,34 @@ conventions are wired into the build and are authoritative:
 - **Commit style:** `feat:` / `test:` / `docs:` / `chore:` prefixes (`merge:` for merge
   commits). **PR titles follow the same prefixed style** (e.g. `docs: add CLAUDE.md`).
 
+## Generated data & codegen
+
+The IDNA/UTS-46 and NFC lookup tables (`…/idna/IdnaMappingTableData.kt`,
+`IdnaValidityData.kt`, `NfcData.kt`) and the conformance fixtures
+(`IdnaConformanceData.kt`, `IdnaConformanceKnownFailures.kt`, `NfcTestData.kt`) are
+**generated, never hand-edited**. Generators are Go under `tools/`; regenerate via the
+`codegen`-group Gradle tasks — `./gradlew generateFixtures` (or one of
+`generateIdnaMappingTable` / `generateIdnaValidityTables` / `generateNfcTables` /
+`generateNfcTestFixture` / `generateIdnaConformanceFixture`). They need a Go toolchain
+(override with `-Pgo=/path/to/go`) and read the vendored UCD + WPT corpora under
+`.claude/references/` (untracked).
+
+- **`idnaref` lock-step (ratchet):** `IdnaConformanceKnownFailures.kt` is *derived* by running
+  `tools/internal/idnaref` (a Go port of `Idna.domainToAscii`) over the WPT corpora, and
+  `IdnaConformanceTest` asserts the live failing set equals it. **Any change to the runtime IDNA
+  engine must be mirrored in `tools/internal/idnaref` and the baseline regenerated**, or the build
+  breaks — keep the Kotlin runtime and the Go reference behaviorally identical.
+- **Bundled Unicode version** is pinned by the single `unicodeVersionDir` constant in
+  `tools/internal/ucd/ucd.go`; only the generated tables are committed (not the UCD sources). Full
+  bump procedure: `docs/idna-unicode-update.md`.
+
+## Repo gotchas
+
+- **`.claude/` is untracked but NOT gitignored** (it holds multi-MB vendored UCD/WPT/reference data).
+  Never `git add -A` / `git add .` — stage intended files by path only.
+- `gh issue view` fails here (Projects-classic GraphQL deprecation); use
+  `gh api repos/:owner/:repo/issues/<n>` instead.
+
 ## Design notes
 
 - The library targets **both Java and Kotlin consumers**. When the public API is

@@ -115,7 +115,7 @@ class UrlHrefConformanceTest {
          * round-trip diverges from WPT. The analysis-derived residual is empty: `UrlConformanceTest`
          * already matches every component getter for all non-failure cases, and the [Serializer]
          * reproduces the only two stricter-than-getter distinctions (present-but-empty `?`/`#`, the
-         * §11.2 [NORM-18] `/.` guard). The deferred IDNA host-validity corners (issue #5) are all
+         * §11.2 [NORM-18] `/.` guard). The decoded-A-label re-validation corners are all
          * required-*failure* inputs and so lie outside this test's non-failure scope.
          *
          * The ratcheting `the known-failures set exactly equals the live failing set` test is the
