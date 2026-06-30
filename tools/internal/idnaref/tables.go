@@ -1,11 +1,10 @@
 // Copyright (c) 2026 dexpace and Omar Aljarrah
 // SPDX-License-Identifier: MIT
 
-package conformance
+package idnaref
 
 import (
-	"github.com/dexpace/kuri/tools/internal/gen/idnamapping"
-	"github.com/dexpace/kuri/tools/internal/gen/idnavalidity"
+	"github.com/dexpace/kuri/tools/internal/ucd"
 )
 
 // UTS-46 mapping kind letters, matching IdnaMappingTable's runtime encoding.
@@ -38,11 +37,11 @@ var acePrefix = []uint16{'x', 'n', '-', '-'}
 // gap-free, start-sorted range list, mirroring IdnaMappingTable.findRangeIndex.
 type mappingTable struct {
 	starts []int
-	ranges []idnamapping.Range
+	ranges []ucd.Range
 }
 
 // newMappingTable indexes the merged ranges by their start code points.
-func newMappingTable(ranges []idnamapping.Range) *mappingTable {
+func newMappingTable(ranges []ucd.Range) *mappingTable {
 	starts := make([]int, len(ranges))
 	for index, current := range ranges {
 		starts[index] = current.Start
@@ -51,7 +50,7 @@ func newMappingTable(ranges []idnamapping.Range) *mappingTable {
 }
 
 // lookup returns the mapping range covering codePoint.
-func (m *mappingTable) lookup(codePoint int) idnamapping.Range {
+func (m *mappingTable) lookup(codePoint int) ucd.Range {
 	return m.ranges[floorIndex(m.starts, codePoint)]
 }
 
@@ -62,7 +61,7 @@ type rangeSet struct {
 }
 
 // newRangeSet builds a membership set from merged, start-sorted ranges.
-func newRangeSet(ranges []idnavalidity.PlainRange) *rangeSet {
+func newRangeSet(ranges []ucd.PlainRange) *rangeSet {
 	starts := make([]int, len(ranges))
 	ends := make([]int, len(ranges))
 	for index, current := range ranges {
@@ -86,7 +85,7 @@ type joiningTable struct {
 }
 
 // newJoiningTable builds the lookup from merged, start-sorted typed ranges.
-func newJoiningTable(ranges []idnavalidity.TypedRange) *joiningTable {
+func newJoiningTable(ranges []ucd.TypedRange) *joiningTable {
 	starts := make([]int, len(ranges))
 	ends := make([]int, len(ranges))
 	types := make([]byte, len(ranges))

@@ -1,12 +1,12 @@
 // Copyright (c) 2026 dexpace and Omar Aljarrah
 // SPDX-License-Identifier: MIT
 
-// Package kotlinlit emits ASCII-only Kotlin source fragments shared by the
-// codegen generators: string-literal escaping, column-aware field wrapping,
-// chunking, and the boilerplate headers. Every helper produces bytes that match
-// the Python generators line-for-line so the regenerated fixtures stay
-// byte-identical.
-package kotlinlit
+// The kotlinlit helpers emit ASCII-only Kotlin source fragments shared by the
+// generators: string-literal escaping, column-aware field wrapping, chunking,
+// and the boilerplate headers. Every helper produces bytes that match the Python
+// generators line-for-line so the regenerated fixtures stay byte-identical.
+
+package codegen
 
 import (
 	"fmt"

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 dexpace and Omar Aljarrah
 // SPDX-License-Identifier: MIT
 
-package conformance
+package idnaref
 
 // RFC 3492 Bootstring parameters, matching Punycode's constants. The codecs are a
 // faithful port of kuri's Punycode (IgnoreInvalidPunycode = false): any malformed
@@ -25,7 +25,7 @@ const (
 
 // punycodeDecode decodes a label (without the xn-- prefix) into its Unicode code
 // units, or ok=false on any malformed input, porting Punycode.decode.
-func (r *reference) punycodeDecode(input []uint16) ([]uint16, bool) {
+func (r *Reference) punycodeDecode(input []uint16) ([]uint16, bool) {
 	basics, pos, ok := decodeBasics(input)
 	if !ok {
 		return nil, false
@@ -113,7 +113,7 @@ func decodeInteger(input []uint16, start, bias, acc int) (value, nextPos int, ok
 
 // punycodeEncode encodes a label's content to its Punycode form without the xn--
 // prefix, porting Punycode.encode. An all-basic input is returned unchanged.
-func (r *reference) punycodeEncode(input []uint16) ([]uint16, bool) {
+func (r *Reference) punycodeEncode(input []uint16) ([]uint16, bool) {
 	codePoints := codePointsOf(input)
 	if !hasNonBasic(codePoints) {
 		return input, true

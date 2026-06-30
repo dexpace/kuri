@@ -1,11 +1,12 @@
 // Copyright (c) 2026 dexpace and Omar Aljarrah
 // SPDX-License-Identifier: MIT
 
-// Package url ports tools/url/generate_urltestdata_fixture.py: it reads the
+// The url generator ports tools/url/generate_urltestdata_fixture.py: it reads the
 // vendored WPT URL corpus and materializes the Kotlin UrlTestData fixture
 // byte-for-byte. Only the corpus is materialized here; the known-failures
 // baseline lives in the test, not in this generator.
-package url
+
+package codegen
 
 import (
 	"bytes"
@@ -13,14 +14,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/dexpace/kuri/tools/internal/kotlinlit"
-	"github.com/dexpace/kuri/tools/internal/repo"
 )
 
-// chunkSize is the number of cases per generated builder method, kept well
+// urlChunkSize is the number of cases per generated builder method, kept well
 // under the 64 KB JVM constant-pool limit so no single method overflows.
-const chunkSize = 60
+const urlChunkSize = 60
 
 // fieldIndent is the column at which every named constructor argument starts.
 const fieldIndent = 16
@@ -42,30 +40,18 @@ type urlCase struct {
 	values  map[string]string
 }
 
-// OutputPath returns the absolute path of the generated UrlTestData.kt fixture.
-func OutputPath() (string, error) {
-	root, err := repo.Root()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(
-		root, "kuri", "src", "commonTest", "kotlin", "org", "dexpace",
-		"kuri", "parser", "UrlTestData.kt",
-	), nil
-}
-
-// inputPath returns the absolute path of the vendored WPT corpus.
-func inputPath() (string, error) {
-	root, err := repo.Root()
+// urlInputPath returns the absolute path of the vendored WPT corpus.
+func urlInputPath() (string, error) {
+	root, err := Root()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(root, "tools", "url", "urltestdata.json"), nil
 }
 
-// Generate reads the corpus and returns the complete Kotlin source string.
-func Generate() (string, error) {
-	path, err := inputPath()
+// generateURL reads the corpus and returns the complete Kotlin source string.
+func generateURL() (string, error) {
+	path, err := urlInputPath()
 	if err != nil {
 		return "", err
 	}
@@ -73,38 +59,17 @@ func Generate() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	cases, err := loadCases(data)
+	cases, err := urlLoadCases(data)
 	if err != nil {
 		return "", err
 	}
-	return emitFixture(cases), nil
+	return urlEmitFixture(cases), nil
 }
 
-// Run generates the fixture and either prints it to stdout or writes it to the
-// fixture path, creating the parent directory if needed.
-func Run(stdout bool) error {
-	source, err := Generate()
-	if err != nil {
-		return err
-	}
-	if stdout {
-		_, err := os.Stdout.WriteString(source)
-		return err
-	}
-	out, err := OutputPath()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(out, []byte(source), 0o644)
-}
-
-// loadCases decodes the top-level JSON array and keeps only objects carrying an
-// `input` key, preserving document order with no sorting or deduplication. The
+// urlLoadCases decodes the top-level JSON array and keeps only objects carrying
+// an `input` key, preserving document order with no sorting or deduplication. The
 // 112 documentation strings (and any object lacking `input`) are dropped.
-func loadCases(data []byte) ([]urlCase, error) {
+func urlLoadCases(data []byte) ([]urlCase, error) {
 	var elements []json.RawMessage
 	if err := json.Unmarshal(data, &elements); err != nil {
 		return nil, fmt.Errorf("url: decoding corpus array: %w", err)
@@ -186,16 +151,16 @@ func firstNonSpace(raw []byte) byte {
 	return trimmed[0]
 }
 
-// emitFixture renders the complete fixture: license header, suppress block,
+// urlEmitFixture renders the complete fixture: license header, suppress block,
 // package, data class, and the chunked builder object, terminated by exactly one
 // newline. The structure mirrors the Python emit_fixture exactly.
-func emitFixture(cases []urlCase) string {
-	parts := kotlinlit.Chunk(cases, chunkSize)
-	lines := []string{kotlinlit.LicenseHeader, ""}
+func urlEmitFixture(cases []urlCase) string {
+	parts := Chunk(cases, urlChunkSize)
+	lines := []string{LicenseHeader, ""}
 	lines = append(lines,
 		"// Generated bulk data, not hand-written logic: the chunked builders intentionally exceed",
 		"// detekt's method/class-size heuristics to stay within the 64 KB JVM method limit.",
-		kotlinlit.FileSuppress("LongMethod", "LargeClass", "MatchingDeclarationName"),
+		FileSuppress("LongMethod", "LargeClass", "MatchingDeclarationName"),
 		"",
 		"package org.dexpace.kuri.parser",
 		"",
@@ -208,13 +173,13 @@ func emitFixture(cases []urlCase) string {
 		"private object UrlConformanceCaseData {",
 	)
 	lines = append(lines, "    fun all(): List<UrlCase> =")
-	lines = append(lines, "        "+sumExpression(len(parts)))
+	lines = append(lines, "        "+urlSumExpression(len(parts)))
 	for index, part := range parts {
 		lines = append(lines, "")
 		lines = append(lines, fmt.Sprintf("    private fun part%d(): List<UrlCase> =", index))
 		lines = append(lines, "        listOf(")
 		for _, current := range part {
-			lines = append(lines, caseLines(current)...)
+			lines = append(lines, urlCaseLines(current)...)
 		}
 		lines = append(lines, "        )")
 	}
@@ -224,13 +189,13 @@ func emitFixture(cases []urlCase) string {
 		"/** Every in-scope WPT `urltestdata.json` case (objects carrying an `input`). */",
 		"internal val URL_TEST_CASES: List<UrlCase> = UrlConformanceCaseData.all()",
 	)
-	return kotlinlit.JoinLines(lines)
+	return JoinLines(lines)
 }
 
-// sumExpression renders the `part0() + part1() + ...` body of all(): the first
+// urlSumExpression renders the `part0() + part1() + ...` body of all(): the first
 // term sits at 8 spaces (supplied by the caller) and each subsequent term wraps
 // to its own line at 12 spaces with a trailing " +" on all but the last.
-func sumExpression(count int) string {
+func urlSumExpression(count int) string {
 	terms := make([]string, count)
 	for i := range terms {
 		terms[i] = fmt.Sprintf("part%d()", i)
@@ -238,7 +203,7 @@ func sumExpression(count int) string {
 	return join(terms, " +\n            ")
 }
 
-// join concatenates terms with sep. It exists only so sumExpression reads
+// join concatenates terms with sep. It exists only so urlSumExpression reads
 // clearly; strings.Join would do, but the separator embeds a newline and indent
 // that are easy to misread inline.
 func join(terms []string, sep string) string {
@@ -252,15 +217,15 @@ func join(terms []string, sep string) string {
 	return result
 }
 
-// caseLines renders one UrlCase constructor call as indented named arguments.
+// urlCaseLines renders one UrlCase constructor call as indented named arguments.
 // failure cases force every component getter and href to "".
-func caseLines(current urlCase) []string {
+func urlCaseLines(current urlCase) []string {
 	lines := []string{"            UrlCase("}
-	lines = append(lines, kotlinlit.FieldLines("input", current.input, fieldIndent)...)
+	lines = append(lines, FieldLines("input", current.input, fieldIndent)...)
 	if current.base == nil {
 		lines = append(lines, "                base = null,")
 	} else {
-		lines = append(lines, kotlinlit.FieldLines("base", *current.base, fieldIndent)...)
+		lines = append(lines, FieldLines("base", *current.base, fieldIndent)...)
 	}
 	failureText := "false"
 	if current.failure {
@@ -268,9 +233,9 @@ func caseLines(current urlCase) []string {
 	}
 	lines = append(lines, "                failure = "+failureText+",")
 	for _, name := range expectedFields {
-		lines = append(lines, kotlinlit.FieldLines(name, current.fieldValue(name), fieldIndent)...)
+		lines = append(lines, FieldLines(name, current.fieldValue(name), fieldIndent)...)
 	}
-	lines = append(lines, kotlinlit.FieldLines("href", current.fieldValue("href"), fieldIndent)...)
+	lines = append(lines, FieldLines("href", current.fieldValue("href"), fieldIndent)...)
 	lines = append(lines, "            ),")
 	return lines
 }

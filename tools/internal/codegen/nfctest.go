@@ -1,12 +1,13 @@
 // Copyright (c) 2026 dexpace and Omar Aljarrah
 // SPDX-License-Identifier: MIT
 
-// Package nfctest ports tools/idna/generate_nfc_test_fixture.py: it reads the
-// vendored Unicode NormalizationTest.txt corpus and materializes the Kotlin
+// The nfc-test generator ports tools/idna/generate_nfc_test_fixture.py: it reads
+// the vendored Unicode NormalizationTest.txt corpus and materializes the Kotlin
 // NfcTestData fixture byte-for-byte. Only the source and NFC columns are kept;
 // the cases are emitted in raw file order with no sort, dedup, or range
 // expansion.
-package nfctest
+
+package codegen
 
 import (
 	"bufio"
@@ -16,14 +17,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dexpace/kuri/tools/internal/kotlinlit"
-	"github.com/dexpace/kuri/tools/internal/repo"
 	"github.com/dexpace/kuri/tools/internal/ucd"
 )
 
-// chunkSize is the number of cases per generated builder method, kept well under
-// the 64 KB JVM method limit so no single method overflows.
-const chunkSize = 400
+// nfcTestChunkSize is the number of cases per generated builder method, kept well
+// under the 64 KB JVM method limit so no single method overflows.
+const nfcTestChunkSize = 400
 
 // maxLine is the column budget for the single-line NfcCase form; a record whose
 // single-line rendering exceeds it is wrapped across four lines instead.
@@ -48,21 +47,9 @@ type nfcCase struct {
 	nfc    string
 }
 
-// OutputPath returns the absolute path of the generated NfcTestData.kt fixture.
-func OutputPath() (string, error) {
-	root, err := repo.Root()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(
-		root, "kuri", "src", "commonTest", "kotlin", "org", "dexpace",
-		"kuri", "idna", "NfcTestData.kt",
-	), nil
-}
-
-// inputPath returns the absolute path of the vendored NormalizationTest.txt.
-func inputPath() (string, error) {
-	root, err := repo.Root()
+// nfcTestInputPath returns the absolute path of the vendored NormalizationTest.txt.
+func nfcTestInputPath() (string, error) {
+	root, err := Root()
 	if err != nil {
 		return "", err
 	}
@@ -71,9 +58,9 @@ func inputPath() (string, error) {
 	), nil
 }
 
-// Generate reads the corpus and returns the complete Kotlin source string.
-func Generate() (string, error) {
-	path, err := inputPath()
+// generateNfcTest reads the corpus and returns the complete Kotlin source string.
+func generateNfcTest() (string, error) {
+	path, err := nfcTestInputPath()
 	if err != nil {
 		return "", err
 	}
@@ -81,40 +68,19 @@ func Generate() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	cases, err := loadCases(data)
+	cases, err := nfcTestLoadCases(data)
 	if err != nil {
 		return "", err
 	}
-	return emitFixture(cases), nil
+	return nfcTestEmitFixture(cases), nil
 }
 
-// Run generates the fixture and either prints it to stdout or writes it to the
-// fixture path, creating the parent directory if needed.
-func Run(stdout bool) error {
-	source, err := Generate()
-	if err != nil {
-		return err
-	}
-	if stdout {
-		_, err := os.Stdout.WriteString(source)
-		return err
-	}
-	out, err := OutputPath()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(out, []byte(source), 0o644)
-}
-
-// loadCases parses (source, nfc) pairs in file order, mirroring the Python
+// nfcTestLoadCases parses (source, nfc) pairs in file order, mirroring the Python
 // load_cases exactly: drop everything after the first '#', strip surrounding
 // whitespace, skip blank and '@'-prefixed section-header lines, then split the
 // remainder on ';' and decode the source and NFC hex-scalar columns. No sort, no
 // dedup, no validation — the input order is preserved verbatim.
-func loadCases(data []byte) ([]nfcCase, error) {
+func nfcTestLoadCases(data []byte) ([]nfcCase, error) {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, 0, scannerBufferSize), scannerBufferSize)
 	var cases []nfcCase
@@ -140,17 +106,17 @@ func loadCases(data []byte) ([]nfcCase, error) {
 	return cases, nil
 }
 
-// emitFixture renders the complete fixture: license header, suppress block,
+// nfcTestEmitFixture renders the complete fixture: license header, suppress block,
 // package, NfcCase data class, and the chunked builder object, terminated by
 // exactly one newline. The structure mirrors the Python render_kotlin exactly.
-func emitFixture(cases []nfcCase) string {
-	parts := kotlinlit.Chunk(cases, chunkSize)
+func nfcTestEmitFixture(cases []nfcCase) string {
+	parts := Chunk(cases, nfcTestChunkSize)
 	lines := []string{
-		kotlinlit.LicenseHeader,
+		LicenseHeader,
 		"",
 		"// Generated bulk data, not hand-written logic: the chunked builders intentionally exceed",
 		"// detekt's method/class-size heuristics to stay within the 64 KB JVM method limit.",
-		kotlinlit.FileSuppress("LongMethod", "LargeClass", "MatchingDeclarationName"),
+		FileSuppress("LongMethod", "LargeClass", "MatchingDeclarationName"),
 		"",
 		"package org.dexpace.kuri.idna",
 		"",
@@ -164,13 +130,13 @@ func emitFixture(cases []nfcCase) string {
 		"private object NfcCaseData {",
 	}
 	lines = append(lines, "    fun all(): List<NfcCase> =")
-	lines = append(lines, "        "+sumExpression(len(parts)))
+	lines = append(lines, "        "+nfcTestSumExpression(len(parts)))
 	for index, part := range parts {
 		lines = append(lines, "")
 		lines = append(lines, fmt.Sprintf("    private fun part%d(): List<NfcCase> =", index))
 		lines = append(lines, "        listOf(")
 		for _, current := range part {
-			lines = append(lines, caseLines(current)...)
+			lines = append(lines, nfcTestCaseLines(current)...)
 		}
 		lines = append(lines, "        )")
 	}
@@ -180,14 +146,14 @@ func emitFixture(cases []nfcCase) string {
 		"/** Every NormalizationTest.txt case as `(source, NFC)` (see [NfcCaseData]). */",
 		"internal val NFC_CASES: List<NfcCase> = NfcCaseData.all()",
 	)
-	return kotlinlit.JoinLines(lines)
+	return JoinLines(lines)
 }
 
-// sumExpression renders the `part0() + part1() + ...` body of all(): the first
-// term sits at 8 spaces (supplied by the caller) and each subsequent term wraps
-// to its own line at 12 spaces with a trailing " +" on all but the last. A
+// nfcTestSumExpression renders the `part0() + part1() + ...` body of all(): the
+// first term sits at 8 spaces (supplied by the caller) and each subsequent term
+// wraps to its own line at 12 spaces with a trailing " +" on all but the last. A
 // single part collapses to just "part0()".
-func sumExpression(count int) string {
+func nfcTestSumExpression(count int) string {
 	terms := make([]string, count)
 	for i := range terms {
 		terms[i] = fmt.Sprintf("part%d()", i)
@@ -195,11 +161,11 @@ func sumExpression(count int) string {
 	return strings.Join(terms, " +\n            ")
 }
 
-// caseLines renders one NfcCase constructor call. The single-line form is
+// nfcTestCaseLines renders one NfcCase constructor call. The single-line form is
 // preferred; when its length would exceed maxLine the record wraps to four lines
 // with the two literals indented at 16 spaces. The trailing comma is always
 // present (Kotlin trailing comma), even on the last case in a listOf.
-func caseLines(current nfcCase) []string {
+func nfcTestCaseLines(current nfcCase) []string {
 	sourceLit := escapeLiteral(current.source)
 	nfcLit := escapeLiteral(current.nfc)
 	singleLine := "            NfcCase(\"" + sourceLit + "\", \"" + nfcLit + "\"),"
@@ -219,5 +185,5 @@ func caseLines(current nfcCase) []string {
 // become surrogate-pair escapes and every non-printable scalar a lowercase
 // \uXXXX, identical to the Python escape_string.
 func escapeLiteral(value string) string {
-	return strings.Join(kotlinlit.EscapeTokens(value), "")
+	return strings.Join(EscapeTokens(value), "")
 }

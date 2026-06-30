@@ -1,10 +1,11 @@
 // Copyright (c) 2026 dexpace and Omar Aljarrah
 // SPDX-License-Identifier: MIT
 
-// Package repo locates the kuri repository root so generators resolve their
-// input and output paths the same way whether they are invoked from Gradle
-// (CWD = repo root) or from `cd tools && go run ...` (CWD = tools).
-package repo
+// Root locates the kuri repository root so generators resolve their input and
+// output paths the same way whether they are invoked from Gradle (CWD = repo
+// root) or from `cd tools && go run ...` (CWD = tools).
+
+package codegen
 
 import (
 	"errors"

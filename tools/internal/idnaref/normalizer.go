@@ -1,7 +1,7 @@
 // Copyright (c) 2026 dexpace and Omar Aljarrah
 // SPDX-License-Identifier: MIT
 
-package conformance
+package idnaref
 
 // Algorithmic Hangul composition/decomposition parameters (UAX #15), matching
 // Normalizer's constants.
@@ -21,7 +21,7 @@ const (
 // nfc ports Normalizer.nfc: full canonical decomposition, canonical ordering,
 // then canonical composition. Empty input passes through; lone surrogates are
 // treated as non-decomposing starters, as in the runtime.
-func (r *reference) nfc(input []uint16) []uint16 {
+func (r *Reference) nfc(input []uint16) []uint16 {
 	if len(input) == 0 {
 		return input
 	}
@@ -31,7 +31,7 @@ func (r *reference) nfc(input []uint16) []uint16 {
 }
 
 // decomposeAll fully canonically decomposes input into a flat code-point list.
-func (r *reference) decomposeAll(input []uint16) []int {
+func (r *Reference) decomposeAll(input []uint16) []int {
 	out := []int{}
 	for _, codePoint := range codePointsOf(input) {
 		out = r.decomposeCodePoint(codePoint, out)
@@ -41,7 +41,7 @@ func (r *reference) decomposeAll(input []uint16) []int {
 
 // decomposeCodePoint appends the full canonical decomposition of codePoint
 // (recursive, plus algorithmic Hangul) to out.
-func (r *reference) decomposeCodePoint(codePoint int, out []int) []int {
+func (r *Reference) decomposeCodePoint(codePoint int, out []int) []int {
 	if decomposed, ok := hangulDecompose(codePoint); ok {
 		return append(out, decomposed...)
 	}
@@ -57,7 +57,7 @@ func (r *reference) decomposeCodePoint(codePoint int, out []int) []int {
 
 // canonicalOrder stably sorts each maximal combining run by combining class in
 // place, mirroring Normalizer.canonicalOrder exactly (including its back-step).
-func (r *reference) canonicalOrder(codePoints []int) {
+func (r *Reference) canonicalOrder(codePoints []int) {
 	index := 1
 	for index < len(codePoints) {
 		current := r.combiningClass(codePoints[index])
@@ -77,7 +77,7 @@ func (r *reference) canonicalOrder(codePoints []int) {
 
 // composeAll canonically composes the ordered code points back into UTF-16,
 // mirroring Normalizer.compose (table + Hangul, blocked-starter rule).
-func (r *reference) composeAll(codePoints []int) []uint16 {
+func (r *Reference) composeAll(codePoints []int) []uint16 {
 	starterIndex := 0
 	starter := codePoints[0]
 	lastClass := cccStarter
@@ -111,7 +111,7 @@ func (r *reference) composeAll(codePoints []int) []uint16 {
 
 // composeStarter composes starter with combining via Hangul or the primary
 // composite table, returning -1 when not composable.
-func (r *reference) composeStarter(starter, combining int) int {
+func (r *Reference) composeStarter(starter, combining int) int {
 	if hangul := hangulCompose(starter, combining); hangul >= 0 {
 		return hangul
 	}
@@ -122,7 +122,7 @@ func (r *reference) composeStarter(starter, combining int) int {
 }
 
 // combiningClass returns codePoint's combining class, zero for any starter.
-func (r *reference) combiningClass(codePoint int) int {
+func (r *Reference) combiningClass(codePoint int) int {
 	if class, ok := r.ccc[codePoint]; ok {
 		return class
 	}

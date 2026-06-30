@@ -1,23 +1,26 @@
 // Copyright (c) 2026 dexpace and Omar Aljarrah
 // SPDX-License-Identifier: MIT
 
-package conformance
+// Package idnaref is a faithful Go port of kuri's Idna.domainToAscii (UTS-46
+// ToASCII under the Url profile), built on the very Unicode 16.0 data the runtime
+// tables decode. The codegen conformance generator runs it over the WPT corpora
+// to derive the tracked known-failures baseline. It depends only on internal/ucd
+// for its table data.
+package idnaref
 
 import (
 	"unicode/utf16"
 
-	"github.com/dexpace/kuri/tools/internal/gen/idnamapping"
-	"github.com/dexpace/kuri/tools/internal/gen/idnavalidity"
-	"github.com/dexpace/kuri/tools/internal/gen/nfctables"
+	"github.com/dexpace/kuri/tools/internal/ucd"
 )
 
-// reference is a faithful Go port of kuri's Idna.domainToAscii under the Url
+// Reference is a faithful Go port of kuri's Idna.domainToAscii under the Url
 // profile, built on the very Unicode 16.0 data the runtime tables decode (mapping
 // table, NFC tables, validity ranges). It deliberately reproduces kuri's
 // omissions — no CheckBidi, no re-validation of an already-decoded A-label, no
 // host-layer forbidden-code-point or empty-domain checks — so the inputs it fails
 // equal kuri's live failing set over the corpus.
-type reference struct {
+type Reference struct {
 	table     *mappingTable
 	marks     *rangeSet
 	viramas   *rangeSet
@@ -27,21 +30,21 @@ type reference struct {
 	compose   map[[2]int]int
 }
 
-// newReference loads every backing table from the vendored UCD inputs.
-func newReference() (*reference, error) {
-	ranges, err := idnamapping.LoadTable()
+// NewReference loads every backing table from the vendored UCD inputs.
+func NewReference() (*Reference, error) {
+	ranges, err := ucd.LoadTable()
 	if err != nil {
 		return nil, err
 	}
-	marks, viramas, joining, err := idnavalidity.LoadValidity()
+	marks, viramas, joining, err := ucd.LoadValidity()
 	if err != nil {
 		return nil, err
 	}
-	ccc, decomposition, composition, err := nfctables.LoadNfc()
+	ccc, decomposition, composition, err := ucd.LoadNfc()
 	if err != nil {
 		return nil, err
 	}
-	return &reference{
+	return &Reference{
 		table:     newMappingTable(ranges),
 		marks:     newRangeSet(marks),
 		viramas:   newRangeSet(viramas),
@@ -52,20 +55,20 @@ func newReference() (*reference, error) {
 	}, nil
 }
 
-// caseFails reports whether kuri's domainToAscii fails the case: a required
-// rejection fails when ToASCII unexpectedly succeeds; a required output fails when
-// ToASCII errors or yields a different string.
-func (r *reference) caseFails(c idnaCase) bool {
-	result, ok := r.domainToAscii(c.input)
-	if c.expected == nil {
+// CaseFails reports whether kuri's domainToAscii fails the case. A required
+// rejection (expected == nil) fails when ToASCII unexpectedly succeeds; a
+// required output fails when ToASCII errors or yields a different string.
+func (r *Reference) CaseFails(input, expected []uint16) bool {
+	result, ok := r.domainToAscii(input)
+	if expected == nil {
 		return ok
 	}
-	return !ok || !equalUnits(result, c.expected)
+	return !ok || !equalUnits(result, expected)
 }
 
 // domainToAscii ports Idna.domainToAscii: map -> NFC -> split labels -> per-label
 // (decode xn--, validate, re-encode). It returns ok=false on any UTS-46 failure.
-func (r *reference) domainToAscii(domain []uint16) ([]uint16, bool) {
+func (r *Reference) domainToAscii(domain []uint16) ([]uint16, bool) {
 	mapped, ok := r.mapAll(domain)
 	if !ok {
 		return nil, false
@@ -87,7 +90,7 @@ func (r *reference) domainToAscii(domain []uint16) ([]uint16, bool) {
 
 // mapAll applies the UTS-46 mapping step to every code point, dropping ignored
 // points, substituting mapped ones, and failing on the first disallowed point.
-func (r *reference) mapAll(domain []uint16) ([]uint16, bool) {
+func (r *Reference) mapAll(domain []uint16) ([]uint16, bool) {
 	var out []uint16
 	for _, codePoint := range codePointsOf(domain) {
 		rng := r.table.lookup(codePoint)
@@ -107,7 +110,7 @@ func (r *reference) mapAll(domain []uint16) ([]uint16, bool) {
 
 // processLabel ports Idna.processLabel: an xn-- label is Punycode-decoded first,
 // then every label is validated and re-encoded to ASCII.
-func (r *reference) processLabel(label []uint16) ([]uint16, bool) {
+func (r *Reference) processLabel(label []uint16) ([]uint16, bool) {
 	decoded := label
 	if hasACEPrefix(label) {
 		var ok bool
@@ -126,7 +129,7 @@ func (r *reference) processLabel(label []uint16) ([]uint16, bool) {
 // ContextJ violation, or any code point that is not valid/deviation. kuri does
 // not re-apply the mapping rejection here beyond the valid-code-point check, and
 // it implements no CheckBidi — both reproduced.
-func (r *reference) validateLabel(label []uint16) bool {
+func (r *Reference) validateLabel(label []uint16) bool {
 	if r.startsWithCombiningMark(label) {
 		return false
 	}
@@ -145,7 +148,7 @@ func (r *reference) validateLabel(label []uint16) bool {
 // encodeLabel ports Idna.encodeLabel: an all-ASCII label passes through; a label
 // with any non-ASCII point becomes xn-- + its Punycode form, or a failure on
 // Punycode overflow.
-func (r *reference) encodeLabel(label []uint16) ([]uint16, bool) {
+func (r *Reference) encodeLabel(label []uint16) ([]uint16, bool) {
 	allASCII := true
 	for _, unit := range label {
 		if unit >= nonASCIIMin {

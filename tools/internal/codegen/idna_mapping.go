@@ -1,0 +1,149 @@
+// Copyright (c) 2026 dexpace and Omar Aljarrah
+// SPDX-License-Identifier: MIT
+
+// The idna-mapping generator ports tools/idna/generate_idna_mapping_table.py: it
+// renders the merged UTS-46 mapping ranges (loaded by ucd from the vendored
+// Unicode IdnaMappingTable.txt) into the compact IDNA mapping-table data file
+// (IdnaMappingTableData.kt) byte-for-byte.
+//
+// ucd canonicalizes each line's status under the baked-in UTS-46 parameter set
+// (UseSTD3ASCIIRules = false, Transitional_Processing = false) and merges adjacent
+// ranges sharing the same status (and, for MAPPED, the same replacement). This
+// file renders each merged range to one `<startHexUpper> <kindLetter><replacement?>`
+// record, newline-joins them into one blob, and slices the blob into chunks whose
+// escaped form stays within mappingEscapedLineBudget columns.
+
+package codegen
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/dexpace/kuri/tools/internal/ucd"
+)
+
+// mappingEscapedLineBudget caps each chunk's escaped width so the emitted
+// string-literal line stays within the 120-column limit: 120 - 8 (indent) - 2
+// (quotes) - 1 (comma) = 109; 100 leaves slack and never splits a 6-char \uXXXX
+// escape.
+const mappingEscapedLineBudget = 100
+
+// Bounds and UTF-16 surrogate-encoding constants for mappingEscapeChar. Printable
+// ASCII in [safeLiteralMin, safeLiteralMax] (minus the Kotlin-special chars) is
+// emitted verbatim; BMP code points become a single \uXXXX; values above the BMP
+// become a surrogate pair derived from these bounds.
+const (
+	safeLiteralMin     = 0x20
+	safeLiteralMax     = 0x7E
+	bmpMax             = 0xFFFF
+	surrogateBase      = 0x10000
+	highSurrogateMin   = 0xD800
+	lowSurrogateMin    = 0xDC00
+	surrogateHighShift = 10
+	surrogateLowMask   = 0x3FF
+)
+
+// unicodeVersion is interpolated into the generated KDoc; bump it together with
+// the source file when retargeting a different Unicode release.
+const unicodeVersion = "16.0.0"
+
+// generateIdnaMapping loads the merged ranges and returns the complete Kotlin
+// source string.
+func generateIdnaMapping() (string, error) {
+	ranges, err := ucd.LoadTable()
+	if err != nil {
+		return "", err
+	}
+	blob := encodeRecords(ranges)
+	chunks := mappingChunkBlob(blob)
+	return mappingRender(chunks), nil
+}
+
+// encodeRecords renders each merged range to a `<startHexUpper> <kind><rep>`
+// record and joins them with a single newline into one blob. The start hex uses
+// uppercase no-pad %X; this casing is distinct from the lowercase \uXXXX escapes
+// applied later and must not be unified.
+func encodeRecords(ranges []ucd.Range) string {
+	records := make([]string, len(ranges))
+	for index, current := range ranges {
+		records[index] = fmt.Sprintf("%X %s%s", current.Start, current.Kind, current.Replacement)
+	}
+	return strings.Join(records, "\n")
+}
+
+// mappingChunkBlob slices the blob at whole-escape-unit boundaries so each chunk's
+// escaped form fits mappingEscapedLineBudget columns. It iterates one code point
+// at a time and greedily packs each escaped unit: break before appending when the
+// running width would exceed the budget and the current chunk is non-empty,
+// mirroring the Python chunk_blob exactly.
+func mappingChunkBlob(blob string) []string {
+	var chunks []string
+	var current strings.Builder
+	width := 0
+	for _, point := range blob {
+		escaped := mappingEscapeChar(point)
+		if width+len(escaped) > mappingEscapedLineBudget && current.Len() > 0 {
+			chunks = append(chunks, current.String())
+			current.Reset()
+			width = 0
+		}
+		current.WriteString(escaped)
+		width += len(escaped)
+	}
+	if current.Len() > 0 {
+		chunks = append(chunks, current.String())
+	}
+	return chunks
+}
+
+// mappingEscapeChar escapes a single code point for a Kotlin string literal as
+// pure ASCII, reproducing the Python generator's escape_char. Note this differs
+// from the shared kotlinlit escaper for the three Kotlin-special chars '"', '\\'
+// and '$': this generator routes them through the \uXXXX branch (e.g. '"' -> ")
+// rather than emitting backslash escapes. Printable ASCII outside that set is
+// emitted verbatim; BMP code points become a lowercase zero-padded \uXXXX; code
+// points above the BMP become a UTF-16 surrogate pair of two escapes.
+func mappingEscapeChar(point rune) string {
+	code := int(point)
+	if code >= safeLiteralMin && code <= safeLiteralMax &&
+		point != '"' && point != '\\' && point != '$' {
+		return string(point)
+	}
+	if code <= bmpMax {
+		return fmt.Sprintf("\\u%04x", code)
+	}
+	offset := code - surrogateBase
+	high := highSurrogateMin + (offset >> surrogateHighShift)
+	low := lowSurrogateMin + (offset & surrogateLowMask)
+	return fmt.Sprintf("\\u%04x\\u%04x", high, low)
+}
+
+// mappingRender builds the complete Kotlin source: license header, package, KDoc,
+// and the single flat listOf of chunk string literals, terminated by exactly one
+// newline. The KDoc carries the only non-ASCII byte in the file (the '§' in
+// 'SPEC §7.4'); it is written verbatim, never run through the chunk escaper.
+func mappingRender(chunks []string) string {
+	lines := []string{
+		LicenseHeader,
+		"",
+		"package org.dexpace.kuri.idna",
+		"",
+		"/**",
+		" * Compact, generated UTS-46 IDNA mapping table data (Unicode " + unicodeVersion + ").",
+		" *",
+		" * GENERATED by tools/idna/generate_idna_mapping_table.py from Unicode's",
+		" * IdnaMappingTable.txt. Do not edit by hand; re-run the generator instead.",
+		" *",
+		" * The chunks concatenate into a newline-joined list of range records, each",
+		" * `<startHex> <kindLetter><replacement?>`. See [IdnaMappingTable] for the",
+		" * decoder and encoding contract (SPEC §7.4, [HOST-26]/[HOST-28]).",
+		" */",
+		"internal val IDNA_MAPPING_TABLE_CHUNKS: List<String> =",
+		"    listOf(",
+	}
+	for _, chunk := range chunks {
+		lines = append(lines, "        \""+chunk+"\",")
+	}
+	lines = append(lines, "    )")
+	return JoinLines(lines)
+}

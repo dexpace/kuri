@@ -56,7 +56,7 @@ val codegenTasks: List<TaskProvider<Exec>> =
             group = "codegen"
             description = summary
             workingDir = toolsDir
-            commandLine(goTool, "run", "./cmd/codegen", subcommand)
+            commandLine(goTool, "run", ".", subcommand)
         }
     }
 
