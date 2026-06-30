@@ -42,6 +42,23 @@ internal class UriNormalizerTest {
         assertEquals("http://h/", normalizedUri("http://h"))
     }
 
+    @Test
+    fun `normalize keeps a rootless path rootless`() {
+        assertEquals("a/b/c", normalizedUri("a/b/c"))
+    }
+
+    @Test
+    fun `normalize removes dot-segments without rooting a rootless path`() {
+        assertEquals("a/b", normalizedUri("a/./b"))
+    }
+
+    @Test
+    fun `normalize re-roots a rootless path when dot-segments pop the leading segment`() {
+        // RFC 3986 §5.2.4 remove_dot_segments emits a leading "/" once "a" is popped by "..";
+        // this is the literal algorithm outcome, not a rootless-preservation guarantee.
+        assertEquals("/b", normalizedUri("a/../b"))
+    }
+
     private fun normalizedUri(input: String): String {
         val parsed = requireNotNull(UriParser.parse(input).getOrNull()) { "expected a parseable Uri: $input" }
         val normalized: ParsedComponents = UriNormalizer.normalize(parsed)

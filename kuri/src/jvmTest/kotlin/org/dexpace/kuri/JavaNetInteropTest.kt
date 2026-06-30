@@ -32,11 +32,12 @@ class JavaNetInteropTest {
 
     @Test
     fun `Uri toJavaUri bridges a mailto to its canonical string`() {
-        // kuri roots the scheme-rootless path, so the canonical form is "mailto:/a@b".
+        // kuri preserves the scheme-rootless path, so the canonical form is "mailto:a@b".
         val uri: Uri = Uri.parse("mailto:a@b").getOrThrow()
 
         val javaUri: URI = uri.toJavaUri()
 
+        assertEquals("mailto:a@b", uri.uriString)
         assertEquals(URI(uri.uriString), javaUri)
         assertEquals("mailto", javaUri.scheme)
     }

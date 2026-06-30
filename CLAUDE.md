@@ -8,22 +8,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-This is a greenfield repository. As of now it contains only `README.md` and `LICENSE`.
-There is **no source code, no build script (Gradle/Maven), and no test suite yet** — even
-though `.gitignore` is pre-seeded with Gradle entries, no `build.gradle(.kts)` or wrapper
-exists.
+kuri is an implemented **Kotlin Multiplatform** library (no longer greenfield). The single
+`kuri/` module holds the source under `src/commonMain` — a pure-Kotlin parsing engine with
+`host`/`idna`/`percent`/`query`/`scheme`/`serialize`/`parser` subpackages — with tests in
+`src/commonTest` and JVM-interop tests in `src/jvmTest`. A Gradle (Kotlin DSL) build with the
+full quality-gate stack is wired up and the `gradlew` wrapper is committed.
 
-When asked to build, test, or run anything, first check whether the relevant tooling has
-been added; do not assume commands that aren't present in the repo.
+- **Build & test:** `./gradlew build` runs the whole gate across every target. For a fast
+  inner loop, use the JVM target: `./gradlew :kuri:jvmTest :kuri:ktlintCheck :kuri:detekt
+  :kuri:apiCheck`. The JS/Wasm suites run on Node via `:kuri:jsNodeTest` and
+  `:kuri:wasmJsNodeTest`.
+- **Targets:** `jvm` (Java 8 bytecode), `js` and `wasmJs` (browser + Node), and native —
+  `linuxX64`/`linuxArm64`, `macosArm64`, `mingwX64`, `iosX64`/`iosArm64`/`iosSimulatorArm64`,
+  `watchosArm64`/`watchosSimulatorArm64`, and `tvosArm64`/`tvosSimulatorArm64`.
 
-## Toolchain (intended targets)
+The docs can still lag the code — when a detail matters, confirm it against the actual
+`kuri/build.gradle.kts` and `gradle/libs.versions.toml` rather than assuming.
 
-- **JDK:** Corretto 25 (project language level JDK 25).
-- **Kotlin:** 2.3.10, language/API version 2.3.
-- **JVM bytecode target:** 1.8 — keep this in mind for a published library; target Java 8
-  bytecode for broad consumer compatibility even though the build JDK is newer. Avoid
-  APIs unavailable on the Java 8 runtime in shipped library code (`InputStream.transferTo`
-  (9+), `Thread.threadId()` (19+), records, sealed `permits`, etc.).
+## Toolchain
+
+- **Build JDK:** Corretto 25 (the JDK the build runs on); the JVM target pins
+  `jvmToolchain(21)` for compilation.
+- **Kotlin:** 2.4.0, with language/API version pinned to **2.0** (Kotlin 2.4 dropped 1.9
+  support, so 2.0 is the floor the library compiles against).
+- **JVM bytecode target:** 1.8 — enforced via `jvmTarget = JVM_1_8` and `-Xjdk-release=1.8`
+  so newer-JDK stdlib symbols cannot leak into a library that must run on Java 8. Keep this
+  in mind for a published library: avoid APIs unavailable on the Java 8 runtime in shipped
+  code (`InputStream.transferTo` (9+), `Thread.threadId()` (19+), records, sealed `permits`,
+  etc.).
 - **Cross-compile toolchain discipline:** a module that genuinely needs a newer JDK must
   override **all three** of `jvmToolchain(N)`, the `java { sourceCompatibility /
   targetCompatibility }` block, and `compilerOptions { jvmTarget.set(JvmTarget.JVM_N) }`.
@@ -32,9 +44,8 @@ been added; do not assume commands that aren't present in the repo.
 
 ## Target build setup & conventions
 
-This repo is greenfield, but it sits in the **Dexpace** family alongside
-`dexpace/java-sdk`, which it mirrors. Apply these conventions as the library is built out
-(they describe the intended setup, not what's wired in today):
+kuri sits in the **Dexpace** family alongside `dexpace/java-sdk`, which it mirrors. These
+conventions are wired into the build and are authoritative:
 
 - **Build tool:** Gradle (Kotlin DSL). `gradle/libs.versions.toml` is the single source of
   truth for dependency and plugin versions. Group `org.dexpace`.
@@ -138,7 +149,3 @@ maintainability, consistency (tiebreaker).
   `@throws`/`@sample`/`@see`); document *why*, nullable/`Result` returns, and every
   deliberately thrown exception; `package.md` per public package; `@Deprecated` with
   `ReplaceWith` and a removal version.
-
-> Note: because the build is still Gradle-less, the `ktlint`/`detekt`/version-catalog
-> tooling above is the target setup to wire in when the build is created — it is not yet
-> present in the repo.

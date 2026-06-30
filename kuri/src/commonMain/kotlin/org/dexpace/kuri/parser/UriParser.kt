@@ -425,24 +425,10 @@ internal object UriParser {
             password = authority?.password ?: "",
             host = authority?.host,
             port = authority?.port,
-            path = pathToSegments(sections.path),
+            path = splitUriPath(sections.path),
             query = sections.query,
             fragment = sections.fragment,
         )
-
-    /**
-     * Decomposes a raw path into [UrlPath.Segments] (SPEC §3.7, [MODEL-26]/[MODEL-27]).
-     *
-     * Empty path is `emptyList()`; an absolute path drops the leading empty element so root-only `/`
-     * is `listOf("")`; a `Uri` rootless path keeps all segments. Trailing `/` is a trailing `""`.
-     * No dot-segment removal is performed ([PARSE-39]).
-     */
-    private fun pathToSegments(path: String): UrlPath.Segments =
-        when {
-            path.isEmpty() -> UrlPath.Segments(emptyList())
-            path.startsWith("/") -> UrlPath.Segments(path.substring(1).split('/'))
-            else -> UrlPath.Segments(path.split('/'))
-        }
 
     // --- structural carriers (private, behaviour-free) -------------------------------------------
 
