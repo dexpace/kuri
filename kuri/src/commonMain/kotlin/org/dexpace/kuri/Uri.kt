@@ -16,6 +16,7 @@ import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.Resolver
 import org.dexpace.kuri.parser.UriParser
 import org.dexpace.kuri.parser.UrlPath
+import org.dexpace.kuri.parser.toUriPathString
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.serialize.Serializer
@@ -90,7 +91,7 @@ public class Uri internal constructor(
      */
     @get:JvmName("path")
     public val path: String
-        get() = serializeEncodedPath()
+        get() = components.path.toUriPathString()
 
     /** The decoded path segments in order (read-only); an opaque path yields its single decoded value. */
     @get:JvmName("pathSegments")
@@ -206,18 +207,6 @@ public class Uri internal constructor(
         val portPart = components.port?.let { ":$it" } ?: ""
         return "$credentials${authorityHost.serialize()}$portPart"
     }
-
-    /** Recomposes the encoded path string from the stored path (no `/.` guard, RFC 3986 §5.3). */
-    private fun serializeEncodedPath(): String =
-        when (val storedPath = components.path) {
-            is UrlPath.Opaque -> storedPath.path
-            is UrlPath.Segments ->
-                when {
-                    storedPath.segments.isEmpty() -> ""
-                    storedPath.rooted -> SLASH + storedPath.segments.joinToString(SLASH)
-                    else -> storedPath.segments.joinToString(SLASH)
-                }
-        }
 
     /** Parse factories for [Uri] (SPEC §7.5); each returns a value rather than throwing ([ERR-1]). */
     public companion object {

@@ -8,6 +8,8 @@ import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.Resolver
 import org.dexpace.kuri.parser.UrlPath
+import org.dexpace.kuri.parser.splitUriPath
+import org.dexpace.kuri.parser.toUriPathString
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.text.hexDigitToInt
 import org.dexpace.kuri.text.isAsciiAlphanumeric
@@ -183,27 +185,11 @@ internal object UriNormalizer {
         path: UrlPath.Segments,
         hasAuthority: Boolean,
     ): UrlPath {
-        val cleaned = Resolver.removeDotSegments(normalizeText(pathToString(path)))
+        val cleaned = Resolver.removeDotSegments(normalizeText(path.toUriPathString()))
         val rendered = if (cleaned.isEmpty() && hasAuthority) SLASH else cleaned
         check(!(hasAuthority && rendered.isEmpty())) { "an authority path must render as at least /" }
-        return splitPath(rendered)
+        return splitUriPath(rendered)
     }
-
-    /** Encodes [Segments] back to a string: `""` (empty), a rootless join, or an absolute `/`-join. */
-    private fun pathToString(path: UrlPath.Segments): String =
-        when {
-            path.segments.isEmpty() -> ""
-            path.rooted -> SLASH + path.segments.joinToString(SLASH)
-            else -> path.segments.joinToString(SLASH)
-        }
-
-    /** Re-splits a path string into [Segments], mirroring the parser's empty/absolute/rootless conventions. */
-    private fun splitPath(path: String): UrlPath.Segments =
-        when {
-            path.isEmpty() -> UrlPath.Segments(emptyList())
-            path.startsWith(SLASH) -> UrlPath.Segments(path.substring(1).split('/'), rooted = true)
-            else -> UrlPath.Segments(path.split('/'), rooted = false)
-        }
 
     // --- §6.2.3 default-port elision ---------------------------------------------------------------
 

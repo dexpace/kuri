@@ -120,7 +120,7 @@ internal object Resolver {
      * the form the future public `Uri.resolve` builds on.
      *
      * [UrlPath.Segments] records the absolute-vs-rootless distinction of a path via its `rooted` flag
-     * (`/g` is rooted, `g` is not), so [pathString] reproduces each form faithfully and this structured
+     * (`/g` is rooted, `g` is not), so [toUriPathString] reproduces each form faithfully and this structured
      * resolution preserves the distinction through to the recomposed target.
      *
      * @param base the absolute base components; its scheme MUST be present.
@@ -359,21 +359,9 @@ internal object Resolver {
 
     // --- structured-form derivation (ParsedComponents) --------------------------------------------
 
-    /** Derives the behaviour-free 5-tuple from parsed components (path via [pathString]). */
+    /** Derives the behaviour-free 5-tuple from parsed components (path via [toUriPathString]). */
     private fun partsOf(c: ParsedComponents): UriParts =
-        UriParts(c.scheme, authorityOf(c), pathString(c.path), c.query, c.fragment)
-
-    /** Encodes a [UrlPath] back to its string form: empty list → `""`, else a rootless or absolute `/`-join. */
-    private fun pathString(path: UrlPath): String =
-        when (path) {
-            is UrlPath.Opaque -> path.path
-            is UrlPath.Segments ->
-                when {
-                    path.segments.isEmpty() -> ""
-                    path.rooted -> SLASH + path.segments.joinToString(SLASH)
-                    else -> path.segments.joinToString(SLASH)
-                }
-        }
+        UriParts(c.scheme, authorityOf(c), c.path.toUriPathString(), c.query, c.fragment)
 
     /** Re-serializes the authority (`userinfo@host:port`) from components, or `null` when none is present. */
     private fun authorityOf(c: ParsedComponents): String? {

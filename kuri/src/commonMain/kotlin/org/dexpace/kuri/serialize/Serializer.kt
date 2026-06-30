@@ -8,6 +8,7 @@ import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.host.serializeHost
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.UrlPath
+import org.dexpace.kuri.parser.toUriPathString
 
 /** The path-segment separator and the per-segment prefix used by both path serializers. */
 private const val SLASH: String = "/"
@@ -69,7 +70,7 @@ internal object Serializer {
         val sb = StringBuilder()
         if (c.scheme != null) sb.append(c.scheme).append(':')
         if (c.host != null) sb.append(DOUBLE_SLASH).append(serializeAuthority(c))
-        sb.append(serializeUriPath(c.path))
+        sb.append(c.path.toUriPathString())
         appendQueryFragment(sb, c, excludeFragment)
         check(c.host == null || sb.contains(DOUBLE_SLASH)) { "an authority must emit //" }
         return sb.toString()
@@ -116,22 +117,6 @@ internal object Serializer {
         val prefix = if (needsGuard) LEADING_DOT_GUARD else ""
         return prefix + segments.joinToString("") { "$SLASH$it" }
     }
-
-    /**
-     * RFC 3986 §5.3 path string: an opaque path verbatim, else `""` (empty), a rootless join, or an
-     * absolute `/`-join. The segment list's `rooted` flag selects the absolute versus rootless form so
-     * a relative reference (`a/b`) and a scheme-rootless path (`mailto:a@b`) round-trip unchanged.
-     */
-    private fun serializeUriPath(path: UrlPath): String =
-        when (path) {
-            is UrlPath.Opaque -> path.path
-            is UrlPath.Segments ->
-                when {
-                    path.segments.isEmpty() -> ""
-                    path.rooted -> SLASH + path.segments.joinToString(SLASH)
-                    else -> path.segments.joinToString(SLASH)
-                }
-        }
 
     /** Appends `?query` then (unless excluded) `#fragment`, each only when its component is present. */
     private fun appendQueryFragment(
