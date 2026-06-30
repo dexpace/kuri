@@ -74,8 +74,52 @@ class UriTest {
         assertNull(uri.scheme)
         assertNull(uri.host)
         assertEquals(listOf("a", "b"), uri.pathSegments)
+        assertEquals("a/b", uri.path)
+        assertEquals("a/b", uri.uriString)
         assertNull(uri.userInfo)
         assertNull(uri.authority)
+    }
+
+    @Test
+    fun `a rootless relative reference round-trips without a synthesized leading slash`() {
+        val uri = parseOk("a/b/c")
+
+        assertEquals("a/b/c", uri.toString())
+    }
+
+    @Test
+    fun `a scheme-rootless mailto preserves its rootless path`() {
+        val uri = parseOk("mailto:a@b")
+
+        assertEquals("a@b", uri.path)
+        assertEquals("mailto:a@b", uri.uriString)
+    }
+
+    @Test
+    fun `a scheme-rootless urn preserves its rootless path`() {
+        val uri = parseOk("urn:example:animal:ferret")
+
+        assertEquals("urn:example:animal:ferret", uri.uriString)
+    }
+
+    @Test
+    fun `a single-segment rootless path round-trips without a leading slash`() {
+        // Guards the join boundary: a one-element segment list must not gain a synthesized "/".
+        val uri = parseOk("a")
+
+        assertEquals(listOf("a"), uri.pathSegments)
+        assertEquals("a", uri.path)
+        assertEquals("a", uri.uriString)
+    }
+
+    @Test
+    fun `a rootless path with a colon in a later segment is not a scheme`() {
+        // The first ':' follows a '/', so it is path data, not a scheme delimiter; the rootless
+        // round-trip must not re-introduce a leading slash that would change how it re-parses.
+        val uri = parseOk("a/b:c/d")
+
+        assertNull(uri.scheme)
+        assertEquals("a/b:c/d", uri.uriString)
     }
 
     @Test

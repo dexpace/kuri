@@ -55,6 +55,7 @@ class UriParserTest {
         assertEquals("urn", components.scheme)
         assertNull(components.host)
         assertEquals(listOf("example:animal:ferret:nose"), segments(components))
+        assertEquals(false, (components.path as UrlPath.Segments).rooted)
         assertNull(components.query)
         assertNull(components.fragment)
     }
@@ -66,6 +67,7 @@ class UriParserTest {
         assertEquals("mailto", components.scheme)
         assertNull(components.host)
         assertEquals(listOf("John.Doe@example.com"), segments(components))
+        assertEquals(false, (components.path as UrlPath.Segments).rooted)
     }
 
     // --- authority presence and relative references ([PARSE-19]/[PARSE-50]) ----------------------
@@ -86,6 +88,7 @@ class UriParserTest {
         assertNull(components.scheme)
         assertNull(components.host)
         assertEquals(listOf("relative", "path"), segments(components))
+        assertEquals(true, (components.path as UrlPath.Segments).rooted)
     }
 
     @Test
@@ -95,6 +98,7 @@ class UriParserTest {
         assertNull(components.scheme)
         assertNull(components.host)
         assertEquals(listOf("a", "b", "c"), segments(components))
+        assertEquals(false, (components.path as UrlPath.Segments).rooted)
     }
 
     @Test

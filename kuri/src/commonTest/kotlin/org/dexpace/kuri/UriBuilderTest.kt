@@ -55,6 +55,25 @@ class UriBuilderTest {
     }
 
     @Test
+    fun `newBuilder then build reproduces a rootless reference`() {
+        // The pre-fill copies source.path, so the round-trip depends on the rootless-aware path getter.
+        val original = parseOk("a/b/c")
+
+        val rebuilt = original.newBuilder().build()
+
+        assertEquals(original, rebuilt)
+        assertEquals("a/b/c", rebuilt.uriString)
+    }
+
+    @Test
+    fun `builds a rootless relative reference from a bare encoded path`() {
+        val uri = Uri.Builder().encodedPath("a/b").build()
+
+        assertNull(uri.scheme)
+        assertEquals("a/b", uri.uriString)
+    }
+
+    @Test
     fun `a setter override changes only the targeted component`() {
         val original = parseOk("foo://h/a/b?q#n")
 

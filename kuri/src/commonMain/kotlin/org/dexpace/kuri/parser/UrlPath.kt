@@ -34,8 +34,8 @@ package org.dexpace.kuri.parser
  * | rootless path (`a/b`, `Uri` only)| `Segments(["a","b"])`*  | `"a/b"`      |
  *
  * \* The leading-slash (absolute vs. rootless) distinction is carried by the
- * serializer/encoded form, not by an extra list element: a path is absolute unless
- * the `Uri` profile recorded it as rootless. An empty path is therefore the
+ * [Segments.rooted] flag, not by an extra list element: a path is absolute (`rooted`)
+ * unless the `Uri` profile recorded it as rootless. An empty path is still the
  * *empty list*, while a root-only path is the *single empty segment* `[""]` — the
  * two MUST NOT be conflated. Per [MODEL-29], a special-scheme `Url` whose input
  * path was empty is canonicalized to the root path `Segments(listOf(""))` (encoded
@@ -57,9 +57,14 @@ internal sealed interface UrlPath {
      *
      * @property segments the decoded path segments in order; `emptyList()` is the
      *   empty path and `listOf("")` is the root-only path `"/"`.
+     * @property rooted whether the path is absolute (a leading `/`, the default) as
+     *   opposed to rootless (`a/b`, the `Uri` profile only — `Url` paths are always
+     *   rooted). Only meaningful for a non-empty segment list: the empty path always
+     *   serializes to `""`, so its rootedness is irrelevant.
      */
     data class Segments(
         val segments: List<String>,
+        val rooted: Boolean = true,
     ) : UrlPath
 
     /**

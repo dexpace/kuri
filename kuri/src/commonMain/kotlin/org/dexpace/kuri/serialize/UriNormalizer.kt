@@ -189,16 +189,20 @@ internal object UriNormalizer {
         return splitPath(rendered)
     }
 
-    /** Encodes [Segments] back to a string: `""` (empty) or an absolute `/`-joined path. */
+    /** Encodes [Segments] back to a string: `""` (empty), a rootless join, or an absolute `/`-join. */
     private fun pathToString(path: UrlPath.Segments): String =
-        if (path.segments.isEmpty()) "" else SLASH + path.segments.joinToString(SLASH)
+        when {
+            path.segments.isEmpty() -> ""
+            path.rooted -> SLASH + path.segments.joinToString(SLASH)
+            else -> path.segments.joinToString(SLASH)
+        }
 
-    /** Re-splits a path string into [Segments], mirroring the parser's empty/absolute conventions. */
+    /** Re-splits a path string into [Segments], mirroring the parser's empty/absolute/rootless conventions. */
     private fun splitPath(path: String): UrlPath.Segments =
         when {
             path.isEmpty() -> UrlPath.Segments(emptyList())
-            path.startsWith(SLASH) -> UrlPath.Segments(path.substring(1).split('/'))
-            else -> UrlPath.Segments(path.split('/'))
+            path.startsWith(SLASH) -> UrlPath.Segments(path.substring(1).split('/'), rooted = true)
+            else -> UrlPath.Segments(path.split('/'), rooted = false)
         }
 
     // --- §6.2.3 default-port elision ---------------------------------------------------------------

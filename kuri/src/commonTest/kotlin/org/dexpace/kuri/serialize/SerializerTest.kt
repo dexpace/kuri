@@ -66,6 +66,32 @@ internal class SerializerTest {
         assertEquals(input, Serializer.serialize(parseUri(input), ParseProfile.URI))
     }
 
+    @Test
+    fun `serialize keeps a rootless relative reference path without a leading slash`() {
+        assertEquals("a/b/c", Serializer.serialize(parseUri("a/b/c"), ParseProfile.URI))
+    }
+
+    @Test
+    fun `serialize keeps a scheme-rootless mailto path without a leading slash`() {
+        assertEquals("mailto:a@b", Serializer.serialize(parseUri("mailto:a@b"), ParseProfile.URI))
+    }
+
+    @Test
+    fun `serialize keeps a scheme-rootless urn path without a leading slash`() {
+        assertEquals("urn:example:x", Serializer.serialize(parseUri("urn:example:x"), ParseProfile.URI))
+    }
+
+    @Test
+    fun `serialize keeps an absolute-path relative reference rooted`() {
+        assertEquals("/a/b", Serializer.serialize(parseUri("/a/b"), ParseProfile.URI))
+    }
+
+    @Test
+    fun `serialize keeps a trailing slash on a rootless path`() {
+        // The trailing "" segment and the missing leading slash must both survive the rootless join.
+        assertEquals("a/b/", Serializer.serialize(parseUri("a/b/"), ParseProfile.URI))
+    }
+
     private fun parseUrl(input: String): ParsedComponents =
         requireNotNull(UrlParser.parse(input).getOrNull()) { "expected a parseable Url: $input" }
 

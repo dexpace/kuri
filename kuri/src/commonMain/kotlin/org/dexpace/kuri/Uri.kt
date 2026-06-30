@@ -212,7 +212,11 @@ public class Uri internal constructor(
         when (val storedPath = components.path) {
             is UrlPath.Opaque -> storedPath.path
             is UrlPath.Segments ->
-                if (storedPath.segments.isEmpty()) "" else SLASH + storedPath.segments.joinToString(SLASH)
+                when {
+                    storedPath.segments.isEmpty() -> ""
+                    storedPath.rooted -> SLASH + storedPath.segments.joinToString(SLASH)
+                    else -> storedPath.segments.joinToString(SLASH)
+                }
         }
 
     /** Parse factories for [Uri] (SPEC §7.5); each returns a value rather than throwing ([ERR-1]). */

@@ -117,12 +117,20 @@ internal object Serializer {
         return prefix + segments.joinToString("") { "$SLASH$it" }
     }
 
-    /** RFC 3986 §5.3 path string: an opaque path verbatim, else `""` (empty) or an absolute `/`-join. */
+    /**
+     * RFC 3986 §5.3 path string: an opaque path verbatim, else `""` (empty), a rootless join, or an
+     * absolute `/`-join. The segment list's `rooted` flag selects the absolute versus rootless form so
+     * a relative reference (`a/b`) and a scheme-rootless path (`mailto:a@b`) round-trip unchanged.
+     */
     private fun serializeUriPath(path: UrlPath): String =
         when (path) {
             is UrlPath.Opaque -> path.path
             is UrlPath.Segments ->
-                if (path.segments.isEmpty()) "" else SLASH + path.segments.joinToString(SLASH)
+                when {
+                    path.segments.isEmpty() -> ""
+                    path.rooted -> SLASH + path.segments.joinToString(SLASH)
+                    else -> path.segments.joinToString(SLASH)
+                }
         }
 
     /** Appends `?query` then (unless excluded) `#fragment`, each only when its component is present. */

@@ -57,11 +57,13 @@ private const val ZONE_PREFIX: String = "%25"
  * the reference is never elided even when it equals the base scheme (the §5.4.2 `http:g` loophole is
  * not taken).
  *
- * The string entry point splits each input into its raw five parts directly (Appendix B), rather
- * than reading the path back out of [ParsedComponents]: [UrlPath.Segments] cannot distinguish an
- * absolute path (`/g`) from a rootless one (`g`) — both decompose to the same segment list — and
- * that distinction is load-bearing for §5.2.2. [UriParser] is still run on both inputs first so the
- * resolution shares the parser's validation and absolute-base check.
+ * The string entry point splits each input into its raw five parts directly (Appendix B) and resolves
+ * over those raw path strings, where the absolute (`/g`) versus rootless (`g`) distinction that is
+ * load-bearing for §5.2.2 is plainly visible. [UrlPath.Segments] now records that same distinction via
+ * its `rooted` flag, so the structured component form preserves it too; the raw-string path is kept
+ * because it operates directly on the input as Appendix B specifies and remains correct. [UriParser]
+ * is still run on both inputs first so the resolution shares the parser's validation and absolute-base
+ * check.
  *
  * The algorithm is a short ordered procedure split into single-purpose helpers, each well under the
  * line/return budgets; this legitimately exceeds the per-object function count.
@@ -117,9 +119,9 @@ internal object Resolver {
      * Resolves [reference] against the absolute [base] on the structured component model (§5.2),
      * the form the future public `Uri.resolve` builds on.
      *
-     * Note that [ParsedComponents] does not record the absolute-vs-rootless distinction of a path
-     * ([UrlPath.Segments] is the same for `/g` and `g`); this structured form therefore serializes
-     * every non-empty path as absolute, which is correct for an authority-bearing base and target.
+     * [UrlPath.Segments] records the absolute-vs-rootless distinction of a path via its `rooted` flag
+     * (`/g` is rooted, `g` is not), so [pathString] reproduces each form faithfully and this structured
+     * resolution preserves the distinction through to the recomposed target.
      *
      * @param base the absolute base components; its scheme MUST be present.
      * @param reference the reference components to resolve.
@@ -361,11 +363,16 @@ internal object Resolver {
     private fun partsOf(c: ParsedComponents): UriParts =
         UriParts(c.scheme, authorityOf(c), pathString(c.path), c.query, c.fragment)
 
-    /** Encodes a [UrlPath] back to its string form: empty list → `""`, otherwise an absolute `/`-joined path. */
+    /** Encodes a [UrlPath] back to its string form: empty list → `""`, else a rootless or absolute `/`-join. */
     private fun pathString(path: UrlPath): String =
         when (path) {
             is UrlPath.Opaque -> path.path
-            is UrlPath.Segments -> if (path.segments.isEmpty()) "" else SLASH + path.segments.joinToString(SLASH)
+            is UrlPath.Segments ->
+                when {
+                    path.segments.isEmpty() -> ""
+                    path.rooted -> SLASH + path.segments.joinToString(SLASH)
+                    else -> path.segments.joinToString(SLASH)
+                }
         }
 
     /** Re-serializes the authority (`userinfo@host:port`) from components, or `null` when none is present. */

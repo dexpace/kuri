@@ -4,7 +4,9 @@
  */
 package org.dexpace.kuri.parser
 
+import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.serialize.Serializer
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -86,6 +88,29 @@ internal class ResolverTest {
                 "http:g" to "http:g",
             )
         assertResolves(cases)
+    }
+
+    @Test
+    fun `structured resolve preserves a rootless scheme reference`() {
+        // The structured overload reads the path back through pathString; a rooted reference scheme
+        // path (mailto:x@y) must stay rootless rather than gaining a leading slash ("mailto:/x@y").
+        val base = UriParser.parse("http://a/b/c/d").getOrThrow()
+        val reference = UriParser.parse("mailto:x@y").getOrThrow()
+
+        val resolved = Resolver.resolve(base, reference)
+
+        assertEquals("mailto:x@y", Serializer.serialize(resolved, ParseProfile.URI))
+    }
+
+    @Test
+    fun `structured resolve merges a rootless relative reference against the base path`() {
+        // Pins the partsOf/pathString rootless branch on the reference: "g/x" merges onto "/a/b".
+        val base = UriParser.parse("http://h/a/b").getOrThrow()
+        val reference = UriParser.parse("g/x").getOrThrow()
+
+        val resolved = Resolver.resolve(base, reference)
+
+        assertEquals("http://h/a/g/x", Serializer.serialize(resolved, ParseProfile.URI))
     }
 
     private fun assertResolves(cases: List<Pair<String, String>>) {

@@ -435,13 +435,14 @@ internal object UriParser {
      *
      * Empty path is `emptyList()`; an absolute path drops the leading empty element so root-only `/`
      * is `listOf("")`; a `Uri` rootless path keeps all segments. Trailing `/` is a trailing `""`.
-     * No dot-segment removal is performed ([PARSE-39]).
+     * No dot-segment removal is performed ([PARSE-39]). The `rooted` flag records the absolute
+     * (leading `/`) versus rootless distinction so the serializer can round-trip it faithfully.
      */
     private fun pathToSegments(path: String): UrlPath.Segments =
         when {
             path.isEmpty() -> UrlPath.Segments(emptyList())
-            path.startsWith("/") -> UrlPath.Segments(path.substring(1).split('/'))
-            else -> UrlPath.Segments(path.split('/'))
+            path.startsWith("/") -> UrlPath.Segments(path.substring(1).split('/'), rooted = true)
+            else -> UrlPath.Segments(path.split('/'), rooted = false)
         }
 
     // --- structural carriers (private, behaviour-free) -------------------------------------------
