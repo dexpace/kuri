@@ -107,9 +107,13 @@ accepting it.
 
 ### 5. Update human-facing version mentions
 
-Bump the `Unicode NN.0` / `unicode-NN.0` strings in doc comments — search the repo
-for `Unicode 1` and `unicode-1` — and update the "current version" note at the top
-of this file.
+The version strings stamped into the generated `.kt` headers are derived from
+`unicodeVersionDir` (via `ucd.BundledUnicodeVersion`), so regenerating in step 3
+rewrites them automatically — they no longer need a manual bump. What remains manual is
+the hand-written prose: bump the `Unicode NN.0` / `unicode-NN.0` mentions in the Go
+doc comments — search the repo for the outgoing version's `Unicode <OLD>` /
+`unicode-<OLD>` strings — and update the "current version" note at the top of this
+file.
 
 ### 6. Run the full gate
 
