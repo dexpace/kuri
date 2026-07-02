@@ -46,12 +46,27 @@ kotlin {
     }
 
     js {
-        browser()
+        browser {
+            // Chrome's sandbox needs privileges CI runners don't reliably grant (a runner
+            // image or user-namespace change can trip "No usable sandbox"). The Karma test
+            // bundle is our own trusted code, so run headless Chrome with the sandbox off.
+            testTask {
+                useKarma {
+                    useChromeHeadlessNoSandbox()
+                }
+            }
+        }
         nodejs()
     }
 
     wasmJs {
-        browser()
+        browser {
+            testTask {
+                useKarma {
+                    useChromeHeadlessNoSandbox()
+                }
+            }
+        }
         nodejs()
     }
 
