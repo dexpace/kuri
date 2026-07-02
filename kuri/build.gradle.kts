@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.android.kmp.library)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.detekt)
     alias(libs.plugins.kover)
@@ -70,6 +71,26 @@ kotlin {
         nodejs()
     }
 
+    // Android (ART) via the KMP-dedicated library plugin. commonTest runs as host (JVM) unit
+    // tests. It is deliberately NOT shared into the device (instrumented) test: its backticked
+    // names contain spaces, which are invalid DEX method names below API 35 (DEX v040), so a
+    // dedicated on-device smoke test in src/androidDeviceTest verifies kuri runs on ART instead.
+    android {
+        namespace = "org.dexpace.kuri"
+        compileSdk = 35
+        minSdk = 21
+
+        withHostTestBuilder {}.configure {}
+        withDeviceTestBuilder {}.configure {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
+
+        // Emit Java 8 bytecode, consistent with the jvm() target.
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_1_8)
+        }
+    }
+
     linuxX64()
     linuxArm64()
     macosArm64()
@@ -87,6 +108,13 @@ kotlin {
     sourceSets {
         commonTest.dependencies {
             implementation(kotlin("test"))
+        }
+        // Instrumented tests run under AndroidJUnitRunner (JUnit4), so bind kotlin.test to JUnit4
+        // and pull in the AndroidX test runtime that provides the runner.
+        getByName("androidDeviceTest").dependencies {
+            implementation(kotlin("test-junit"))
+            implementation("androidx.test:runner:1.6.2")
+            implementation("androidx.test.ext:junit:1.2.1")
         }
     }
 }
