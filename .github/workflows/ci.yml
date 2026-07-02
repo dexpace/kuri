@@ -97,10 +97,10 @@ jobs:
           - name: Native · Apple (macOS arm64)
             os: macos-latest
             # The macOS host target and the arm64 iOS/tvOS/watchOS simulators run the full
-            # suite (macos-latest ships those simulator runtimes). The x86_64 iOS simulator
-            # (iosX64) is disabled by Kotlin/Native on an arm64 host, and the device targets
-            # (iosArm64/tvosArm64/watchosArm64) have no runner that can execute them — so all
-            # four are compiled and linked via *TestBinaries to still catch build breaks.
+            # suite (macos-latest ships those simulator runtimes). Targets no runner can
+            # execute — the device targets (iosArm64/tvosArm64/watchosArm64) and the x86_64
+            # iOS simulator (iosX64: disabled by Kotlin/Native on an arm64 host, and GitHub no
+            # longer offers Intel macOS runners) — are compiled and linked via *TestBinaries.
             tasks: >-
               macosArm64Test
               iosSimulatorArm64Test
@@ -120,12 +120,56 @@ jobs:
       - name: ${{ matrix.name }}
         run: ./gradlew ${{ matrix.tasks }} --stacktrace
 
+  android-unit:
+    name: Android unit tests (Linux x64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: '21'
+      # AGP needs an Android SDK at configuration time; this installs it and accepts licenses.
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Android host (JVM) unit tests
+        # Runs commonTest compiled for the Android target on the JVM — no emulator.
+        run: ./gradlew :kuri:testAndroidHostTest --stacktrace
+
+  android-instrumented:
+    name: Android instrumented tests (emulator)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      # Hardware acceleration for the emulator; required for a reliable boot on hosted runners.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Android instrumented tests on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: aosp_atd
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # Installs and runs the androidDeviceTest instrumentation (an ART smoke test) on the emulator.
+          script: ./gradlew :kuri:connectedAndroidDeviceTest --stacktrace
+
   # Aggregate gate: a single check to require in branch protection. Green only when every
   # job above succeeded; fails if any was skipped, cancelled or failed.
   ci:
     name: CI
     if: always()
-    needs: [ static-analysis, web, native ]
+    needs: [ static-analysis, web, native, android-unit, android-instrumented ]
     runs-on: ubuntu-latest
     # Only evaluates the aggregate result; a couple of minutes is ample.
     timeout-minutes: 5
