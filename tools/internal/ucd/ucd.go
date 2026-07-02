@@ -58,6 +58,65 @@ const rootMarker = "settings.gradle.kts"
 // embedded Kotlin tables. See docs/idna-unicode-update.md for the full procedure.
 const unicodeVersionDir = "unicode-17.0"
 
+// versionDirPrefix is the fixed prefix of unicodeVersionDir; the dotted Unicode
+// version follows it, so BundledUnicodeVersion can recover the release from the
+// same pin the loaders resolve their inputs against.
+const versionDirPrefix = "unicode-"
+
+// A well-formed version pin carries two dotted components (major.minor, with the
+// patch implied 0) or three (major.minor.patch).
+const (
+	minVersionComponents = 2
+	maxVersionComponents = 3
+)
+
+// UnicodeVersion is the bundled Unicode release recovered from unicodeVersionDir.
+// It exists so the directory pin is the sole place a version bump edits: the
+// generators both read unicode-<version>/ and stamp <version> into the headers
+// they emit, so the two can no longer drift apart. Its two renderings match the
+// two conventions the generated files already use.
+type UnicodeVersion struct {
+	major, minor, patch int
+}
+
+// MajorMinor renders "<major>.<minor>" (e.g. "17.0") — the form the NFC table
+// header stamps.
+func (v UnicodeVersion) MajorMinor() string {
+	return fmt.Sprintf("%d.%d", v.major, v.minor)
+}
+
+// String renders the full "<major>.<minor>.<patch>" form (e.g. "17.0.0") — the
+// form the IDNA mapping and label-validity headers stamp.
+func (v UnicodeVersion) String() string {
+	return fmt.Sprintf("%d.%d.%d", v.major, v.minor, v.patch)
+}
+
+// BundledUnicodeVersion recovers the bundled release from unicodeVersionDir, so
+// the version strings stamped into generated headers derive from the same
+// one-line pin the UCD loaders read. A pin that is not
+// "unicode-<major>.<minor>[.<patch>]" with numeric components is a programmer
+// error and yields an error rather than letting a bogus version reach generated
+// code.
+func BundledUnicodeVersion() (UnicodeVersion, error) {
+	rest, ok := strings.CutPrefix(unicodeVersionDir, versionDirPrefix)
+	if !ok {
+		return UnicodeVersion{}, fmt.Errorf("ucd: version pin %q lacks the %q prefix", unicodeVersionDir, versionDirPrefix)
+	}
+	fields := strings.Split(rest, ".")
+	if len(fields) < minVersionComponents || len(fields) > maxVersionComponents {
+		return UnicodeVersion{}, fmt.Errorf("ucd: version pin %q is not unicode-<major>.<minor>[.<patch>]", unicodeVersionDir)
+	}
+	var components [maxVersionComponents]int
+	for index, field := range fields {
+		value, err := strconv.Atoi(field)
+		if err != nil || value < 0 {
+			return UnicodeVersion{}, fmt.Errorf("ucd: version pin %q has a non-numeric component %q", unicodeVersionDir, field)
+		}
+		components[index] = value
+	}
+	return UnicodeVersion{major: components[0], minor: components[1], patch: components[2]}, nil
+}
+
 // repoRoot walks up from the current working directory and returns the first
 // ancestor directory that contains settings.gradle.kts, so the loaders resolve
 // their inputs the same way whether invoked from Gradle (CWD = repo root) or

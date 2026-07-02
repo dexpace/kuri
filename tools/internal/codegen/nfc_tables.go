@@ -29,11 +29,15 @@ const chunkBudget = 100
 // generateNfcTables loads the NFC maps and returns the complete Kotlin source
 // string.
 func generateNfcTables() (string, error) {
+	version, err := ucd.BundledUnicodeVersion()
+	if err != nil {
+		return "", err
+	}
 	ccc, decomposition, composition, err := ucd.LoadNfc()
 	if err != nil {
 		return "", err
 	}
-	return emitKotlin(encodeCCC(ccc), encodeDecomposition(decomposition), encodeComposition(composition)), nil
+	return emitKotlin(version.MajorMinor(), encodeCCC(ccc), encodeDecomposition(decomposition), encodeComposition(composition)), nil
 }
 
 // encodeCCC renders the combining-class blob: "<cpHex>:<cccHex>" records sorted
@@ -88,7 +92,7 @@ func encodeComposition(composition map[[2]int]int) string {
 // package, the three guidance comment lines, and the three chunked tables in the
 // fixed order (CCC, decomposition, composition), terminated by exactly one
 // newline. The structure mirrors the Python render_kotlin exactly.
-func emitKotlin(cccBlob, decompBlob, compBlob string) string {
+func emitKotlin(version, cccBlob, decompBlob, compBlob string) string {
 	lines := []string{LicenseHeader, ""}
 	lines = append(lines, FileSuppressBlock([]string{
 		"// Generated bulk data, not hand-written logic: the chunked string tables intentionally",
@@ -97,7 +101,7 @@ func emitKotlin(cccBlob, decompBlob, compBlob string) string {
 	lines = append(lines,
 		"package org.dexpace.kuri.idna",
 		"",
-		"// Compact, generated NFC table data (Unicode 17.0), derived from UnicodeData.txt and",
+		"// Compact, generated NFC table data (Unicode "+version+"), derived from UnicodeData.txt and",
 		"// CompositionExclusions.txt by ./gradlew generateNfcTables. Do not edit by hand;",
 		"// re-run the generator instead. See Normalizer for the decoder and the UAX #15 contract.",
 	)
