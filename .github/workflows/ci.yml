@@ -2,13 +2,14 @@ name: CI
 
 # Runs the full test suite for every kuri target on the host arch that can actually
 # execute it: JVM on Linux x64; JS (Node + browser) and Wasm/JS (Node + browser) on
-# Linux x64; Kotlin/Native on Linux x64, Linux arm64, Windows x64 and macOS arm64
-# (the macOS host target plus the arm64 iOS/tvOS/watchOS simulators). Targets no hosted
-# runner can execute — the Apple device targets (iosArm64/tvosArm64/watchosArm64) and
-# the x86_64 iOS simulator (Kotlin/Native disables the iosX64 test run on an arm64 host)
-# — are compiled and linked so target-specific build breaks are still caught. The first
-# job also carries the host-agnostic quality gates — ktlint, detekt, the binary-compat
-# API check and the JVM coverage floor — so they run once, not per arch.
+# Linux x64; Kotlin/Native executed on Linux x64 (linuxX64), Windows x64 (mingwX64) and
+# macOS arm64 (the macOS host target plus the arm64 iOS/tvOS/watchOS simulators). Targets
+# no hosted runner can execute — linuxArm64 and the Apple device targets
+# (iosArm64/tvosArm64/watchosArm64), for which Kotlin/Native has no host of that arch, and
+# the x86_64 iOS simulator (disabled by Kotlin/Native on an arm64 host) — are cross-
+# compiled and linked so target-specific build breaks are still caught. The first job
+# also carries the host-agnostic quality gates — ktlint, detekt, the binary-compat API
+# check and the JVM coverage floor — so they run once, not per arch.
 
 on:
   push:
@@ -74,12 +75,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Native · Linux x64
+          # linuxX64 runs its tests; linuxArm64 has no arm64-Linux Kotlin/Native host, so
+          # it is cross-compiled and linked from the x64 host to still catch build breaks.
+          - name: Native · Linux (x64 host)
             os: ubuntu-latest
-            tasks: linuxX64Test
-          - name: Native · Linux arm64
-            os: ubuntu-24.04-arm
-            tasks: linuxArm64Test
+            tasks: linuxX64Test linuxArm64TestBinaries
           - name: Native · Windows x64
             os: windows-latest
             tasks: mingwX64Test
