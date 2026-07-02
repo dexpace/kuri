@@ -107,13 +107,22 @@ accepting it.
 
 ### 5. Update human-facing version mentions
 
-The version strings stamped into the generated `.kt` headers are derived from
-`unicodeVersionDir` (via `ucd.BundledUnicodeVersion`), so regenerating in step 3
-rewrites them automatically — they no longer need a manual bump. What remains manual is
-the hand-written prose: bump the `Unicode NN.0` / `unicode-NN.0` mentions in the Go
-doc comments — search the repo for the outgoing version's `Unicode <OLD>` /
-`unicode-<OLD>` strings — and update the "current version" note at the top of this
-file.
+The version strings stamped into the **generated** headers (`IdnaMappingTableData.kt`,
+`IdnaValidityData.kt`, `NfcData.kt`, and the `*TestData` / `*ConformanceData` fixtures)
+are derived from `unicodeVersionDir` (via `ucd.BundledUnicodeVersion`), so regenerating
+in step 3 rewrites them automatically — do **not** hand-edit those files.
+
+What remains manual is the version mentioned in **hand-written** doc comments, which
+codegen never touches. Search the repo for the outgoing version's `Unicode <OLD>` /
+`unicode-<OLD>` strings and bump each hit that is not a generated file:
+
+- the Go package/doc comments under `tools/internal/…`, and
+- the hand-written Kotlin KDocs — `IdnaMappingTable.kt` and `IdnaValidity.kt` (decoders)
+  and `IdnaConformanceTest.kt` and `NormalizerTest.kt` (tests).
+
+Then update the "current version" note at the top of this file. (The mapping-table KDoc
+had already drifted a full major release behind before this was written down, so treat
+the grep as authoritative rather than trusting this list to stay complete.)
 
 ### 6. Run the full gate
 

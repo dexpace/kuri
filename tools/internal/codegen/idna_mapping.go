@@ -56,7 +56,7 @@ func generateIdnaMapping() (string, error) {
 	}
 	blob := encodeRecords(ranges)
 	chunks := ChunkBlobByEscape(blob, mappingEscapedLineBudget, mappingEscapeChar)
-	return mappingRender(chunks, version.String()), nil
+	return mappingRender(version.String(), chunks), nil
 }
 
 // encodeRecords renders each merged range to a `<startHexUpper> <kind><rep>`
@@ -97,7 +97,7 @@ func mappingEscapeChar(point rune) string {
 // and the single flat listOf of chunk string literals, terminated by exactly one
 // newline. The KDoc carries the only non-ASCII byte in the file (the '§' in
 // 'SPEC §7.4'); it is written verbatim, never run through the chunk escaper.
-func mappingRender(chunks []string, version string) string {
+func mappingRender(version string, chunks []string) string {
 	lines := []string{
 		LicenseHeader,
 		"",
