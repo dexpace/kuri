@@ -17,10 +17,12 @@ on:
   pull_request:
   workflow_dispatch:
 
-# A newer push to the same ref cancels an in-flight run instead of queueing behind it.
+# A newer push to the same ref cancels an in-flight run instead of queueing behind it —
+# except on `main`, where each push is allowed to finish so every commit on the default
+# branch keeps its own full, recorded result rather than only the latest surviving.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -38,6 +40,9 @@ jobs:
   static-analysis:
     name: Quality gate · JVM tests (Linux x64)
     runs-on: ubuntu-latest
+    # Bound the run so a hung test or stuck daemon fails fast instead of burning the
+    # 6-hour default; generous over the real ~few-minute runtime.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -54,6 +59,9 @@ jobs:
   web:
     name: JS · Wasm tests (Linux x64)
     runs-on: ubuntu-latest
+    # A wedged headless-Chrome/Karma run can hang indefinitely; cap it well above the
+    # real runtime so only a genuine hang trips the limit.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -69,6 +77,9 @@ jobs:
   native:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    # Highest ceiling of the jobs: the macOS leg cold-downloads the Kotlin/Native
+    # toolchain and boots several simulators, but this still bounds a hang far under 6h.
+    timeout-minutes: 45
     strategy:
       # Report every arch's result even when one fails, so a single red target does not
       # mask the others.
@@ -116,6 +127,8 @@ jobs:
     if: always()
     needs: [ static-analysis, web, native ]
     runs-on: ubuntu-latest
+    # Only evaluates the aggregate result; a couple of minutes is ample.
+    timeout-minutes: 5
     steps:
       - name: Fail if any job did not succeed
         if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
