@@ -35,7 +35,7 @@ private const val KIND_MAPPED: Char = 'M'
 private const val KIND_DEVIATION: Char = 'Y'
 
 /**
- * The bundled UTS-46 IDNA mapping table (Unicode 15.1.0), implementing the mapping step of
+ * The bundled UTS-46 IDNA mapping table (Unicode 17.0.0), implementing the mapping step of
  * domain-to-ASCII processing (SPEC §7.4, [HOST-26] step 2; parameters per [HOST-28]).
  *
  * The compact data in [IDNA_MAPPING_TABLE_CHUNKS] is decoded once, lazily, into two parallel
