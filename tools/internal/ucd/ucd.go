@@ -109,8 +109,12 @@ func BundledUnicodeVersion() (UnicodeVersion, error) {
 	var components [maxVersionComponents]int
 	for index, field := range fields {
 		value, err := strconv.Atoi(field)
-		if err != nil || value < 0 {
-			return UnicodeVersion{}, fmt.Errorf("ucd: version pin %q has a non-numeric component %q", unicodeVersionDir, field)
+		// Require the canonical decimal form: strconv.Atoi also accepts a leading
+		// '+' and non-canonical leading zeros ("07" -> 7), which would reconstruct
+		// a version string that no longer matches the on-disk directory suffix. The
+		// value < 0 arm is still needed because "-5" round-trips through Itoa.
+		if err != nil || value < 0 || field != strconv.Itoa(value) {
+			return UnicodeVersion{}, fmt.Errorf("ucd: version pin %q has a malformed component %q", unicodeVersionDir, field)
 		}
 		components[index] = value
 	}
