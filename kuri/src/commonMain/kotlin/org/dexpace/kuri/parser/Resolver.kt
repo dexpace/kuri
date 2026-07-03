@@ -4,6 +4,7 @@
  */
 package org.dexpace.kuri.parser
 
+import org.dexpace.kuri.ParseOptions
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.host.Host
@@ -103,15 +104,18 @@ internal object Resolver {
      *
      * @param baseUri the absolute base URI the reference is interpreted against.
      * @param reference the (possibly relative) URI reference to resolve.
+     * @param options the opt-in parsing configuration applied to the validation parses of both
+     *   inputs, so a base (or reference) carrying an RFC 6874 zone id is accepted ([HOST-18]).
      * @return the recomposed target URI, or the first fatal parse error.
      */
     internal fun resolve(
         baseUri: String,
         reference: String,
+        options: ParseOptions = ParseOptions.DEFAULT,
     ): ParseResult<String> {
         require(baseUri.isNotEmpty()) { "an absolute base URI is required for resolution" }
-        val base = UriParser.parse(baseUri)
-        val ref = UriParser.parse(reference)
+        val base = UriParser.parse(baseUri, options)
+        val ref = UriParser.parse(reference, options)
         return resolveOutcome(baseUri, reference, base, ref)
     }
 

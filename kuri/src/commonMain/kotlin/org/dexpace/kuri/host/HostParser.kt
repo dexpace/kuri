@@ -66,6 +66,7 @@ internal object HostParser {
      * @param profile selects the WHATWG (`Url`) or RFC 3986 (`Uri`) acceptance rules.
      * @param isSpecial whether the scheme is special; gates the `Url` domain/IPv4 pipeline ([HOST-3]).
      * @param isFile whether the scheme is `file`; an empty `file` host is permitted ([HOST-39]).
+     * @param allowIpv6ZoneId whether an RFC 6874 `%25` IPv6 zone id is accepted (default off, [HOST-17]).
      * @return the parsed [Host], or a [UriParseError]-tagged failure.
      */
     internal fun parse(
@@ -73,7 +74,13 @@ internal object HostParser {
         profile: ParseProfile,
         isSpecial: Boolean,
         isFile: Boolean = false,
-    ): ParseResult<Host> = if (profile.isWhatwg) parseUrlHost(input, isSpecial, isFile) else parseUriHost(input)
+        allowIpv6ZoneId: Boolean = false,
+    ): ParseResult<Host> =
+        if (profile.isWhatwg) {
+            parseUrlHost(input, isSpecial, isFile, allowIpv6ZoneId)
+        } else {
+            parseUriHost(input, allowIpv6ZoneId)
+        }
 
     // --- Url profile (WHATWG host parser, §7.2/§7.4/§7.5/§7.7) ------------------------
 
@@ -82,18 +89,22 @@ internal object HostParser {
         input: String,
         isSpecial: Boolean,
         isFile: Boolean,
+        allowIpv6ZoneId: Boolean,
     ): ParseResult<Host> =
         when {
-            input.firstOrNull() == BRACKET_OPEN -> parseBracketedUrl(input)
+            input.firstOrNull() == BRACKET_OPEN -> parseBracketedUrl(input, allowIpv6ZoneId)
             !isSpecial -> OpaqueHost.parse(input)
             input.isEmpty() -> if (isFile) ParseResult.Ok(Host.Empty) else ParseResult.Err(UriParseError.EmptyHost)
             else -> parseSpecialDomain(input)
         }
 
     /** Parses a `Url` `[`…`]` literal strictly as IPv6: a missing `]` is fatal ([HOST-4]). */
-    private fun parseBracketedUrl(input: String): ParseResult<Host> =
+    private fun parseBracketedUrl(
+        input: String,
+        allowIpv6ZoneId: Boolean,
+    ): ParseResult<Host> =
         if (input.endsWith(BRACKET_CLOSE)) {
-            Ipv6.parse(bracketInterior(input))
+            Ipv6.parse(bracketInterior(input), allowIpv6ZoneId)
         } else {
             bracketError(input)
         }
@@ -142,9 +153,12 @@ internal object HostParser {
     // --- Uri profile (RFC 3986 §3.2.2 host grammar, §7.2/§7.5/§7.8) -------------------
 
     /** Ordered `Uri`-profile dispatch ([HOST-3] row 5): IP-literal, empty host, then IPv4/reg-name. */
-    private fun parseUriHost(input: String): ParseResult<Host> =
+    private fun parseUriHost(
+        input: String,
+        allowIpv6ZoneId: Boolean,
+    ): ParseResult<Host> =
         when {
-            input.firstOrNull() == BRACKET_OPEN -> parseBracketedUri(input)
+            input.firstOrNull() == BRACKET_OPEN -> parseBracketedUri(input, allowIpv6ZoneId)
             input.isEmpty() -> ParseResult.Ok(Host.Empty)
             else -> parseUriHostNonBracket(input)
         }
@@ -157,10 +171,13 @@ internal object HostParser {
     }
 
     /** Parses a `Uri` `[`…`]` literal: IPvFuture when version-prefixed, else IPv6 ([HOST-5]/[HOST-42]). */
-    private fun parseBracketedUri(input: String): ParseResult<Host> {
+    private fun parseBracketedUri(
+        input: String,
+        allowIpv6ZoneId: Boolean,
+    ): ParseResult<Host> {
         require(input.firstOrNull() == BRACKET_OPEN) { "bracketed parser needs a leading '['" }
         return if (input.endsWith(BRACKET_CLOSE)) {
-            classifyIpLiteral(bracketInterior(input), input)
+            classifyIpLiteral(bracketInterior(input), input, allowIpv6ZoneId)
         } else {
             bracketError(input)
         }
@@ -170,7 +187,13 @@ internal object HostParser {
     private fun classifyIpLiteral(
         interior: String,
         input: String,
-    ): ParseResult<Host> = if (isVersionPrefixed(interior)) parseIpFuture(interior, input) else Ipv6.parse(interior)
+        allowIpv6ZoneId: Boolean,
+    ): ParseResult<Host> =
+        if (isVersionPrefixed(interior)) {
+            parseIpFuture(interior, input)
+        } else {
+            Ipv6.parse(interior, allowIpv6ZoneId)
+        }
 
     /** Validates the IPvFuture ABNF and produces a [Host.IpFuture], or a malformed-literal failure. */
     private fun parseIpFuture(

@@ -117,4 +117,123 @@ class UriBuilderTest {
 
         assertFailsWith<IllegalArgumentException> { builder.build() }
     }
+
+    @Test
+    fun `a colon in the first path segment is guarded so it is not read as a scheme`() {
+        val uri = Uri.Builder().encodedPath("a:b").build()
+
+        assertNull(uri.scheme)
+        assertEquals("./a:b", uri.uriString)
+        assertEquals(uri, uri.newBuilder().build())
+    }
+
+    @Test
+    fun `a colon in a later path segment is not guarded`() {
+        val uri = Uri.Builder().encodedPath("a/b:c").build()
+
+        assertNull(uri.scheme)
+        assertEquals("a/b:c", uri.uriString)
+    }
+
+    @Test
+    fun `a present scheme absorbs a first-segment colon without a guard`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("foo")
+                .encodedPath("a:b")
+                .build()
+
+        assertEquals("foo", uri.scheme)
+        assertEquals("foo:a:b", uri.uriString)
+    }
+
+    @Test
+    fun `a leading double slash is guarded when there is no authority`() {
+        val uri = Uri.Builder().encodedPath("//not-authority").build()
+
+        assertNull(uri.host)
+        assertEquals("/.//not-authority", uri.uriString)
+    }
+
+    @Test
+    fun `a leading double slash is guarded even with a scheme present`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("foo")
+                .encodedPath("//bar")
+                .build()
+
+        assertNull(uri.host)
+        assertEquals("foo:/.//bar", uri.uriString)
+    }
+
+    @Test
+    fun `an authority paired with a rootless path is rejected`() {
+        assertFailsWith<IllegalArgumentException> {
+            Uri
+                .Builder()
+                .host("h")
+                .encodedPath("p")
+                .build()
+        }
+    }
+
+    @Test
+    fun `an authority paired with an empty path is allowed`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .build()
+
+        assertEquals("http://h", uri.uriString)
+    }
+
+    @Test
+    fun `userInfo without a host is rejected`() {
+        assertFailsWith<IllegalArgumentException> {
+            Uri
+                .Builder()
+                .userInfo("u")
+                .encodedPath("/p")
+                .build()
+        }
+    }
+
+    @Test
+    fun `a port without a host is rejected`() {
+        assertFailsWith<IllegalArgumentException> {
+            Uri
+                .Builder()
+                .port(8080)
+                .encodedPath("/p")
+                .build()
+        }
+    }
+
+    @Test
+    fun `userInfo with an empty host is allowed`() {
+        val uri =
+            Uri
+                .Builder()
+                .userInfo("u")
+                .host("")
+                .encodedPath("/p")
+                .build()
+
+        assertEquals("//u@/p", uri.uriString)
+    }
+
+    @Test
+    fun `the guards never alter a value that already parsed`() {
+        val original = parseOk("a/b:c/d")
+
+        val rebuilt = original.newBuilder().build()
+
+        assertEquals(original, rebuilt)
+        assertEquals("a/b:c/d", rebuilt.uriString)
+    }
 }

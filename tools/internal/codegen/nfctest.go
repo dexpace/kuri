@@ -3,9 +3,10 @@
 
 // The nfc-test generator ports the former Python generator: it reads
 // the vendored Unicode NormalizationTest.txt corpus and materializes the Kotlin
-// NfcTestData fixture byte-for-byte. Only the source and NFC columns are kept;
-// the cases are emitted in raw file order with no sort, dedup, or range
-// expansion.
+// NfcTestData fixture byte-for-byte. All five columns are kept — source, NFC,
+// NFD, NFKC, and NFKD — so the full UAX #15 NFC conformance clause can be
+// asserted; the cases are emitted in raw file order with no sort, dedup, or
+// range expansion.
 
 package codegen
 
@@ -27,11 +28,14 @@ const nfcTestChunkSize = 400
 // single-line rendering exceeds it is wrapped across four lines instead.
 const maxLine = 120
 
-// sourceColumn and nfcColumn are the only NormalizationTest.txt columns consumed;
-// the remaining NFD/NFKC/NFKD columns and the trailing empty field are ignored.
+// sourceColumn..nfkdColumn are the five NormalizationTest.txt data columns
+// consumed (c1..c5); the trailing empty field after c5 is ignored.
 const (
 	sourceColumn = 0
 	nfcColumn    = 1
+	nfdColumn    = 2
+	nfkcColumn   = 3
+	nfkdColumn   = 4
 )
 
 // scannerBufferSize caps a single scanned line. UCD lines are short, but the
@@ -39,11 +43,15 @@ const (
 // comment line can never silently truncate the input.
 const scannerBufferSize = 1 << 20
 
-// nfcCase is one NormalizationTest.txt entry: source and its required NFC form,
-// each already decoded from its hex-scalar field into a Go string.
+// nfcCase is one NormalizationTest.txt entry: the source and its NFC, NFD, NFKC,
+// and NFKD forms (columns c1..c5), each already decoded from its hex-scalar field
+// into a Go string.
 type nfcCase struct {
 	source string
 	nfc    string
+	nfd    string
+	nfkc   string
+	nfkd   string
 }
 
 // nfcTestInputPath returns the absolute path of the vendored NormalizationTest.txt,
@@ -70,11 +78,11 @@ func generateNfcTest() (string, error) {
 	return nfcTestEmitFixture(cases), nil
 }
 
-// nfcTestLoadCases parses (source, nfc) pairs in file order, mirroring the Python
-// load_cases exactly: drop everything after the first '#', strip surrounding
-// whitespace, skip blank and '@'-prefixed section-header lines, then split the
-// remainder on ';' and decode the source and NFC hex-scalar columns. No sort, no
-// dedup, no validation — the input order is preserved verbatim.
+// nfcTestLoadCases parses (source, nfc, nfd, nfkc, nfkd) tuples in file order,
+// mirroring the Python load_cases exactly: drop everything after the first '#',
+// strip surrounding whitespace, skip blank and '@'-prefixed section-header lines,
+// then split the remainder on ';' and decode the five hex-scalar columns c1..c5.
+// No sort, no dedup, no validation — the input order is preserved verbatim.
 func nfcTestLoadCases(data []byte) ([]nfcCase, error) {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, 0, scannerBufferSize), scannerBufferSize)
@@ -93,7 +101,19 @@ func nfcTestLoadCases(data []byte) ([]nfcCase, error) {
 		if err != nil {
 			return nil, err
 		}
-		cases = append(cases, nfcCase{source: source, nfc: nfc})
+		nfd, err := ucd.ScalarsToString(columns[nfdColumn])
+		if err != nil {
+			return nil, err
+		}
+		nfkc, err := ucd.ScalarsToString(columns[nfkcColumn])
+		if err != nil {
+			return nil, err
+		}
+		nfkd, err := ucd.ScalarsToString(columns[nfkdColumn])
+		if err != nil {
+			return nil, err
+		}
+		cases = append(cases, nfcCase{source: source, nfc: nfc, nfd: nfd, nfkc: nfkc, nfkd: nfkd})
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("nfctest: scanning corpus: %w", err)
@@ -102,8 +122,13 @@ func nfcTestLoadCases(data []byte) ([]nfcCase, error) {
 }
 
 // nfcTestEmitFixture renders the complete fixture: license header, suppress block,
-// package, NfcCase data class, and the chunked builder object, terminated by
-// exactly one newline. The structure mirrors the Python render_kotlin exactly.
+// package, NfcCase data class, the NfcCaseData aggregator object, one NfcCasePartN
+// object per chunk, and the NFC_CASES accessor, terminated by exactly one newline.
+//
+// Each chunk is emitted as its own object (rather than one method per chunk inside a
+// single object) because five columns per case push the combined string-constant pool
+// of a single class past the 65535-entry JVM class-file limit; splitting per chunk
+// keeps every part object's constant pool comfortably bounded.
 func nfcTestEmitFixture(cases []nfcCase) string {
 	parts := Chunk(cases, nfcTestChunkSize)
 	lines := []string{LicenseHeader, ""}
@@ -111,43 +136,70 @@ func nfcTestEmitFixture(cases []nfcCase) string {
 	lines = append(lines,
 		"package org.dexpace.kuri.idna",
 		"",
-		"/** One Unicode NormalizationTest.txt case: [nfc] is the required NFC form of [source]. */",
+		"/**",
+		" * One Unicode NormalizationTest.txt case, holding all five columns (c1..c5): [source] and its",
+		" * [nfc], [nfd], [nfkc], and [nfkd] forms. These pin the full UAX #15 NFC conformance clause:",
+		" * `nfc == nfc(source) == nfc(nfc) == nfc(nfd)` and `nfkc == nfc(nfkc) == nfc(nfkd)`.",
+		" */",
 		"internal data class NfcCase(",
 		"    val source: String,",
 		"    val nfc: String,",
+		"    val nfd: String,",
+		"    val nfkc: String,",
+		"    val nfkd: String,",
 		")",
 		"",
-		"// Generated by ./gradlew generateNfcTestFixture from NormalizationTest.txt.",
+		"// Generated by ./gradlew generateNfcTestFixture from NormalizationTest.txt. Each chunk is its own",
+		"// object so no single class's string-constant pool exceeds the 65535-entry JVM class-file limit.",
 		"private object NfcCaseData {",
+		"    fun all(): List<NfcCase> =",
+		"        "+nfcCasePartSumExpression(len(parts)),
+		"}",
 	)
-	lines = append(lines, "    fun all(): List<NfcCase> =")
-	lines = append(lines, "        "+PartSumExpression(len(parts)))
 	for index, part := range parts {
 		lines = append(lines, "")
-		lines = append(lines, fmt.Sprintf("    private fun part%d(): List<NfcCase> =", index))
+		lines = append(lines, fmt.Sprintf("private object NfcCasePart%d {", index))
+		lines = append(lines, "    fun build(): List<NfcCase> =")
 		lines = append(lines, "        listOf(")
 		for _, current := range part {
 			lines = append(lines, nfcTestCaseLines(current)...)
 		}
 		lines = append(lines, "        )")
+		lines = append(lines, "}")
 	}
 	lines = append(lines,
-		"}",
 		"",
-		"/** Every NormalizationTest.txt case as `(source, NFC)` (see [NfcCaseData]). */",
+		"/** Every NormalizationTest.txt case as `(source, NFC, NFD, NFKC, NFKD)` (see [NfcCaseData]). */",
 		"internal val NFC_CASES: List<NfcCase> = NfcCaseData.all()",
 	)
 	return JoinLines(lines)
 }
 
-// nfcTestCaseLines renders one NfcCase constructor call. The single-line form is
-// preferred; when its length would exceed maxLine the record wraps to four lines
-// with the two literals indented at 16 spaces. The trailing comma is always
-// present (Kotlin trailing comma), even on the last case in a listOf.
+// nfcCasePartSumExpression renders the `NfcCasePart0.build() +\n            NfcCasePart1.build() + ...`
+// aggregator body: the first term sits at the caller's 8-space indent and each later term wraps to its
+// own line at 12 spaces with a trailing " +". A single part collapses to "NfcCasePart0.build()".
+func nfcCasePartSumExpression(count int) string {
+	terms := make([]string, count)
+	for i := range terms {
+		terms[i] = fmt.Sprintf("NfcCasePart%d.build()", i)
+	}
+	return strings.Join(terms, " +\n            ")
+}
+
+// nfcTestCaseLines renders one NfcCase constructor call with all five literals in
+// c1..c5 order (source, nfc, nfd, nfkc, nfkd). The single-line form is preferred;
+// when its length would exceed maxLine the record wraps to one literal per line
+// indented at 16 spaces so the ktlint 120-column gate is never tripped. The
+// trailing comma is always present (Kotlin trailing comma), even on the last case
+// in a listOf.
 func nfcTestCaseLines(current nfcCase) []string {
 	sourceLit := escapeLiteral(current.source)
 	nfcLit := escapeLiteral(current.nfc)
-	singleLine := "            NfcCase(\"" + sourceLit + "\", \"" + nfcLit + "\"),"
+	nfdLit := escapeLiteral(current.nfd)
+	nfkcLit := escapeLiteral(current.nfkc)
+	nfkdLit := escapeLiteral(current.nfkd)
+	singleLine := "            NfcCase(\"" + sourceLit + "\", \"" + nfcLit + "\", \"" + nfdLit +
+		"\", \"" + nfkcLit + "\", \"" + nfkdLit + "\"),"
 	if len(singleLine) <= maxLine {
 		return []string{singleLine}
 	}
@@ -155,6 +207,9 @@ func nfcTestCaseLines(current nfcCase) []string {
 		"            NfcCase(",
 		"                \"" + sourceLit + "\",",
 		"                \"" + nfcLit + "\",",
+		"                \"" + nfdLit + "\",",
+		"                \"" + nfkcLit + "\",",
+		"                \"" + nfkdLit + "\",",
 		"            ),",
 	}
 }

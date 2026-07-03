@@ -100,4 +100,44 @@ class PercentCodecTest {
     fun `encode replaces a lone surrogate with the replacement character octets per PCT-21`() {
         assertEquals("%EF%BF%BD", PercentCodec.encode(Char(0xD83C).toString(), PercentEncodeSets.PATH))
     }
+
+    @Test
+    fun `decodeNonAscii decodes a multi-octet non-ascii run`() {
+        assertEquals("☃", PercentCodec.decodeNonAscii("%E2%98%83"))
+        assertEquals("🍩", PercentCodec.decodeNonAscii("%F0%9F%8D%A9"))
+    }
+
+    @Test
+    fun `decodeNonAscii leaves ascii triplets literal`() {
+        assertEquals("%2F", PercentCodec.decodeNonAscii("%2F"))
+        assertEquals("%20", PercentCodec.decodeNonAscii("%20"))
+        assertEquals("a%41b", PercentCodec.decodeNonAscii("a%41b"))
+    }
+
+    @Test
+    fun `decodeNonAscii leaves an invalid utf8 run literal`() {
+        // Both octets are non-ascii but 0xC3 0xC3 is not valid utf8, so the run stays literal.
+        assertEquals("%C3%C3", PercentCodec.decodeNonAscii("%C3%C3"))
+        // A truncated 3-byte sequence is likewise invalid and kept verbatim.
+        assertEquals("%E2%98", PercentCodec.decodeNonAscii("%E2%98"))
+    }
+
+    @Test
+    fun `decodeNonAscii keeps a run literal when it mixes ascii and non-ascii octets`() {
+        // %20 (ascii) abuts the ü run, so the maximal triplet run is mixed and stays literal.
+        assertEquals("%20%C3%BC", PercentCodec.decodeNonAscii("%20%C3%BC"))
+    }
+
+    @Test
+    fun `decodeNonAscii decodes non-ascii runs bounded by literal text`() {
+        assertEquals("/fa" + Char(0x00DF), PercentCodec.decodeNonAscii("/fa%C3%9F"))
+        assertEquals("a☃b", PercentCodec.decodeNonAscii("a%E2%98%83b"))
+    }
+
+    @Test
+    fun `decodeNonAscii is identity for empty and triplet-free input`() {
+        assertEquals("", PercentCodec.decodeNonAscii(""))
+        assertEquals("abc/def", PercentCodec.decodeNonAscii("abc/def"))
+        assertEquals("100%", PercentCodec.decodeNonAscii("100%"))
+    }
 }

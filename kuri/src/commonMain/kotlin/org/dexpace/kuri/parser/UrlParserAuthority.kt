@@ -205,7 +205,12 @@ internal object UrlParserAuthority {
         if (hostSlice.isEmpty()) {
             ParseResult.Ok(Host.Empty)
         } else {
-            HostParser.parse(hostSlice, ParseProfile.URL, isSpecial = state.special, isFile = false)
+            HostParser.parse(
+                hostSlice,
+                ParseProfile.URL,
+                isSpecial = state.special,
+                isFile = false,
+            )
         }
 
     // --- port (§8.3 [PARSE-32]–[PARSE-34]) -------------------------------------------
@@ -429,7 +434,15 @@ internal object UrlParserAuthority {
         buffer: String,
         end: Int,
     ): UrlTransition =
-        when (val host = HostParser.parse(buffer, ParseProfile.URL, isSpecial = true, isFile = true)) {
+        when (
+            val host =
+                HostParser.parse(
+                    buffer,
+                    ParseProfile.URL,
+                    isSpecial = true,
+                    isFile = true,
+                )
+        ) {
             is ParseResult.Err -> UrlTransition.Fail(host.error)
             is ParseResult.Ok -> {
                 state.host = if (host.value == Host.RegName(LOCALHOST)) Host.Empty else host.value

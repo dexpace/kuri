@@ -4,11 +4,15 @@
  */
 package org.dexpace.kuri
 
+import org.dexpace.kuri.error.HostError
+import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.error.getOrNull
 import org.dexpace.kuri.host.Host
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -86,6 +90,32 @@ class UrlTest {
     }
 
     @Test
+    fun `origin is opaque for a non-special scheme`() {
+        assertEquals("null", parseOk("git://github.com/foo/bar.git").origin)
+    }
+
+    @Test
+    fun `origin of a blob url adopts the inner https origin`() {
+        assertEquals("https://example.com", parseOk("blob:https://example.com:443/").origin)
+        assertEquals("http://example.org:88", parseOk("blob:http://example.org:88/").origin)
+    }
+
+    @Test
+    fun `origin is opaque for a file url`() {
+        assertEquals("null", parseOk("file:///etc/hosts").origin)
+    }
+
+    @Test
+    fun `origin is opaque when a blob inner scheme is not unwrappable`() {
+        assertEquals("null", parseOk("blob:ftp://host/path").origin)
+    }
+
+    @Test
+    fun `origin is opaque when a blob path is not a url`() {
+        assertEquals("null", parseOk("blob:d3958f5c-0777-0845-9dcf-2cb28783acaf").origin)
+    }
+
+    @Test
     fun `equals and hashCode are canonical-href based and case-folding`() {
         val canonical = parseOk("http://h/")
         val mixedCase = parseOk("HTTP://H/")
@@ -122,5 +152,16 @@ class UrlTest {
     fun `static parse factory is reachable`() {
         val result = Url.parse("https://example.com/")
         assertEquals("https://example.com/", result.getOrNull()?.href)
+    }
+
+    // --- RFC 6874 zone identifiers ([HOST-17]) ---------------------------------------
+
+    @Test
+    fun `the Url profile rejects an IPv6 zone id because WHATWG has no zone-id production`() {
+        // The Url profile is the WHATWG profile and accepts no ParseOptions: a `%` in an IPv6
+        // literal is always rejected, with no opt-in to relax it ([HOST-17]).
+        val err = assertIs<ParseResult.Err>(Url.parse("http://[fe80::1%25eth0]/"))
+        val cause = assertIs<UriParseError.InvalidHost>(err.error)
+        assertEquals(HostError.ZoneIdRejected, cause.reason)
     }
 }

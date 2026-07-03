@@ -139,7 +139,7 @@ The scope of this specification is the behaviour of layers 1 and 2:
 - **[INTRO-2]** A conforming implementation MUST expose, at layer 2, the public types and identifiers named verbatim in this specification (`Uri`, `Url`, `ParseProfile`, `Host` and its variants, `QueryParameters`, `ParseResult`, `UriParseError`, `ValidationError`, `effectivePort`) with the semantics this specification assigns them.
 - **[INTRO-3]** This specification governs textual identifier syntax, structure, and serialization only. Network operations (name resolution, connection establishment, retrieval, redirection following) are out of scope, and a conforming implementation MUST NOT perform any network access — including DNS resolution — as part of parsing, building, manipulating, serializing, comparing, or hashing a `Uri` or `Url`.
 
-The treatment of internationalized identifiers (IRIs, per RFC 3987) is **in scope** as an input dialect of both profiles, not as a separate type: non-ASCII input is accepted and is resolved at the relevant component boundary (host via IDNA/UTS-46; other components via percent-encoding of UTF-8 octets), as specified in §5 and §7.
+The treatment of internationalized identifiers (IRIs, per RFC 3987) is **in scope**, but its mechanism differs by profile. In the `Url` profile, non-ASCII input is resolved **inline during parsing**: the host through IDNA/UTS-46 and every other component through percent-encoding of its UTF-8 octets, as specified in §5 and §7. In the `Uri` profile, strict parsing follows RFC 3986 to the letter and therefore **rejects** a non-ASCII host outright; the RFC 3987 §3.1 IRI-to-URI mapping (host IDNA plus UTF-8 percent-encoding of the other components) and the §3.2 display transform are instead offered as an explicit, opt-in conversion facility (`Iri.toUri` / `Iri.toUnicode`, §11.5), never as a relaxation of the parser. Keeping the mapping outside strict `Uri` parsing preserves the invariant that the `Uri` profile has no RFC 3986 deviations ([INTRO-14]; Appendix B).
 
 ### 1.2 The Two-Profile Architecture
 
@@ -508,7 +508,7 @@ public sealed interface Host {
 
 ### 3.6 Port
 
-[MODEL-23] `port` MUST be modelled as `Int?`. A `null` value denotes that no port was explicitly specified. A non-null value MUST be the literal port given in the input (after the `Url`-profile default-port elision in [MODEL-25]). In the `Url` profile a non-null value MUST be in the range `0..65535` (a value outside that range is a parse failure, per the WHATWG URL Standard). In the `Uri` profile, which follows RFC 3986 §3.2.3 (`port = *DIGIT`), any port consisting solely of decimal digits is syntactically valid and MUST be preserved; the `0..65535` cap MUST NOT be imposed as an RFC-`Uri` acceptance rule. The model MUST NOT use `-1`, `0`, or any other in-range value as a sentinel for "unspecified"; absence is `null` exclusively.
+[MODEL-23] `port` MUST be modelled as `Int?`. A `null` value denotes that no port was explicitly specified. A non-null value MUST be the literal port given in the input (after the `Url`-profile default-port elision in [MODEL-25]). In the `Url` profile a non-null value MUST be in the range `0..65535` (a value outside that range is a parse failure, per the WHATWG URL Standard). In the `Uri` profile, which follows RFC 3986 §3.2.3 (`port = *DIGIT`), a port consisting solely of decimal digits is syntactically valid and is parsed into the `port: Int?` model value; the `0..65535` cap MUST NOT be imposed as an RFC-`Uri` acceptance rule. Because the port is modelled as `Int`, a digit run whose value exceeds `Int.MAX_VALUE` is rejected as `InvalidPort`, and only the decimal value is stored (leading zeros are not preserved). The model MUST NOT use `-1`, `0`, or any other in-range value as a sentinel for "unspecified"; absence is `null` exclusively.
 
 Note: `-1` (the `java.net.URI`/`java.net.URL` convention) and `0` (a `DEFAULT_PORT` convention seen in some libraries) are both rejected as sentinels. A literal port `0` in the input is a real, distinct value from `null`.
 
@@ -551,7 +551,7 @@ The leading-slash (absolute vs rootless) distinction MUST be preserved in the `U
 
 ### 3.10 Authority and other derived projections
 
-[MODEL-34] `authority`, `userInfo`, `origin`, the encoded component getters (`encodedPath`, etc.), and the decoded component getters are **derived projections** of the seven stored components and MUST NOT be stored as independent authoritative state. The `authority` projection is `null` exactly when `host == null` (no authority), and otherwise is the serialization of userinfo + host + port. `origin` is defined for the `Url` profile (§11); it MUST NOT be relied upon to round-trip and is not part of the stored record.
+[MODEL-34] `authority`, `userInfo`, `origin`, the encoded component getters (`encodedPath`, etc.), and the decoded component getters are **derived projections** of the seven stored components and MUST NOT be stored as independent authoritative state. The `authority` projection is `null` exactly when `host == null` (no authority), and otherwise is the serialization of userinfo + host + port. `origin` is defined for the `Url` profile (§11.6); it MUST NOT be relied upon to round-trip and is not part of the stored record.
 
 ### 3.11 Immutability and construction
 
@@ -689,7 +689,7 @@ segment-nz-nc = 1*( unreserved / pct-encoded / sub-delims / "@" )
               ; non-zero-length segment without any colon ":"
 ```
 
-**[GRAM-4]** The `segment-nz-nc` production MUST be applied to the first segment of a `path-noscheme` (a relative reference whose first segment must not be mistaken for a scheme). A colon appearing in that first segment is a syntax error in the `Uri` profile and MUST be rejected or, where the component is being constructed rather than parsed, percent-encoded; the colon MUST NOT be emitted unescaped in a leading `segment-nz-nc`.
+**[GRAM-4]** The `segment-nz-nc` production MUST be applied to the first segment of a `path-noscheme` (a relative reference whose first segment must not be mistaken for a scheme). A colon appearing in that first segment is a syntax error in the `Uri` profile and MUST be rejected or, where the component is being constructed rather than parsed, remedied — either by percent-encoding the colon or by prefixing the path with the RFC 3986 §4.2 `./` dot-segment guard (as `Uri.Builder` does, permitted by [PATH-22]); the colon MUST NOT be emitted unescaped in a leading `segment-nz-nc`.
 
 #### 4.1.5 Query and fragment
 
@@ -894,7 +894,7 @@ The RFC `gen-delims` and `sub-delims` classes are syntactic delimiters: they are
 
 #### 4.3.4 Whitespace and controls
 
-**[GRAM-24]** ASCII tab and newline (§4.2.2) and leading/trailing C0-control-or-space (§4.2.1) are removed or stripped only in the `Url` profile, each removal being a non-fatal validation error. In the `Uri` profile these same code points are not stripped: an embedded control or an embedded space in a component is a syntax error to be handled per §12, never silently elided. An implementation MUST NOT share a single "strip whitespace" pass across both profiles; the stripping behaviour is profile-specific by [GRAM-9] and [GRAM-10].
+**[GRAM-24]** ASCII tab and newline (§4.2.2) and leading/trailing C0-control-or-space (§4.2.1) are removed or stripped only in the `Url` profile, each removal being a non-fatal validation error. In the `Uri` profile these same code points are not stripped: an embedded C0 control or DEL is rejected, but an embedded space is neither stripped nor rejected — the non-validating splitter preserves it verbatim; the `Uri` profile does not re-validate component content against the full grammar (only a raw C0/DEL and a malformed `%xx` are fatal). An implementation MUST NOT share a single "strip whitespace" pass across both profiles; the stripping behaviour is profile-specific by [GRAM-9] and [GRAM-10].
 
 > Note: this reconciliation reflects the locked architecture in which one shared engine is parameterized by `ParseProfile` (`URI` vs `URL`); the productions of §4.1 and the classes of §4.2 are both compiled into the engine, and the active `ParseProfile` selects which set of rules gates acceptance versus merely records a validation error. Note: cf. WHATWG URL §4.4 (basic URL parser) and RFC 3986 §3 / Appendix A.
 
@@ -921,7 +921,7 @@ Every percent-encode set named in this section is defined as a list of ASCII cod
 | c | `c` appears in the set's explicit code-point list (§5.1.3) | U+0020 – U+007E |
 | d | `c` is non-ASCII and the active profile encodes non-ASCII for this component | > U+007F |
 
-**[PCT-2]** Condition (d) is profile-dependent. In the `Url` profile every non-ASCII code point in a component governed by a percent-encode set MUST be percent-encoded (after UTF-8 encoding, §5.2). In the `Uri` profile, a non-ASCII code point that is permitted by the IRI character repertoire for that component (cross-ref §4) MAY be preserved unencoded; an implementation that does not preserve IRIs MUST percent-encode it. A code point that is preserved unencoded MUST NOT be partially encoded.
+**[PCT-2]** Condition (d) is profile-dependent. In the `Url` profile every non-ASCII code point in a component governed by a percent-encode set MUST be percent-encoded (after UTF-8 encoding, §5.2). In the `Uri` profile the parser is preserve-by-default: a non-ASCII code point in the path, query, or fragment is retained **as-is** — neither percent-encoded nor rejected — so the IRI character repertoire is carried through unchanged. The RFC 3987 §3.1 percent-encoding of UTF-8 octets is applied on demand by the `Iri` conversion facility (§11.5), not during a strict `Uri` parse. A code point that is preserved unencoded MUST NOT be partially encoded.
 
 **[PCT-3]** A code point not selected by [PCT-1] MUST be copied to the output unchanged (identity). ASCII letters (`A`–`Z`, `a`–`z`), ASCII digits (`0`–`9`), and the code points `*` `-` `.` `_` are never members of any explicit list in §5.1.3 and therefore pass through identity in every set except the `application/x-www-form-urlencoded` set (which still passes `*` `-` `.` `_` and the alphanumerics — see §5.1.4).
 
@@ -1258,9 +1258,9 @@ The IPv6 parser operates on the bracket contents (the `[` and `]` removed). It b
 
 #### 7.2.2 Zone identifiers (RFC 6874)
 
-**[HOST-17]** By default, in **both** profiles, `%` is a forbidden host code point (§7.6); an IPv6 literal containing `%` (a zone identifier) MUST fail to parse.
+**[HOST-17]** The RFC 6874 zone-id opt-in (`ParseOptions.allowIpv6ZoneId`, default off) is scoped to the **`Uri` profile**. By default `%` is a forbidden host code point (§7.6), so absent the opt-in an IPv6 literal containing `%` (a zone identifier) MUST fail to parse, rejected with `InvalidHost(ZoneIdRejected)`. The **`Url` profile** does not accept `ParseOptions` at all and MUST reject a zone identifier for **every** input regardless of any option: a `%` in a `Url` IPv6 literal always yields `InvalidHost(ZoneIdRejected)`. This is because the WHATWG URL parser defines no zone-id syntax — browsers reject `%` in IPv6 literals — so keeping the opt-in out of the `Url` profile preserves its unconditionally-WHATWG guarantee and keeps the two-profile boundary clean.
 
-**[HOST-18]** Implementations MUST provide an explicit opt-in flag enabling RFC 6874 zone identifiers. When enabled, an IPv6 literal of the form `[` IPv6address `%25` ZoneID `]` SHALL be accepted, where `ZoneID` is `1*( unreserved / pct-encoded )`. The address part before `%25` is parsed per §7.2; the percent-decoded `ZoneID` is stored as the `zoneId` of the `Ipv6` host. When a `zoneId` is present, serialization MUST emit `[` + canonical address + `%25` + the percent-encoded zone + `]`. When the flag is disabled, [HOST-17] applies.
+**[HOST-18]** Implementations MUST provide an explicit opt-in flag enabling RFC 6874 zone identifiers **for the `Uri` profile** (`ParseOptions.allowIpv6ZoneId`, default off; the `Url` profile takes no options and never enables this, per [HOST-17]). When enabled, an IPv6 literal of the form `[` IPv6address `%25` ZoneID `]` SHALL be accepted, where `ZoneID` is `1*( unreserved / pct-encoded )`. The address part before `%25` is parsed per §7.2; the `ZoneID` is stored **raw** — the exact text between `%25` and the closing bracket, in its `unreserved / pct-encoded` form and **not** percent-decoded — as the `zoneId` of the `Ipv6` host (consistent with [MODEL-19]). When a `zoneId` is present, serialization MUST re-emit it verbatim: `[` + canonical address + `%25` + the stored raw zone + `]`. A malformed zone under the opt-in (a `%` that does not begin the `%25` introducer, an empty `ZoneID`, or an illegal `ZoneID` code point) is `InvalidHost(Ipv6Malformed)`, distinct from the opt-off `InvalidHost(ZoneIdRejected)`. Because the zone text is stored raw rather than the options that unlocked it, a zoned value round-trips through serialize-then-parse only when re-parsed under the same opt-in. When the flag is disabled, [HOST-17] applies.
 
 ### 7.3 IPv4 addresses
 
@@ -1563,7 +1563,7 @@ Entry: from AUTHORITY, FILE HOST, or PATH OR AUTHORITY chains. Profiles: both. H
 Entry: from HOST. Profiles: both.
 
 - **[PARSE-32]** The parser MUST consume the maximal run of ASCII digits beginning at `pos` as the port. A non-digit, non-EOF code point that is not one of `/`, `?`, or (special `Url`) `\` MUST cause `Err` (*port-invalid*).
-- **[PARSE-33]** The accumulated digits MUST be interpreted as a base-10 integer. In the `Url` profile, if it exceeds 65535 the parser MUST return `Err` (*port-out-of-range*). In the `Uri` profile the port is `*DIGIT` per RFC 3986 §3.2.3 and is NOT range-limited at parse time: a value exceeding 65535 MUST NOT be fatal — it is preserved as written, with any range validation deferred to the scheme. The empty port (e.g. `host:/path`) is permitted and denotes no explicit port. (The `Url`-profile 65535 cap is a sanctioned deviation from RFC 3986 — see Appendix B [DEV-3].)
+- **[PARSE-33]** The accumulated digits MUST be interpreted as a base-10 integer. In the `Url` profile, if it exceeds 65535 the parser MUST return `Err` (*port-out-of-range*). In the `Uri` profile the port is `*DIGIT` per RFC 3986 §3.2.3 and is NOT range-limited at parse time: a value in `0..Int.MAX_VALUE` MUST NOT be fatal — it is accepted and stored as its decimal `Int` value ([MODEL-23]), with any 16-bit range validation deferred to the scheme. A digit run whose value exceeds `Int.MAX_VALUE` is rejected as `InvalidPort`, and leading zeros are not preserved. The empty port (e.g. `host:/path`) is permitted and denotes no explicit port. (The `Url`-profile 65535 cap is a sanctioned deviation from RFC 3986 — see Appendix B [DEV-3].)
 - **[PARSE-34]** In the `Url` profile, if the parsed port equals the default port for the scheme (§6), the port MUST be elided (stored as absent) and `effectivePort` resolves to that default. In the `Uri` profile the port MUST be preserved exactly as written (no default-port elision); `effectivePort` resolves the scheme default only as a computed accessor, not a stored mutation.
 - After consuming the port, set state to PATH START and reconsume the terminating delimiter (or finish at EOF).
 
@@ -2113,6 +2113,23 @@ The two public types convert to one another. The conversions are asymmetric beca
 
 **[NORM-31]** Bridge consistency. For any `Url` value `u`, `u.toUri().toUrl()` MUST return `Ok(u')` with `serialize(u') == serialize(u)` (the round trip through `Uri` is value-preserving for anything that originated as a `Url`). The reverse round trip `someUri.toUrl()` followed by `.toUri()` is NOT required to reproduce the original `Uri` byte-for-byte, because `toUrl()` canonicalizes; an implementation MUST document that `Uri → Url → Uri` is canonicalizing, not preserving.
 
+Beyond the two type-to-type bridges above, the `Uri` profile also exposes an RFC 3987 dialect bridge — the `Iri` conversion facility — so internationalized input has an explicit home without weakening strict `Uri` parsing (§1.1, [PCT-2]):
+
+- `Iri.toUri(iri)` is **fallible** and returns `ParseResult<Uri>`. It applies the RFC 3987 §3.1 IRI-to-URI mapping (host via IDNA/UTS-46 ToASCII, every other component via UTF-8 percent-encoding of its non-ASCII octets), then validates and stores the fully-ASCII result through the unchanged strict `Uri` engine. It returns `Err` when the mapping cannot yield a valid URI — for example an IDNA failure in the host, or an expanded form that exceeds the input-length bound of §12.
+- `Iri.toUnicode(uri)` is **total** and returns a best-effort display IRI (RFC 3987 §3.2): a reg-name host is rendered through IDNA ToUnicode and every other component has its non-ASCII UTF-8 triplet runs decoded, while ASCII triplets and non-UTF-8 runs are preserved so structure survives. The result is for presentation only and is NOT guaranteed to re-parse as the original `uri`.
+
+### 11.6 Origin (`Url` profile)
+
+The `Url` profile exposes an `origin` projection modelling the WHATWG URL Living Standard's "origin of a URL". Origin is defined for the `Url` profile only; it is a derived projection ([MODEL-34]), never stored authoritative state.
+
+**[NORM-32]** In the `Url` profile, `origin` MUST return the ASCII serialization of the URL's WHATWG origin, computed as follows:
+
+- **(a) Tuple origin.** For a special scheme other than `file` (i.e. `ftp`, `http`, `https`, `ws`, `wss`), the origin serializes as `scheme "://" host [ ":" port ]`. The `port` is emitted only when it is non-null (a default-elided port ([NORM-10]) therefore does not appear), and userinfo is never included.
+- **(b) Blob unwrapping.** For the `blob` scheme, the origin is the origin of the URL obtained by parsing this URL's path (the URL-path serialization, an opaque path). When that inner URL parses and its scheme is `http`, `https`, or `file`, `origin` returns that inner URL's origin; otherwise (the inner path is not a URL, or its scheme is not one of those three) the origin is opaque.
+- **(c) Opaque origin.** For the `file` scheme and for every non-special scheme, the origin is opaque. An opaque origin MUST serialize as the literal string `"null"`.
+
+`origin` MUST NOT be relied upon to round-trip and is not part of the stored record; it is a pure function of the stored components ([MODEL-34]).
+
 ## 12. Error Handling, Validation & Resource Limits
 
 This section defines how `kuri` reports failures, records non-fatal anomalies, and bounds resource consumption. It governs both profiles; where behaviour differs it is stated as "In the `Url` profile … In the `Uri` profile …". Every testable requirement is tagged **[ERR-n]** for reference from §13 (CONF).
@@ -2254,7 +2271,7 @@ Strictness is a property of the profile, with one orthogonal escalation knob. It
 
 **[ERR-22]** The baseline strictness of each profile is fixed:
 - The `Url` profile is **lenient by specification**: it strips tab/newline, trims leading/trailing C0+space, repairs slash runs and backslashes, and records validation errors, per WHATWG. It only fails for the conditions WHATWG defines as failures (e.g. forbidden host code point, empty host on a special non-`file` scheme, IPv4 overflow, port > 65535).
-- The `Uri` profile is **strict by RFC**: it does not strip control characters, validates each component against its RFC 3986 grammar, and rejects what the grammar does not admit — but it is *preserve-by-default* for syntactically valid input (no eager normalization).
+- The `Uri` profile is **structurally strict but content-non-validating**: it splits at the RFC 3986 structural delimiters (the Appendix B reference regex) without re-validating each component against the full grammar. It rejects the structural failures it detects (an ill-formed scheme, an invalid or overflowing port, a rejected host) and, in the path/query/fragment, a raw C0/DEL control or a malformed `%xx` triplet; other ASCII the grammar forbids there (space, `"`, `<`, `>`, `` ` ``, `{`, `}`) is preserved verbatim, not rejected. It is *preserve-by-default* for the input it admits (no eager normalization).
 
 **[ERR-23]** An optional `strict: Boolean` flag (default `false`) MAY be supplied to either profile's parse configuration. When `strict = true`, advisory checks that are otherwise non-fatal MUST be escalated to a fatal `UriParseError` (`Err`) at the first such condition. The escalated checks are exactly those listed in the rightmost column of the §12.5 table, including:
 - DNS length overflow (label > 63, host > 253) → `InvalidHost(HostError.LabelTooLong | HostTooLong)`;
@@ -2287,7 +2304,7 @@ For each listed condition, the table gives the mandated behaviour. "strip"/"trim
 | k | DNS length: label > 63 / host > 253 | advisory (non-fatal; value produced) | advisory | reject `InvalidHost(LabelTooLong/HostTooLong)` |
 | l | Forbidden host code point | reject `ForbiddenHostCodePoint` | reject `ForbiddenHostCodePoint` (RFC reg-name set) | reject |
 | m | Missing authority slashes (`http:/host`, `http:host`) | repair to `//` (record `MissingAuthoritySlashes`) | exactly `//` required to introduce an authority; otherwise the text is a path, not an authority | same as default |
-| n | Unencoded space in path/fragment | percent-encode per component set (record where applicable) | percent-encode per RFC component set | percent-encode (or reject if strict component grammar forbids) |
+| n | Unencoded space in path/query/fragment | percent-encode per component set (record where applicable) | preserve verbatim (non-validating splitter; not re-encoded, not rejected) | preserve verbatim (non-validating splitter; not re-encoded, not rejected) — strict escalation adds no component-grammar validation |
 
 **[ERR-27]** Row (d): in the `Url` profile, "ends in a number" host detection and width-aware overflow MUST be applied per §7; an overflowing numeric host is fatal, not reinterpreted as a reg-name. In the `Uri` profile there is no shorthand IPv4, so `192.168.0.257` is parsed as a reg-name and is fatal only if it contains a code point outside the reg-name set.
 
@@ -2364,7 +2381,7 @@ This specification defines three conformance classes (introduced in §1.3). An i
 
 ### 13.2 Required external test corpora
 
-A conforming implementation MUST vendor the corpora below at pinned, recorded revisions and execute them as parameterized suites in CI. Each corpus gates a defined slice of behaviour; "gates" means a non-`KNOWN_FAILURES` regression in that corpus MUST fail the build (`check`). Where a corpus encodes its own expected-failure markers (e.g. WPT `failure: true`), the implementation MUST honour them.
+A conforming implementation MUST vendor the corpora below at pinned, recorded revisions and execute them as parameterized suites in CI. The pinned revisions are recorded in `docs/idna-unicode-update.md` (Recorded corpus revisions). Each corpus gates a defined slice of behaviour; "gates" means a non-`KNOWN_FAILURES` regression in that corpus MUST fail the build (`check`). Where a corpus encodes its own expected-failure markers (e.g. WPT `failure: true`), the implementation MUST honour them.
 
 | Corpus | Source family | Gates | Profile |
 | --- | --- | --- | --- |
@@ -2442,7 +2459,7 @@ Each requirement below is a single testable behaviour with its example input and
 - **[CONF-45]** Leading/trailing zero groups MUST compress: `[::0001]` and `[0000::0001]` → `::1`; `[0001::0000]` → `1::`.
 - **[CONF-46]** An embedded IPv4 suffix MUST be parsed into the low 32 bits: `[::1:255.255.255.255]` → `::1:ffff:ffff`; `[0:0:0:0:0:1:0.0.0.0]` → `::1:0:0`.
 - **[CONF-47]** Embedded-IPv4 octets MUST follow strict decimal rules: reject `256`, hex (`ff`, `0x10`), octal (`010`, `000001`), empty (`.255`), double dot (`255..255`), leading/trailing dot, and incomplete groups → `Err`.
-- **[CONF-48]** IPv4-mapped IPv6 addresses MUST serialize in their canonical dotted form where RFC 5952 prescribes it: `[::ffff:c0a8:1fe]` → `::ffff:192.168.1.254`.
+- **[CONF-48]** An IPv4-mapped or IPv4-embedded IPv6 address MUST re-serialize in the canonical eight-piece pure-hexadecimal form of [HOST-16]; dotted-decimal notation MUST NOT be reintroduced on output: `[::ffff:192.168.1.254]` → `[::ffff:c0a8:1fe]` (never `[::ffff:192.168.1.254]`).
 - **[CONF-49]** Invalid IPv6 forms MUST be rejected: too many digits per group (`[::00001]`), misplaced or excess colons (`[:1]`, `[:::1]`, `[1:::]`, `[1:::1]`), trailing colon, more than 8 groups, more than one `::`, and any group with disallowed leading content → `Err`.
 - **[CONF-50]** A `:` inside `[...]` MUST NOT be treated as the port delimiter.
 - **[CONF-51]** A builder MUST accept an IPv6 host supplied with or without surrounding brackets and store the bracket-free value.
@@ -2617,7 +2634,7 @@ This appendix lists every numbered, testable requirement tag **[ABBR-N]** define
 | **[CONF-45]** | §13 | Leading/trailing zero groups MUST compress: [::0001] and [0000::0001] → ::1; [0001::0000] → 1::. |
 | **[CONF-46]** | §13 | An embedded IPv4 suffix MUST be parsed into the low 32 bits … |
 | **[CONF-47]** | §13 | Embedded-IPv4 octets MUST follow strict decimal rules: reject 256, hex (ff, 0x10) … |
-| **[CONF-48]** | §13 | IPv4-mapped IPv6 addresses MUST serialize in their canonical dotted form where RFC … |
+| **[CONF-48]** | §13 | An IPv4-mapped or IPv4-embedded IPv6 address MUST re-serialize in the canonical eight-piece pure-hexadecimal form of [HOST-16] … |
 | **[CONF-49]** | §13 | Invalid IPv6 forms MUST be rejected: too many digits per group ([::00001]) … |
 | **[CONF-50]** | §13 | A : inside [...] MUST NOT be treated as the port delimiter. |
 | **[CONF-51]** | §13 | A builder MUST accept an IPv6 host supplied with or without surrounding … |
@@ -2781,8 +2798,8 @@ This appendix lists every numbered, testable requirement tag **[ABBR-N]** define
 | **[HOST-14]** | §7 | After successful piece/embedded-IPv4 scanning: if the compression marker is set, the pieces … |
 | **[HOST-15]** | §7 | An Ipv6 host MUST be serialized to its RFC 5952 canonical textual … |
 | **[HOST-16]** | §7 | When the compression replaces a run that begins at piece index 0 … |
-| **[HOST-17]** | §7 | By default, in both profiles, % is a forbidden host code point … |
-| **[HOST-18]** | §7 | Implementations MUST provide an explicit opt-in flag enabling RFC 6874 zone identifiers. |
+| **[HOST-17]** | §7 | The zone-id opt-in is scoped to the Uri profile; the Url profile always rejects a zone identifier … |
+| **[HOST-18]** | §7 | Implementations MUST provide an explicit opt-in flag enabling RFC 6874 zone identifiers for the Uri profile. |
 | **[HOST-19]** | §7 | The ends-in-a-number test SHALL operate on the host string with a single … |
 | **[HOST-20]** | §7 | When the ends-in-a-number test is positive, the host MUST be parsed as … |
 | **[HOST-21]** | §7 | The IPv4 number parser SHALL: |
@@ -2907,6 +2924,7 @@ This appendix lists every numbered, testable requirement tag **[ABBR-N]** define
 | **[NORM-31]** | §11 | The serializer SHOULD accept an optional excludeFragment boolean (default false) that skips the fragment step, mirroring the WHATWG exclude-fragment parameter. |
 | **[NORM-30]** | §11 | Uri.toUrl() MUST be fallible and MUST return ParseResult<Url> (Ok/Err with UriParseError), never … |
 | **[NORM-31]** | §11 | Bridge consistency. For any Url value u, u.toUri().toUrl() MUST return Ok(u') with … |
+| **[NORM-32]** | §11.6 | In the Url profile, origin returns the ASCII serialization of the WHATWG origin: a tuple scheme://host[:port] for a special scheme other than file (port only when non-null, no userinfo); for blob, the origin of the URL parsed from the path when its inner scheme is http/https/file, else opaque; file and every non-special scheme are opaque; an opaque origin serializes as "null". A derived projection ([MODEL-34]), not stored, not guaranteed to round-trip. |
 | **[PARSE-1]** | §8 | The parser MUST enforce a fixed maximum input length (the configured limit … |
 | **[PARSE-2]** | §8 | After the state loop completes, if normalization (percent-encoding, IDNA, default-port elision, dot-segment … |
 | **[PARSE-3]** | §8 | In the Url profile, before any other processing, the parser MUST remove … |
@@ -3127,10 +3145,10 @@ Each deviation is given a stable **[DEV-n]** identifier. The columns are: the RF
 | Field | Value |
 |---|---|
 | **RFC 3986 clause** | §3.2.3 |
-| **What RFC 3986 requires** | `port = *DIGIT` — any sequence of decimal digits with no upper numeric bound; e.g. `:99999` and `:000000000000` are syntactically valid ports. |
+| **What RFC 3986 requires** | `port = *DIGIT` — any sequence of decimal digits with no upper numeric bound; e.g. `:99999` and `:000000000000` satisfy the ABNF as written. This is a purely syntactic judgement about the grammar, not a claim that kuri retains the literal digits (kuri parses the run to an `Int`; see Justification). |
 | **`Url`-profile behaviour (WHATWG)** | A port whose numeric value exceeds 65535 is a fatal `port-out-of-range` parse failure, matching the WHATWG 16-bit (TCP/UDP) port model. |
 | **Spec requirement tags** | [MODEL-23], [PARSE-33], [PARSE-34], [ERR-35] |
-| **Justification** | Web compatibility: the WHATWG basic URL parser fails on port > 65535. The `Uri` profile preserves any `*DIGIT` port as written. |
+| **Justification** | Web compatibility: the WHATWG basic URL parser fails on port > 65535. The `Uri` profile accepts any `*DIGIT` port whose value fits `Int` and stores it as its decimal `Int` value (so `:000000000000` parses to port `0`); a value above `Int.MAX_VALUE` is rejected as `InvalidPort`. |
 
 ### [DEV-4] Eager default-port elision
 

@@ -53,6 +53,29 @@ and the aggregate `generateFixtures`). Each runs `go run . <subcommand>` in
 `tools/`. They are developer tooling and are deliberately **not** wired into
 `check`/`build`. Override the Go toolchain with `-Pgo=/path/to/go`.
 
+## Recorded corpus revisions
+
+The raw conformance corpora are **not fully tracked**: the WPT IDNA corpora and
+`NormalizationTest.txt` live untracked under `.claude/references/`, while
+`urltestdata.json` is the one corpus committed in-tree (under `tools/url/`). Only the
+recorded revisions below are tracked here, so a conformance claim stays reproducible
+against a fixed corpus snapshot even when the raw files are absent from the repository.
+
+| Corpus | Upstream source | Pinned revision | Retrieved |
+| --- | --- | --- | --- |
+| `urltestdata.json` (WHATWG URL parsing + `href`) | WPT `url/resources/urltestdata.json`; committed at `tools/url/urltestdata.json` | upstream revision not recorded at vendoring; backfill from WPT history | 2026-06-30 |
+| `toascii.json` (IDNA ToASCII + CheckBidi) | WPT `url/resources/toascii.json`, vendored via ada-url @ `791fb5c` | upstream revision not recorded at vendoring; backfill from WPT history | 2026-06-28 |
+| `IdnaTestV2.json` (UTS-46 ToASCII/ToUnicode) | Unicode UTS-46 `IdnaTestV2` via WPT, vendored via ada-url @ `791fb5c` | upstream revision not recorded at vendoring; backfill from WPT history | 2026-06-28 |
+| `NormalizationTest.txt` (NFC) | Unicode UCD `NormalizationTest.txt` | Unicode 17.0 (`unicodeVersionDir = "unicode-17.0"`) | 2026-07-01 |
+
+The UCD/Unicode corpus is pinned to the bundled Unicode release (the
+`unicodeVersionDir` constant in `tools/internal/ucd/ucd.go`). The WPT JSON corpora
+carry no upstream commit recorded at the time they were vendored; the retrieval dates
+above (for `urltestdata.json`, from `git log`) are the reproducibility handle until a
+precise WPT commit is backfilled from history. `setters_tests.json`,
+`percent-encoding.json`, and the `urlsearchparams` vectors are not consumed by the
+current generators or suites, so they are intentionally omitted here.
+
 ## Update procedure
 
 ### 1. Vendor the new release's UCD files

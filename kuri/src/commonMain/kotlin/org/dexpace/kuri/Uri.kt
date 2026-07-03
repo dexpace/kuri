@@ -22,19 +22,31 @@ import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.serialize.Serializer
 import org.dexpace.kuri.serialize.UriNormalizer
 import kotlin.jvm.JvmName
+import kotlin.jvm.JvmOverloads
 import kotlin.jvm.JvmStatic
 
 /** The path-segment separator shared by the encoded-path projection (RFC 3986 §3.3). */
 private const val SLASH: String = "/"
+
+/** A leading `//` opens an authority; a path starting with it re-parses as a spurious host (RFC 3986 §3.3). */
+private const val DOUBLE_SLASH: String = "//"
+
+/** The RFC 3986 §4.2 `/.` prefix that keeps a `//`-leading, authority-less path from opening an authority. */
+private const val LEADING_DOT_GUARD: String = "/."
+
+/** The RFC 3986 §4.2 `./` prefix that keeps a colon-bearing first segment from re-parsing as a scheme. */
+private const val COLON_SEGMENT_GUARD: String = "./"
 
 /**
  * An immutable, preserve-by-default RFC 3986 generic-URI value (SPEC §3, §11; RFC 3986).
  *
  * A `Uri` wraps the output of the `Uri`-profile §8 engine, so every accessor is a pure projection of
  * the stored components and never re-parses or performs I/O. Unlike [Url], the `Uri` profile is
- * *preserve-by-default* ([PARSE-52]): the scheme and host keep their original case, the path keeps
- * its dot-segments, and an explicit port is never elided. A `Uri` may be a relative reference, so its
- * [scheme] (and authority) can be absent — `null` — which a parsed [Url] never is. Construct one with
+ * *preserve-by-default* ([PARSE-52]): the scheme and reg-name (domain) hosts keep their original
+ * case, the path keeps its dot-segments, and an explicit port is never elided. An IP-literal host is
+ * the exception — it is canonicalized on output, so an IPv6 literal is re-serialized to its RFC 5952
+ * form (§7). A `Uri` may be a relative reference, so its [scheme] (and authority) can be absent —
+ * `null` — which a parsed [Url] never is. Construct one with
  * the [parse] factories or, for programmatic assembly, with [Builder].
  *
  * Equality and hashing are *structural* over the canonical-but-unnormalized [uriString] ([NORM-21]):
@@ -142,12 +154,18 @@ public class Uri internal constructor(
      * result is a [ParseResult.Err].
      *
      * @param reference the (possibly relative) reference to resolve.
+     * @param options the opt-in parsing configuration applied to the resolved reference, so a base
+     *   with a zone id (or other opt-in feature) round-trips through resolution ([HOST-18]).
      * @return [ParseResult.Ok] with the resolved [Uri], or [ParseResult.Err] when resolution fails.
      */
-    public fun resolve(reference: String): ParseResult<Uri> =
-        when (val resolved = Resolver.resolve(uriString, reference)) {
+    @JvmOverloads
+    public fun resolve(
+        reference: String,
+        options: ParseOptions = ParseOptions.DEFAULT,
+    ): ParseResult<Uri> =
+        when (val resolved = Resolver.resolve(uriString, reference, options)) {
             is ParseResult.Err -> resolved
-            is ParseResult.Ok -> parse(resolved.value)
+            is ParseResult.Ok -> parse(resolved.value, options)
         }
 
     /**
@@ -216,36 +234,58 @@ public class Uri internal constructor(
          * A relative reference (no scheme) is accepted, deferring base merging to [resolve] ([PARSE-19]).
          *
          * @param input the URI-reference text to parse, used exactly as supplied.
+         * @param options the opt-in parsing configuration ([ParseOptions.DEFAULT] applies the
+         *   standards baseline); enables features such as RFC 6874 zone ids ([HOST-18]).
          * @return [ParseResult.Ok] with the [Uri], or [ParseResult.Err] on the first fatal error.
          */
         @JvmStatic
-        public fun parse(input: String): ParseResult<Uri> = UriParser.parse(input).map { Uri(it) }
+        @JvmOverloads
+        public fun parse(
+            input: String,
+            options: ParseOptions = ParseOptions.DEFAULT,
+        ): ParseResult<Uri> = UriParser.parse(input, options).map { Uri(it) }
 
         /**
          * Parses [input], punning a failure to `null` ([ERR-5]).
          *
          * @param input the URI-reference text to parse.
+         * @param options the opt-in parsing configuration ([ParseOptions.DEFAULT] applies the
+         *   standards baseline).
          * @return the parsed [Uri], or `null` when [input] is not a valid URI-reference.
          */
         @JvmStatic
-        public fun parseOrNull(input: String): Uri? = parse(input).getOrNull()
+        @JvmOverloads
+        public fun parseOrNull(
+            input: String,
+            options: ParseOptions = ParseOptions.DEFAULT,
+        ): Uri? = parse(input, options).getOrNull()
 
         /**
          * Reports whether [input] parses as a URI-reference without retaining the value ([ERR-5]).
          *
          * @param input the URI-reference text to test.
+         * @param options the opt-in parsing configuration ([ParseOptions.DEFAULT] applies the
+         *   standards baseline).
          * @return `true` iff [parse] would succeed for [input].
          */
         @JvmStatic
-        public fun canParse(input: String): Boolean = parse(input).isOk()
+        @JvmOverloads
+        public fun canParse(
+            input: String,
+            options: ParseOptions = ParseOptions.DEFAULT,
+        ): Boolean = parse(input, options).isOk()
     }
 
     /**
      * A mutable, Java-constructible (`new Uri.Builder()`) assembler for a [Uri].
      *
      * Setters are fluent and accumulate component state; [build] recomposes that state into a URI
-     * string and re-parses it through the `Uri`-profile engine, so the produced [Uri] is always a
-     * valid, canonical value. Use [Uri.newBuilder] for a pre-filled builder.
+     * string and re-parses it through the `Uri`-profile engine. Recomposition applies the RFC 3986
+     * §3.3/§4.2 guards (a `./` before a colon-bearing first segment, a `/.` before a `//`-leading
+     * authority-less path), so no component the caller set is silently reinterpreted, and it fails
+     * fast with [IllegalArgumentException] on unrepresentable combinations — a host-less [userInfo]
+     * or [port], or an authority paired with a non-rooted path. The produced [Uri] is therefore
+     * always a valid, canonical value. Use [Uri.newBuilder] for a pre-filled builder.
      */
     @Suppress("TooManyFunctions") // One setter per RFC 3986 component; each is a one-liner.
     public class Builder {
@@ -356,24 +396,65 @@ public class Uri internal constructor(
          * Recomposes the accumulated components and re-parses them into a canonical [Uri].
          *
          * @return the [Uri] for the assembled components.
+         * @throws IllegalArgumentException when the components cannot be represented as an RFC 3986
+         *   URI: a [userInfo] or [port] set without a [host], or an authority paired with a
+         *   non-rooted [encodedPath].
          * @throws UriSyntaxException when the components do not form a valid URI — a builder misuse is
          *   a programmer error rather than a recoverable parse failure ([ERR-6]).
          */
-        public fun build(): Uri =
-            UriParser.parse(recompose()).fold(
+        public fun build(): Uri {
+            validateComposable()
+            return UriParser.parse(recompose()).fold(
                 onOk = { Uri(it) },
                 onErr = { throw UriSyntaxException(it) },
             )
+        }
+
+        /**
+         * Rejects component combinations no RFC 3986 recomposition can represent (RFC 3986 §3.2/§3.3).
+         *
+         * `userinfo`/`port` are authority sub-components, so they require a host; a caller wanting an
+         * empty authority passes `host("")`. A present authority forbids a rootless path, which would
+         * otherwise merge into the authority on re-parse.
+         */
+        private fun validateComposable() {
+            require(host != null || (userInfo.isNullOrEmpty() && port == null)) {
+                "userInfo/port require a host: set host(\"\") for an empty-authority URI, or drop them"
+            }
+            require(host == null || encodedPath.isEmpty() || encodedPath.startsWith(SLASH)) {
+                "a path with an authority must be empty or start with '/': $encodedPath"
+            }
+        }
 
         /** Recomposes a parseable URI string from the accumulated components (RFC 3986 §5.3). */
         private fun recompose(): String {
             val sb = StringBuilder()
             if (scheme != null) sb.append(scheme).append(':')
             if (host != null) appendAuthority(sb)
-            sb.append(encodedPath)
+            sb.append(guardedPath())
             if (query != null) sb.append('?').append(query)
             if (fragment != null) sb.append('#').append(fragment)
             return sb.toString()
+        }
+
+        /**
+         * The [encodedPath] with the RFC 3986 §4.2 dot-segment guard that stops the re-parse from
+         * reinterpreting it: `/.` before a `//`-leading authority-less path, `./` before a
+         * colon-bearing first segment that would otherwise read as a scheme.
+         */
+        private fun guardedPath(): String =
+            when {
+                host != null -> encodedPath
+                encodedPath.startsWith(DOUBLE_SLASH) -> LEADING_DOT_GUARD + encodedPath
+                scheme == null && firstSegmentHasColon(encodedPath) -> COLON_SEGMENT_GUARD + encodedPath
+                else -> encodedPath
+            }
+
+        /** Mirrors [UriParser] scheme detection: a `:` before the first `/` reads the first segment as a scheme. */
+        private fun firstSegmentHasColon(path: String): Boolean {
+            val colon = path.indexOf(':')
+            val slash = path.indexOf('/')
+            return colon >= 0 && (slash < 0 || colon < slash)
         }
 
         /** Appends `//[userinfo@]host[:port]` for a present authority (RFC 3986 §3.2). */

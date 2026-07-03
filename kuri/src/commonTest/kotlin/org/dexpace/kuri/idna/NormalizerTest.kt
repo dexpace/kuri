@@ -11,8 +11,9 @@ import kotlin.test.assertTrue
 
 /**
  * Validates [Normalizer.nfc] against Unicode's own NormalizationTest.txt (Unicode 17.0), modelled as
- * [NFC_CASES] (`source` -> required NFC form). Every case is checked, plus the NFC idempotence
- * invariant (`nfc(nfc(x)) == nfc(x)`) and targeted algorithmic-Hangul cases (UAX #15).
+ * [NFC_CASES] (all five columns c1..c5). The full UAX #15 NFC conformance clause is asserted across
+ * every case: `nfc == nfc(source) == nfc(nfc) == nfc(nfd)` and `nfkc == nfc(nfkc) == nfc(nfkd)` — i.e.
+ * all five NFC legs — plus targeted algorithmic-Hangul cases.
  */
 class NormalizerTest {
     @Test
@@ -28,6 +29,37 @@ class NormalizerTest {
     fun `nfc is idempotent on every NormalizationTest case`() {
         val unstable = NFC_CASES.filter { Normalizer.nfc(it.nfc) != it.nfc }
         assertTrue(unstable.isEmpty(), "nfc(nfc(x)) != nfc(x) for ${unstable.size} cases")
+    }
+
+    @Test
+    fun `nfc recomposes the NFD column to the NFC form for every case`() {
+        // The high-value leg: recomposing from the full canonical decomposition (c3) must reach NFC (c2).
+        val mismatches = NFC_CASES.filter { Normalizer.nfc(it.nfd) != it.nfc }
+        assertTrue(
+            mismatches.isEmpty(),
+            "nfc(NFD) != NFC for ${mismatches.size}/${NFC_CASES.size}; " +
+                "first = ${describeLeg(mismatches.firstOrNull()?.nfd, mismatches.firstOrNull()?.nfc)}",
+        )
+    }
+
+    @Test
+    fun `nfc leaves the NFKC column unchanged for every case`() {
+        val mismatches = NFC_CASES.filter { Normalizer.nfc(it.nfkc) != it.nfkc }
+        assertTrue(
+            mismatches.isEmpty(),
+            "nfc(NFKC) != NFKC for ${mismatches.size}/${NFC_CASES.size}; " +
+                "first = ${describeLeg(mismatches.firstOrNull()?.nfkc, mismatches.firstOrNull()?.nfkc)}",
+        )
+    }
+
+    @Test
+    fun `nfc recomposes the NFKD column to the NFKC form for every case`() {
+        val mismatches = NFC_CASES.filter { Normalizer.nfc(it.nfkd) != it.nfkc }
+        assertTrue(
+            mismatches.isEmpty(),
+            "nfc(NFKD) != NFKC for ${mismatches.size}/${NFC_CASES.size}; " +
+                "first = ${describeLeg(mismatches.firstOrNull()?.nfkd, mismatches.firstOrNull()?.nfkc)}",
+        )
     }
 
     @Test
@@ -75,6 +107,17 @@ class NormalizerTest {
         }
         val actual = Normalizer.nfc(case.source)
         return "source=${hex(case.source)} expected=${hex(case.nfc)} actual=${hex(actual)}"
+    }
+
+    private fun describeLeg(
+        input: String?,
+        expected: String?,
+    ): String {
+        if (input == null || expected == null) {
+            return "none"
+        }
+        val actual = Normalizer.nfc(input)
+        return "input=${hex(input)} expected=${hex(expected)} actual=${hex(actual)}"
     }
 
     private fun hex(value: String): String = value.map { it.code.toString(HEX_RADIX) }.joinToString(" ")
