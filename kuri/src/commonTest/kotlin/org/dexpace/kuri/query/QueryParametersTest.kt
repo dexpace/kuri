@@ -169,17 +169,35 @@ class QueryParametersTest {
     }
 
     @Test
-    fun `parse caps the pair count at the resource bound per QUERY-24`() {
-        val overLimit = (0 until MAX_PAIRS + 1).joinToString("&") { "k$it=v$it" }
-        val params = QueryParameters.parse(overLimit)
-        assertEquals(MAX_PAIRS, params.size)
-        assertEquals("k0", params.nameAt(0))
+    fun `parse materializes every pair with no count cap per QUERY-24`() {
+        val pairCount = 1001
+        val input = (0 until pairCount).joinToString("&") { "k$it=v$it" }
+        val params = QueryParameters.parse(input)
+        assertEquals(pairCount, params.size)
+        assertEquals("k1000", params.nameAt(1000))
+        assertEquals(input, params.toQueryString())
     }
 
     @Test
-    fun `parse keeps exactly the bound when pairs equal the limit per QUERY-24`() {
-        val atLimit = (0 until MAX_PAIRS).joinToString("&") { "k$it" }
-        assertEquals(MAX_PAIRS, QueryParameters.parse(atLimit).size)
+    fun `of and toQueryString round-trip a snapshot larger than a thousand pairs`() {
+        val pairCount = 1001
+        val map = LinkedHashMap<String, String?>(pairCount)
+        for (i in 0 until pairCount) {
+            map["k$i"] = "v$i"
+        }
+        val snapshot = QueryParameters.of(map)
+        assertEquals(pairCount, snapshot.size)
+        assertEquals(snapshot, QueryParameters.parse(snapshot.toQueryString()))
+    }
+
+    @Test
+    fun `toString serializes a snapshot of any size without failing`() {
+        val builder = QueryParametersBuilder()
+        for (i in 0 until 1001) {
+            builder.add("k$i", "v$i")
+        }
+        val params = builder.build()
+        assertTrue(params.toString().startsWith("QueryParameters(k0=v0&"))
     }
 
     @Test
@@ -247,6 +265,15 @@ class QueryParametersTest {
             ),
             collected,
         )
+    }
+
+    @Test
+    fun `iterator returns a fresh independent iterator on every call`() {
+        val params = QueryParameters.parse("a=1&b")
+        val first = params.iterator().asSequence().toList()
+        val second = params.iterator().asSequence().toList()
+        assertEquals(first, second)
+        assertEquals(2, first.size)
     }
 
     @Test

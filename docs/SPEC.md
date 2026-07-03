@@ -2009,9 +2009,9 @@ Consequently: space → `+`; literal `+` (`0x2B`) → `%2B`; `&` (`0x26`) → `%
 
 ### 10.5 Resource bound on pair parsing
 
-**[QUERY-24]** Deriving `QueryParameters` (§10.2) and parsing form input (§10.4) MUST enforce a maximum parsed-pair count. The default limit MUST be **1000** pairs and SHOULD be configurable. A query or form body whose pair count would exceed the limit MUST fail with a `UriParseError` (the failure is surfaced as `ParseResult.Err`; see §12, ERR — this bound is the `QueryPairs` `ResourceLimit` whose canonical registry entry is fixed there). Implementations MUST NOT silently truncate the input at the limit and discard the remainder.
+**[QUERY-24]** Deriving `QueryParameters` (§10.2) and parsing form input (§10.4) MUST be single-pass, lossless, and linear in the input length: every name/value pair is materialized and no pair-count cap applies (WHATWG `URLSearchParams` has none). Implementations MUST NOT truncate the input or drop the pair tail. The resource bound on hostile input is the raw query/form string the caller already holds; in the `Uri` profile that string is additionally bounded by the profile's entry-point input-length limit (§12), while the `Url` profile deliberately imposes no such length limit, matching WHATWG.
 
-> Note: the 1000-pair default matches ktor's `parseUrlEncodedParameters(limit = 1000)` bound; kuri tightens it to a hard failure rather than ktor's silent `split(limit=…)` truncation, per the "limits on everything" rule. The companion input-length and percent-decode bounds, and the canonical `ResourceLimit` registry, are defined in §12.
+> Note: ktor truncates the pair count at 1000 through `parseUrlEncodedParameters(limit = 1000)`'s underlying `split(limit=…)`; kuri instead follows WHATWG `URLSearchParams`, which applies no pair cap, because pair derivation is already linear in the input length — the string the caller holds (and, in the `Uri` profile, its input-length bound of §12) is the resource bound. The input-length and percent-decode bounds, and the canonical `ResourceLimit` registry, are defined in §12.
 
 ## 11. Normalization, Serialization & Equivalence
 
@@ -2220,7 +2220,7 @@ public enum class HostError {
 
 **[ERR-16]** `InputTooLong` MUST be produced when the input length exceeds the configured maximum (see [ERR-31]), carrying the observed `length` and the configured `max`. The length check MUST also be re-applied after percent-decoding/IDNA expansion (see [ERR-32]); the post-expansion failure MUST also be reported as `InputTooLong`.
 
-**[ERR-17]** `LimitExceeded` MUST be produced when a configured resource bound other than total input length is exceeded (e.g. query-pair count). It carries which `ResourceLimit` was hit, the `observed` count, and the configured `max`. (`InputTooLong` is retained as a dedicated variant for the headline length bound; all other bounds use `LimitExceeded`.)
+**[ERR-17]** `LimitExceeded` MUST be produced when a configured resource bound other than total input length is exceeded (e.g. path-segment count). It carries which `ResourceLimit` was hit, the `observed` count, and the configured `max`. (`InputTooLong` is retained as a dedicated variant for the headline length bound; all other bounds use `LimitExceeded`.)
 
 **[ERR-18]** The `UriParseError` hierarchy MUST be `sealed` and exhaustively matchable without an `else`. Adding a variant is a breaking API change governed by binary-compatibility-validation.
 
@@ -2320,7 +2320,6 @@ Every unbounded dimension of the input is capped. Each limit has a documented de
 public enum class ResourceLimit {
     InputLength,       // default 64 KiB (65_536) UTF-16 code units
     ExpandedLength,    // default equals InputLength; re-checked post percent/IDNA expansion
-    QueryPairs,        // default 1000
     PathSegments,      // default 10_000
     HostLabelLength,   // 63 (DNS); fixed by RFC 5890, not lowered below 63
     HostTotalLength,   // 253 (DNS)
@@ -2335,7 +2334,7 @@ public enum class ResourceLimit {
 
 **[ERR-31]** **[ExpandedLength]** Because percent-decoding and IDNA ToUnicode/ToASCII can lengthen a string, the total serialized length MUST be re-checked after expansion; an expansion that exceeds `ExpandedLength` MUST produce `InputTooLong` with the post-expansion `length`.
 
-**[ERR-32]** **[QueryPairs]** When materializing `QueryParameters`, the number of name/value pairs MUST be capped at `QueryPairs` (default 1000). Exceeding it MUST produce `LimitExceeded(QueryPairs, …)`. The raw `query`/`encodedQuery` string is not split and is bounded only by `InputLength`. (This is the canonical registry entry for the query-pair bound referenced by [QUERY-24].)
+**[ERR-32]** **[Query pairs]** Query-pair and form-pair materialization is deliberately NOT a resource limit: deriving `QueryParameters` and parsing form input MUST be single-pass, lossless, and linear in the input length, materializing every pair with no pair-count cap (see [QUERY-24], matching WHATWG `URLSearchParams`). The raw `query`/`encodedQuery` string is not split into a bounded set; it is bounded only by `InputLength` on a profile that configures one (the `Uri` profile), never by a dedicated pair cap. There is accordingly no `QueryPairs` entry in `ResourceLimit`.
 
 **[ERR-33]** **[PathSegments / ResolutionDepth]** Path-segment splitting and dot-segment removal MUST be bounded: segment count by `PathSegments`, and reference-resolution work by `ResolutionDepth`. Resolution and dot-segment removal MUST run in bounded time and MUST NOT recurse without a fixed depth bound; a `..` sequence that would underflow the path MUST clamp at the root (per §9) rather than loop.
 
@@ -2751,7 +2750,7 @@ This appendix lists every numbered, testable requirement tag **[ABBR-N]** define
 | **[ERR-29]** | §12 | Each limit MUST be enforced and MUST have the documented default value above. |
 | **[ERR-30]** | §12 | [InputLength] The original input length MUST be checked before substantive parsing; if … |
 | **[ERR-31]** | §12 | [ExpandedLength] Because percent-decoding and IDNA ToUnicode/ToASCII can lengthen a string, the total … |
-| **[ERR-32]** | §12 | [QueryPairs] When materializing QueryParameters, the number of name/value pairs MUST be capped … |
+| **[ERR-32]** | §12 | [Query pairs] Query-pair and form-pair materialization is deliberately NOT a resource limit; it MUST be single-pass, lossless, and linear in the input length … |
 | **[ERR-33]** | §12 | [PathSegments / ResolutionDepth] Path-segment splitting and dot-segment removal MUST be bounded: segment … |
 | **[ERR-34]** | §12 | [HostLabelLength / HostTotalLength] Label length (≤ 63) and total host length (≤ … |
 | **[ERR-35]** | §12 | [PortMax] A port value MUST be rejected when it exceeds 65535 (PortMax) … |
@@ -3079,7 +3078,7 @@ This appendix lists every numbered, testable requirement tag **[ABBR-N]** define
 | **[QUERY-21]** | §10 | The form parser MUST decode an application/x-www-form-urlencoded string as follows: split on … |
 | **[QUERY-22]** | §10 | The form codec MUST use UTF-8 for all name/value text. |
 | **[QUERY-23]** | §10 | Plus-as-space MUST be confined to the form dialect ([QUERY-20]/[QUERY-21]). |
-| **[QUERY-24]** | §10 | Deriving QueryParameters (§10.2) and parsing form input (§10.4) MUST enforce a maximum parsed-pair count. |
+| **[QUERY-24]** | §10 | Deriving QueryParameters (§10.2) and parsing form input (§10.4) MUST be single-pass, lossless, and linear in the input length; no pair-count cap applies. |
 | **[SCH-1]** | §6 | An implementation MUST recognize exactly the six schemes in Table 6-1 as special. |
 | **[SCH-2]** | §6 | The default port of a special scheme MUST be exactly the value … |
 | **[SCH-3]** | §6 | Scheme comparison against the registry MUST be performed on the normalized (lowercased … |

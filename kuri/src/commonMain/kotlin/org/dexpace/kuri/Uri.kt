@@ -29,15 +29,19 @@ import kotlin.jvm.JvmStatic
 /** The path-segment separator shared by the encoded-path projection (RFC 3986 §3.3). */
 private const val SLASH: String = "/"
 
+/** The raw code points a single encoded path segment must not carry; each would re-split it. */
+private const val SEGMENT_DELIMITERS: String = "/\\?#"
+
 /**
  * The encode set applied to a decoded segment added via [Uri.Builder.addPathSegment]
  * (`encodeURIComponent`, RFC 3986 §3.3). It percent-encodes the reserved delimiters that could
- * break a segment — including `/` (the segment separator) and `%` (the escape introducer) — so an
- * added segment can never merge into a neighbouring segment nor produce a bare `%` that the strict
- * `Uri` parser rejects. Matching `encodeURIComponent`, the always-safe sub-delims (`!`, `'`, `(`,
- * `)`, `*`) and the RFC 3986 `unreserved` set are left literal.
+ * break a segment — including `/` and `\` (segment separators), `?` and `#` (which would open a
+ * query or fragment), and `%` (the escape introducer) — so an added segment can never merge into a
+ * neighbouring component nor produce a bare `%` that the strict `Uri` parser rejects. Matching
+ * `encodeURIComponent`, the always-safe sub-delims (`!`, `'`, `(`, `)`, `*`) and the RFC 3986
+ * `unreserved` set are left literal.
  */
-private val PATH_SEGMENT_ENCODE_SET: PercentEncodeSet = PercentEncodeSets.COMPONENT
+private val URI_PATH_SEGMENT_ENCODE_SET: PercentEncodeSet = PercentEncodeSets.COMPONENT
 
 /**
  * An immutable, preserve-by-default RFC 3986 generic-URI value (SPEC §3, §11; RFC 3986).
@@ -328,6 +332,9 @@ public class Uri internal constructor(
         private var host: String? = null
         private var port: Int? = null
         private var encodedPath: String = ""
+
+        /** True while [encodedPath] was assembled from empty by segment appends; its rooting is decided at [build]. */
+        private var isSegmentBuiltPath: Boolean = false
         private var query: String? = null
         private var fragment: String? = null
         private var options: ParseOptions = ParseOptions.DEFAULT
@@ -414,6 +421,7 @@ public class Uri internal constructor(
          */
         public fun encodedPath(encodedPath: String): Builder {
             this.encodedPath = encodedPath
+            isSegmentBuiltPath = false // a verbatim path owns its own (root or rootless) shape.
             return this
         }
 
@@ -425,21 +433,42 @@ public class Uri internal constructor(
         public fun path(path: String): Builder = encodedPath(path)
 
         /**
-         * Appends one decoded path segment, percent-encoding it (including any `/` or `%`) so it
-         * stays a single RFC 3986 segment; a separating `/` is inserted before it when needed.
+         * Appends one decoded path segment, percent-encoding it (including any `/`, `\`, `%`, `?`, or
+         * `#`) so it always stays a single RFC 3986 segment and [Uri.pathSegments] decodes it back to
+         * exactly [segment] (SPEC [PATH-6]).
+         *
+         * Segments join at the path's segment boundary: a path that is empty or already ends in `/`
+         * has an open final slot the segment fills directly, and any other path first gains a
+         * separating `/` — so `newBuilder()` of `http://h/` plus `"x"` builds `http://h/x`, matching
+         * OkHttp's replace-trailing-empty rule (SPEC [PATH-3]). Pushing `""` leaves the final slot
+         * open: on a path that already has content it is a real trailing empty segment (`/a/`, so
+         * [Uri.pathSegments] is `["a", ""]`); on a still-empty path it leaves the path empty, so a
+         * lone `addPathSegment("")` serializes as the root `/` under an authority and contributes
+         * nothing without one. An interior empty segment (`/a//b`) is expressible only through
+         * [encodedPath]. A path assembled purely from segments stays rootless until [build], which
+         * prepends the root `/` iff the value has an authority (RFC 3986 §3.3) — so rootless
+         * `urn:`/`mailto:` paths build segment-wise, independent of setter order.
          *
          * @param segment the decoded segment to append.
          * @return this builder, for chaining.
          */
         public fun addPathSegment(segment: String): Builder =
-            pushSegment(PercentCodec.encode(segment, PATH_SEGMENT_ENCODE_SET))
+            pushSegment(PercentCodec.encode(segment, URI_PATH_SEGMENT_ENCODE_SET))
 
         /**
-         * Appends one already-encoded path segment verbatim (RFC 3986 §3.3); a separating `/` is
-         * inserted before it when needed. The caller is responsible for its encoding.
+         * Appends one already-encoded path segment verbatim (RFC 3986 §3.3).
+         *
+         * The caller owns the encoding: percent-escapes are kept exactly as supplied and validated by
+         * the strict parser at [build]. Because a segment is `*pchar`, [segment] must not carry a raw
+         * `/`, `\`, `?`, or `#` — those are component delimiters, not segment data, and would
+         * otherwise silently re-split the built value (SPEC [MODEL-39]); use [addPathSegment] to carry
+         * them as data. Separator and rooting rules are those of [addPathSegment]: the segment joins
+         * at the path's segment boundary, and a path built purely from segments is rooted at [build]
+         * iff the value has an authority.
          *
          * @param segment the encoded segment to append; kept exactly as supplied.
          * @return this builder, for chaining.
+         * @throws IllegalArgumentException when [segment] contains a raw `/`, `\`, `?`, or `#`.
          */
         public fun addEncodedPathSegment(segment: String): Builder = pushSegment(segment)
 
@@ -474,8 +503,9 @@ public class Uri internal constructor(
          *   a programmer error rather than a recoverable parse failure.
          */
         public fun build(): Uri {
-            validateComposable()
-            return UriParser.parse(recompose(), options).fold(
+            val path = effectivePath()
+            validateComposable(path)
+            return UriParser.parse(recompose(path), options).fold(
                 onOk = { Uri(it) },
                 onErr = { throw UriSyntaxException(it) },
             )
@@ -485,32 +515,58 @@ public class Uri internal constructor(
          * Rejects component combinations no RFC 3986 recomposition can represent (RFC 3986 §3.2/§3.3).
          *
          * `userinfo`/`port` are authority sub-components, so they require a host; a caller wanting an
-         * empty authority passes `host("")`. A present authority forbids a rootless path, which would
-         * otherwise merge into the authority on re-parse.
+         * empty authority passes `host("")`. A present authority forbids a rootless [path], which
+         * would otherwise merge into the authority on re-parse; a segment-built path is already rooted
+         * by [effectivePath] when a host is present, so only a verbatim rootless path can trip this.
          */
-        private fun validateComposable() {
+        private fun validateComposable(path: String) {
             require(host != null || (userInfo.isNullOrEmpty() && port == null)) {
                 "userInfo/port require a host: set host(\"\") for an empty-authority URI, or drop them"
             }
-            require(host == null || encodedPath.isEmpty() || encodedPath.startsWith(SLASH)) {
-                "a path with an authority must be empty or start with '/': $encodedPath"
+            require(host == null || path.isEmpty() || path.startsWith(SLASH)) {
+                "a path with an authority must be empty or start with '/': $path"
             }
         }
 
-        /** Appends [encodedSegment] as a rooted path segment, inserting a separating `/` when needed. */
+        /**
+         * Appends [encodedSegment] at the path's segment boundary; rooting is deferred to
+         * [effectivePath].
+         *
+         * The path takes the segment directly when it is empty (a rootless first segment) or already
+         * ends in `/` (an open final slot); otherwise a separating `/` is inserted first. A segment
+         * must already be exactly one segment, so a raw `/`, `\`, `?`, or `#` is rejected rather than
+         * silently re-split (RFC 3986 §3.3; SPEC [MODEL-39]).
+         */
         private fun pushSegment(encodedSegment: String): Builder {
-            if (!encodedPath.endsWith(SLASH)) encodedPath += SLASH
+            val delimiter = encodedSegment.indexOfFirst { it in SEGMENT_DELIMITERS }
+            require(delimiter < 0) {
+                "a path segment must not contain '/', '\\', '?', or '#' " +
+                    "(found '${encodedSegment[delimiter]}' at index $delimiter): $encodedSegment"
+            }
+            if (encodedPath.isEmpty()) isSegmentBuiltPath = true
+            if (encodedPath.isNotEmpty() && !encodedPath.endsWith(SLASH)) encodedPath += SLASH
             encodedPath += encodedSegment
-            check(encodedPath.endsWith("$SLASH$encodedSegment")) { "segment lost its separator: $encodedSegment" }
+            check(encodedPath.endsWith(encodedSegment)) { "the pushed segment must terminate the path" }
             return this
         }
 
+        /**
+         * The path [recompose] serializes: a segment-built path gains its root `/` exactly when an
+         * authority is present, because RFC 3986 §3.3 forbids a rootless path after an authority while
+         * the rootless form is the only one an authority-less `urn:`-style value can carry.
+         */
+        private fun effectivePath(): String {
+            if (!isSegmentBuiltPath || host == null) return encodedPath
+            check(!encodedPath.startsWith(SLASH)) { "a segment-built path is stored rootless: $encodedPath" }
+            return SLASH + encodedPath
+        }
+
         /** Recomposes a parseable URI string from the accumulated components (RFC 3986 §5.3). */
-        private fun recompose(): String {
+        private fun recompose(path: String): String {
             val sb = StringBuilder()
             if (scheme != null) sb.append(scheme).append(':')
             if (host != null) appendAuthority(sb)
-            sb.append(guardRecomposedUriPath(scheme, host != null, encodedPath))
+            sb.append(guardRecomposedUriPath(scheme, host != null, path))
             if (query != null) sb.append('?').append(query)
             if (fragment != null) sb.append('#').append(fragment)
             return sb.toString()

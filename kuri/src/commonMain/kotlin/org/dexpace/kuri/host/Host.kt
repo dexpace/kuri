@@ -4,18 +4,6 @@
  */
 package org.dexpace.kuri.host
 
-/** The fixed octet count of an IPv4 address: four 8-bit groups. */
-private const val IPV4_OCTET_COUNT: Int = 4
-
-/** Bit width of one octet; the shift between adjacent octets in the packed value. */
-private const val IPV4_BITS_PER_OCTET: Int = 8
-
-/** Index of the most-significant octet, i.e. `IPV4_OCTET_COUNT - 1`. */
-private const val IPV4_HIGH_OCTET_INDEX: Int = 3
-
-/** Largest value a single octet may hold, also the low-byte mask (`0xFF`). */
-private const val IPV4_OCTET_MASK: Int = 0xFF
-
 /**
  * The addressable-name portion of an authority, modelled as a sealed type so the
  * host *kind* is part of the type, exhaustively matchable, and able to drive
@@ -83,20 +71,13 @@ public sealed interface Host {
          *
          * The structured counterpart to [asText]: where `asText()` yields the canonical
          * dotted-decimal string, this returns the raw bytes for callers that need the
-         * numeric form. Each octet is in `0..255` and the result always has length four;
-         * the stored [value] is unchanged.
+         * numeric form. Both views share the serializer's unpacking, so they always
+         * agree. Each octet is in `0..255` and the result always has length four; the
+         * stored [value] is unchanged.
          *
          * @return a fresh four-element array of octets, high-order octet first, each `0..255`.
          */
-        public fun octets(): IntArray {
-            val result =
-                IntArray(IPV4_OCTET_COUNT) { index ->
-                    (value ushr (IPV4_BITS_PER_OCTET * (IPV4_HIGH_OCTET_INDEX - index))) and IPV4_OCTET_MASK
-                }
-            check(result.size == IPV4_OCTET_COUNT) { "expected $IPV4_OCTET_COUNT octets, got ${result.size}" }
-            check(result.all { it in 0..IPV4_OCTET_MASK }) { "octet out of range in ${result.toList()}" }
-            return result
-        }
+        public fun octets(): IntArray = ipv4Octets(value)
     }
 
     /**

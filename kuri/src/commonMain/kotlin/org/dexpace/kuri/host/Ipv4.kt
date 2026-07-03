@@ -55,6 +55,26 @@ private const val INVALID_PART: Long = -1L
 private const val UINT32_LIMIT: Long = 1L shl 32
 
 /**
+ * Unpacks a packed 32-bit IPv4 address into its four octets, most-significant first.
+ *
+ * The single owner of the packed-[Int] unpacking: both [Ipv4.serialize] (the textual
+ * view) and [Host.Ipv4.octets] (the numeric view) delegate here, so the two views of
+ * one address cannot drift apart. The postconditions are asserted once on behalf of both.
+ *
+ * @param value the address as 32 unsigned bits packed into a signed [Int].
+ * @return a fresh four-element array of octets, high-order octet first, each `0..255`.
+ */
+internal fun ipv4Octets(value: Int): IntArray {
+    val octets =
+        IntArray(IPV4_OCTET_COUNT) { index ->
+            (value ushr (BITS_PER_OCTET * (HIGH_OCTET_INDEX - index))) and MAX_OCTET
+        }
+    check(octets.size == IPV4_OCTET_COUNT) { "expected $IPV4_OCTET_COUNT octets, got ${octets.size}" }
+    check(octets.all { it in 0..MAX_OCTET }) { "octet out of range in ${octets.toList()}" }
+    return octets
+}
+
+/**
  * Parser and serializer for the IPv4 host form (SPEC §7.3).
  *
  * Two parse postures share one type: the `Url` profile runs the WHATWG number
@@ -114,18 +134,7 @@ internal object Ipv4 {
      * @param value the address as 32 unsigned bits packed into a signed [Int].
      * @return the canonical `a.b.c.d` text, e.g. `192.168.0.1`.
      */
-    internal fun serialize(value: Int): String {
-        val octets = (0 until IPV4_OCTET_COUNT).map { i -> octetAt(value, i) }
-        check(octets.size == IPV4_OCTET_COUNT) { "expected four octets, got ${octets.size}" }
-        check(octets.all { it in 0..MAX_OCTET }) { "octet out of range in $octets" }
-        return octets.joinToString(SEPARATOR)
-    }
-
-    /** Extracts octet [index] (0 = most significant) from the packed [value]. */
-    private fun octetAt(
-        value: Int,
-        index: Int,
-    ): Int = (value ushr (BITS_PER_OCTET * (HIGH_OCTET_INDEX - index))) and MAX_OCTET
+    internal fun serialize(value: Int): String = ipv4Octets(value).joinToString(SEPARATOR)
 
     /**
      * The WHATWG IPv4 number parser of §7.3.1 ([HOST-21], [HOST-22]).

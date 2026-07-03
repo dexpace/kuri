@@ -41,11 +41,11 @@
 
 The coordinates:
 
-| Coordinate | Value                                                     |
-|------------|-----------------------------------------------------------|
-| Group      | `org.dexpace`                                             |
-| Artifact   | `kuri`                                                     |
-| Version    | `0.1.0` (first release) · `0.1.0-SNAPSHOT` (current dev build) |
+| Coordinate | Value                                                                   |
+|------------|-------------------------------------------------------------------------|
+| Group      | `org.dexpace`                                                           |
+| Artifact   | `kuri`                                                                  |
+| Version    | `0.1.0-SNAPSHOT` (current dev build; `0.1.0` will be the first release) |
 
 The artifact id is identical across Kotlin Multiplatform targets; the Gradle plugin selects the right variant for your
 platform automatically.

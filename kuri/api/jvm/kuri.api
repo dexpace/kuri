@@ -156,11 +156,13 @@ public final class org/dexpace/kuri/Url$Builder {
 public final class org/dexpace/kuri/Url$Companion {
 	public final fun canParse (Ljava/lang/String;)Z
 	public final fun canParse (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Z
+	public static synthetic fun canParse$default (Lorg/dexpace/kuri/Url$Companion;Ljava/lang/String;Lorg/dexpace/kuri/Url;ILjava/lang/Object;)Z
 	public final fun parse (Ljava/lang/String;)Lorg/dexpace/kuri/error/ParseResult;
 	public final fun parse (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Lorg/dexpace/kuri/error/ParseResult;
 	public static synthetic fun parse$default (Lorg/dexpace/kuri/Url$Companion;Ljava/lang/String;Lorg/dexpace/kuri/Url;ILjava/lang/Object;)Lorg/dexpace/kuri/error/ParseResult;
 	public final fun parseOrNull (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
 	public final fun parseOrNull (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Lorg/dexpace/kuri/Url;
+	public static synthetic fun parseOrNull$default (Lorg/dexpace/kuri/Url$Companion;Ljava/lang/String;Lorg/dexpace/kuri/Url;ILjava/lang/Object;)Lorg/dexpace/kuri/Url;
 	public final fun parseOrThrow (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
 	public final fun parseOrThrow (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Lorg/dexpace/kuri/Url;
 	public static synthetic fun parseOrThrow$default (Lorg/dexpace/kuri/Url$Companion;Ljava/lang/String;Lorg/dexpace/kuri/Url;ILjava/lang/Object;)Lorg/dexpace/kuri/Url;

@@ -112,11 +112,12 @@ kotlin {
             implementation(kotlin("test"))
         }
         // The JVM test set also holds a Java interop test (src/jvmTest/java) that guards the
-        // documented Java call sites; it uses JUnit 4 directly, so bind kotlin.test to the JUnit 4
-        // backend and put JUnit 4 on the JVM test classpath.
+        // documented Java call sites. It uses JUnit 4 directly, but no explicit junit:junit
+        // dependency is needed: kotlin-test-junit is the kotlin.test-to-JUnit-4 bridge and
+        // exposes junit:junit as an api dependency, so binding the backend also puts JUnit 4
+        // on the Java test's compile classpath, at the version the Kotlin release was built for.
         jvmTest.dependencies {
             implementation(kotlin("test-junit"))
-            implementation("junit:junit:4.13.2")
         }
         // Instrumented tests run under AndroidJUnitRunner (JUnit4), so bind kotlin.test to JUnit4
         // and pull in the AndroidX test runtime that provides the runner.

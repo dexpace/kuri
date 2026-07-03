@@ -45,6 +45,16 @@ public final class JavaInteropTest {
     }
 
     @Test
+    public void nullBaseMeansAbsoluteParseAcrossTheParseFamily() {
+        // A null base must mean "absolute parse" for every factory, including the never-throws pair;
+        // the two-arg parseOrNull/canParse used to null-check base and NPE a Java caller here.
+        Assert.assertTrue(Url.parse("https://x/", null).isOk());
+        Assert.assertEquals("https", Url.parseOrThrow("https://x/", null).scheme());
+        Assert.assertNull(Url.parseOrNull("../relative", null));
+        Assert.assertFalse(Url.canParse("../relative", null));
+    }
+
+    @Test
     public void errorMessageIsReadableWithoutThrowing() {
         ParseResult<Url> result = Url.parse("::bad");
 

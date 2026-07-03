@@ -159,6 +159,15 @@ class Ipv4Test {
     }
 
     @Test
+    fun `octets and asText expose the same packed layout`() {
+        // 0 and -1 are the all-zeroes/all-ones extremes; 0x7F000001 exercises the high octet.
+        listOf(0, -1, 0x7F000001, 0x01020304).forEach { value ->
+            val host = Host.Ipv4(value)
+            assertEquals(host.asText(), host.octets().joinToString("."), "value ${value.toUInt()}")
+        }
+    }
+
+    @Test
     fun `RegName asText returns the stored value verbatim`() {
         assertEquals("example.com", Host.RegName("example.com").asText())
     }

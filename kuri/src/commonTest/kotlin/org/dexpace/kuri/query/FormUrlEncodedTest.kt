@@ -67,8 +67,9 @@ class FormUrlEncodedTest {
     }
 
     @Test
-    fun `parse caps the pair count at the resource bound per QUERY-24`() {
-        val overLimit = (0 until MAX_PAIRS + 1).joinToString("&") { "k$it=v$it" }
-        assertEquals(MAX_PAIRS, FormUrlEncoded.parse(overLimit).size)
+    fun `parse keeps every pair with no count cap per QUERY-24`() {
+        val pairCount = 1001
+        val input = (0 until pairCount).joinToString("&") { "k$it=v$it" }
+        assertEquals(pairCount, FormUrlEncoded.parse(input).size)
     }
 }

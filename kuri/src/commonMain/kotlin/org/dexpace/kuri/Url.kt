@@ -29,8 +29,19 @@ private const val NO_DEFAULT_PORT: Int = -1
 /** Inclusive upper bound of a WHATWG URL port (`0..65535`); a larger value is a parse failure. */
 private const val MAX_PORT: Int = 65535
 
-/** The `application/x-www-form-urlencoded`-free path-segment encode set: the path set plus `/`. */
-private val PATH_SEGMENT_ENCODE_SET: PercentEncodeSet = PercentEncodeSets.PATH.including('/')
+/** The path-segment separator of a WHATWG URL path (SPEC §9). */
+private const val SLASH: String = "/"
+
+/** The raw code points a single encoded path segment must not carry; each would re-split it. */
+private const val SEGMENT_DELIMITERS: String = "/\\?#"
+
+/**
+ * The encode set applied to a decoded segment added via [Url.Builder.addPathSegment]: the WHATWG
+ * path set plus `/` (the segment separator), `\` (equally a separator in a special-scheme path),
+ * and `%` (the escape introducer), so an added segment always survives [Url.Builder.build] as a
+ * single segment and [Url.pathSegments] decodes it back to exactly the value supplied (SPEC [PATH-6]).
+ */
+private val URL_PATH_SEGMENT_ENCODE_SET: PercentEncodeSet = PercentEncodeSets.PATH.including('/', '\\', '%')
 
 /** The ASCII serialization of an opaque origin: the literal `"null"` (WHATWG "opaque origin"). */
 private const val OPAQUE_ORIGIN: String = "null"
@@ -270,25 +281,18 @@ public class Url internal constructor(
         ): ParseResult<Url> = UrlParser.parse(input, base?.components).map { Url(it) }
 
         /**
-         * Parses [input], punning a failure to `null`.
-         *
-         * @param input the URL text to parse.
-         * @return the parsed [Url], or `null` when [input] is not a valid URL.
-         */
-        @JvmStatic
-        public fun parseOrNull(input: String): Url? = parse(input).getOrNull()
-
-        /**
-         * Resolves [input] against [base], punning a failure to `null`.
+         * Parses [input] (resolving against [base] when supplied), punning a failure to `null`.
          *
          * @param input the (possibly relative) URL text to parse.
-         * @param base the base URL for relative resolution.
-         * @return the resolved [Url], or `null` when the reference does not resolve to a valid URL.
+         * @param base the base URL for relative resolution, or `null` for an absolute parse.
+         * @return the parsed (or resolved) [Url], or `null` when [input] does not parse (or resolve)
+         *   to a valid URL.
          */
         @JvmStatic
+        @JvmOverloads
         public fun parseOrNull(
             input: String,
-            base: Url,
+            base: Url? = null,
         ): Url? = parse(input, base).getOrNull()
 
         /**
@@ -312,26 +316,18 @@ public class Url internal constructor(
         ): Url = parse(input, base).getOrThrow()
 
         /**
-         * Reports whether [input] parses as a URL without allocating the value.
-         *
-         * @param input the URL text to test.
-         * @return `true` iff [parse] would succeed for [input].
-         */
-        @JvmStatic
-        public fun canParse(input: String): Boolean = parse(input).isOk()
-
-        /**
-         * Reports whether [input] resolves against [base] to a valid URL, without allocating the
-         * value.
+         * Reports whether [input] parses as a URL (resolving against [base] when supplied), without
+         * allocating the value.
          *
          * @param input the (possibly relative) URL text to test.
-         * @param base the base URL for relative resolution.
-         * @return `true` iff [parse] of [input] against [base] would succeed.
+         * @param base the base URL for relative resolution, or `null` to test an absolute parse.
+         * @return `true` iff [parse] would succeed for [input] against [base].
          */
         @JvmStatic
+        @JvmOverloads
         public fun canParse(
             input: String,
-            base: Url,
+            base: Url? = null,
         ): Boolean = parse(input, base).isOk()
     }
 
@@ -350,6 +346,9 @@ public class Url internal constructor(
         private var host: String? = null
         private var port: Int? = null
         private var encodedPath: String = ""
+
+        /** True while [encodedPath] was assembled from empty by segment appends; its rooting is decided at [build]. */
+        private var isSegmentBuiltPath: Boolean = false
         private var encodedQuery: String? = null
         private var encodedFragment: String? = null
 
@@ -423,29 +422,63 @@ public class Url internal constructor(
         }
 
         /**
-         * Replaces the entire encoded path.
+         * Replaces the entire encoded path verbatim.
          *
          * @param encodedPath the already-encoded path (e.g. `/a/b`); validated at [build].
          */
         public fun encodedPath(encodedPath: String): Builder {
             this.encodedPath = encodedPath
+            isSegmentBuiltPath = false // a verbatim path owns its own (root or rootless) shape.
             return this
         }
 
         /**
-         * Appends one decoded path segment, percent-encoding it (including any `/`).
+         * Appends one decoded path segment, percent-encoding it (including any `/`, `\`, or `%`) so
+         * it always stays a single segment and [Url.pathSegments] decodes it back to exactly
+         * [segment] (SPEC [PATH-6]; OkHttp `HttpUrl.Builder`).
+         *
+         * Segments join at the path's segment boundary: a path that is empty or already ends in `/`
+         * has an open final slot the segment fills directly, and any other path first gains a
+         * separating `/` — so `newBuilder()` of `http://h/` plus `"x"` builds `http://h/x`, matching
+         * OkHttp's replace-trailing-empty rule (SPEC [PATH-3]). Pushing `""` leaves the final slot
+         * open: on a path that already has content it is a real trailing empty segment (`/a/`, so
+         * [Url.pathSegments] is `["a", ""]`); on a still-empty path it leaves the path empty, so a
+         * lone `addPathSegment("")` serializes as the root `/` under a [host] and contributes nothing
+         * without one. An interior empty segment (`/a//b`) is expressible only through [encodedPath].
+         * A path assembled purely from segments stays rootless until [build], which prepends the root
+         * `/` iff the value has a [host] — so an opaque-path `mailto:`/`urn:` URL builds segment-wise,
+         * independent of setter order.
+         *
+         * Note: the dot segments `.`, `..`, and their percent-encoded forms remain subject to WHATWG
+         * path shortening at [build] (OkHttp-consistent; SPEC [PATH-11]), so they are not preserved
+         * as exactly one appended segment.
          *
          * @param segment the decoded segment to append.
+         * @return this builder, for chaining.
          */
         public fun addPathSegment(segment: String): Builder =
-            pushSegment(PercentCodec.encode(segment, PATH_SEGMENT_ENCODE_SET))
+            pushSegment(PercentCodec.encode(segment, URL_PATH_SEGMENT_ENCODE_SET))
 
         /**
-         * Appends one already-encoded path segment verbatim.
+         * Appends one already-encoded path segment verbatim (WHATWG path segment).
          *
-         * @param encodedSegment the encoded segment to append; kept as supplied.
+         * The caller owns the encoding: percent-escapes are preserved (WHATWG
+         * validation-error-and-continue) and validated at [build]. Because a segment cannot contain a
+         * component delimiter, [segment] must not carry a raw `/`, `\`, `?`, or `#` — those would
+         * silently re-split the built value into an extra segment, a query, or a fragment (SPEC
+         * [MODEL-39]); use [addPathSegment] to carry them as data. Separator and rooting rules are
+         * those of [addPathSegment]: the segment joins at the path's segment boundary, and a path
+         * built purely from segments is rooted at [build] iff the value has a [host].
+         *
+         * Note: the dot segments `.`, `..`, and their percent-encoded forms remain subject to WHATWG
+         * path shortening at [build] (SPEC [PATH-11]), so they are not preserved as exactly one
+         * appended segment.
+         *
+         * @param segment the encoded segment to append; kept exactly as supplied.
+         * @return this builder, for chaining.
+         * @throws IllegalArgumentException when [segment] contains a raw `/`, `\`, `?`, or `#`.
          */
-        public fun addEncodedPathSegment(encodedSegment: String): Builder = pushSegment(encodedSegment)
+        public fun addEncodedPathSegment(segment: String): Builder = pushSegment(segment)
 
         /**
          * Sets or clears the raw encoded query (without its leading `?`).
@@ -491,28 +524,65 @@ public class Url internal constructor(
          * Recomposes the accumulated components and re-parses them into a canonical [Url].
          *
          * @return the canonical [Url] for the assembled components.
+         * @throws IllegalArgumentException when the components cannot be represented as a URL: a
+         *   special (non-`file`) scheme with no [host] — whose first path segment the parser would
+         *   otherwise read as the host — or an authority paired with a verbatim rootless [encodedPath].
          * @throws UriSyntaxException when the components do not form a valid URL — a builder
          *   misuse is a programmer error rather than a recoverable parse failure.
          */
-        public fun build(): Url =
-            UrlParser.parse(recompose()).fold(
+        public fun build(): Url {
+            val path = effectivePath()
+            require(host != null || !Scheme.isSpecial(scheme) || scheme.equals(FILE_SCHEME, ignoreCase = true)) {
+                "a special scheme requires a host: set host(...) before build(): $scheme"
+            }
+            require(host == null || path.isEmpty() || path.startsWith(SLASH)) {
+                "a path with an authority must be empty or start with '/': $path"
+            }
+            return UrlParser.parse(recompose(path)).fold(
                 onOk = { Url(it) },
                 onErr = { throw UriSyntaxException(it) },
             )
+        }
 
-        /** Appends [encodedSegment] to the encoded path, inserting a separating `/` when needed. */
+        /**
+         * Appends [encodedSegment] at the path's segment boundary; rooting is deferred to
+         * [effectivePath].
+         *
+         * The path takes the segment directly when it is empty (a rootless first segment) or already
+         * ends in `/` (an open final slot); otherwise a separating `/` is inserted first. A segment
+         * must already be exactly one segment, so a raw `/`, `\`, `?`, or `#` is rejected rather than
+         * silently re-split (RFC 3986 §3.3; SPEC [MODEL-39]).
+         */
         private fun pushSegment(encodedSegment: String): Builder {
-            if (!encodedPath.endsWith("/")) encodedPath += "/"
+            val delimiter = encodedSegment.indexOfFirst { it in SEGMENT_DELIMITERS }
+            require(delimiter < 0) {
+                "a path segment must not contain '/', '\\', '?', or '#' " +
+                    "(found '${encodedSegment[delimiter]}' at index $delimiter): $encodedSegment"
+            }
+            if (encodedPath.isEmpty()) isSegmentBuiltPath = true
+            if (encodedPath.isNotEmpty() && !encodedPath.endsWith(SLASH)) encodedPath += SLASH
             encodedPath += encodedSegment
+            check(encodedPath.endsWith(encodedSegment)) { "the pushed segment must terminate the path" }
             return this
         }
 
+        /**
+         * The path [recompose] serializes: a segment-built path gains its root `/` exactly when a
+         * [host] is present, because a rootless path after an authority is invalid while the rootless
+         * form is the only one a host-less opaque-path value can carry (SPEC §9).
+         */
+        private fun effectivePath(): String {
+            if (!isSegmentBuiltPath || host == null) return encodedPath
+            check(!encodedPath.startsWith(SLASH)) { "a segment-built path is stored rootless: $encodedPath" }
+            return SLASH + encodedPath
+        }
+
         /** Recomposes a parseable URL string from the accumulated components. */
-        private fun recompose(): String {
+        private fun recompose(path: String): String {
             val sb = StringBuilder()
             sb.append(scheme).append(':')
             if (host != null) appendAuthority(sb)
-            sb.append(encodedPath)
+            sb.append(path)
             if (encodedQuery != null) sb.append('?').append(encodedQuery)
             if (encodedFragment != null) sb.append('#').append(encodedFragment)
             return sb.toString()

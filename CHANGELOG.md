@@ -15,11 +15,17 @@ series the public API is not yet frozen and may change between minor releases.
 - `Uri.parseOrThrow(input, options)` and `Url.parseOrThrow(input, base)` — the throwing counterpart
   of `parse`, for call sites that prefer an exception to a `ParseResult` branch.
 - `Url` gained base-relative overloads: `Url.parseOrNull(input, base)` and
-  `Url.canParse(input, base)` resolve a reference against a base URL.
+  `Url.canParse(input, base)` resolve a reference against a base URL. The base is optional — omit it
+  or pass `null` for an absolute parse — so the whole `parse`/`parseOrThrow`/`parseOrNull`/`canParse`
+  family accepts a nullable base uniformly (a null base no longer throws from `parseOrNull`/`canParse`).
 - `UriParseError.message` — a stable, human-readable rendering of a parse failure, readable without
   throwing (`error.getMessage()` from Java).
 - `Uri.Builder.addPathSegment(segment)` and `Uri.Builder.addEncodedPathSegment(segment)` append a
-  single path segment; `Uri.encodedPath()` exposes the percent-encoded path under a name shared with
+  single path segment. The encoded variant rejects a segment that contains a raw `/`, `\`, `?`, or
+  `#`, since a segment cannot span those delimiters; the decoded variant percent-encodes them. When
+  no authority is present the segments compose into a rootless path (`urn:`, `mailto:`), and they
+  gain a leading `/` once a host is set — independent of the order in which segments and the host are
+  added. `Uri.encodedPath()` exposes the percent-encoded path under a name shared with
   `Url.encodedPath()`.
 - `QueryParameters` is now a value type: `equals`/`hashCode`/`toString` compare the full ordered pair
   sequence. It is `Iterable<QueryParameter>` and projects to a first-value-wins map via `toMap()`,

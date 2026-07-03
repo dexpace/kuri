@@ -10,9 +10,6 @@ import org.dexpace.kuri.percent.PercentEncodeSets
 import kotlin.jvm.JvmName
 import kotlin.jvm.JvmStatic
 
-/** The query-pair resource bound: at most this many pairs are materialized (§10.5). */
-internal const val MAX_PAIRS: Int = 1000
-
 /** The `&` that joins pairs and splits the raw query (SPEC §10.2.1, §10.3.3). */
 private const val PAIR_SEPARATOR: String = "&"
 
@@ -183,15 +180,14 @@ public class QueryParameters internal constructor(
      * Pairs join with `&`; each emits `encodeName(name)` followed by `= encodeValue(value)` only
      * when `value` is non-`null`. `+` is never specially encoded, and the null-vs-empty distinction
      * is preserved, so a query needing no escaping round-trips exactly (e.g. `===3===`).
+     * Serialization is total: a snapshot of any size serializes, so [toString] never fails.
      *
      * @return the raw query string (without a leading `?`); `""` when [isEmpty].
      */
-    public fun toQueryString(): String {
-        check(entries.size <= MAX_PAIRS) { "pair count exceeds the parse bound" }
-        return entries.joinToString(PAIR_SEPARATOR) { (name, value) ->
+    public fun toQueryString(): String =
+        entries.joinToString(PAIR_SEPARATOR) { (name, value) ->
             encodeName(name) + (value?.let { VALUE_SEPARATOR + encodeValue(it) } ?: "")
         }
-    }
 
     /**
      * Iterates the decoded pairs in appearance order, duplicates included (SPEC §10.3).
@@ -199,7 +195,7 @@ public class QueryParameters internal constructor(
      * @return an iterator over each `(name, value?)` pair as a [QueryParameter], in order.
      */
     public override operator fun iterator(): Iterator<QueryParameter> =
-        entries.map { (name, value) -> QueryParameter(name, value) }.iterator()
+        entries.asSequence().map { (name, value) -> QueryParameter(name, value) }.iterator()
 
     /**
      * A first-value-wins, insertion-ordered [Map] of the distinct names to their first value
@@ -270,25 +266,26 @@ public class QueryParameters internal constructor(
          * are percent-decoded with no plus-as-space. Order and duplicates are preserved,
          * and the sentinels hold (`""` -> one empty pair, `&` -> two empty pairs).
          *
-         * The pair count is bounded by [MAX_PAIRS]: once the cap is reached, parsing
-         * stops and no further pairs are recorded (this factory returns a value, not a `ParseResult`;
-         * the surfaced `LimitExceeded` failure of §10.5 is the caller's concern).
+         * Every pair in [query] is materialized: like the WHATWG `URLSearchParams` parser, this
+         * factory applies no pair-count cap and never truncates. Work and memory are linear in the
+         * query length — each pair consumes at least one input character — so hostile input is
+         * bounded by the string the caller already holds, not by any cap here.
          *
          * @param query the raw query string, with or without a single leading `?`.
-         * @return the decoded, ordered, duplicate-preserving snapshot, bounded by [MAX_PAIRS].
+         * @return the decoded, ordered, duplicate-preserving snapshot of every pair in [query].
          */
         @JvmStatic
         public fun parse(query: String): QueryParameters {
             val body = if (query.startsWith(QUERY_PREFIX)) query.substring(1) else query
             val pairs = ArrayList<Pair<String, String?>>()
             var pos = 0
-            while (pos <= body.length && pairs.size < MAX_PAIRS) {
+            while (pos <= body.length) {
                 val amp = nextSeparator(body, pos)
                 val eq = firstEquals(body, pos, amp)
                 pairs.add(splitPair(body, pos, amp, eq))
                 pos = amp + 1
             }
-            check(pairs.size <= MAX_PAIRS) { "parse exceeded the pair bound" }
+            check(pairs.size <= body.length + 1) { "pair count must stay linear in the query length" }
             return QueryParameters(pairs)
         }
 
