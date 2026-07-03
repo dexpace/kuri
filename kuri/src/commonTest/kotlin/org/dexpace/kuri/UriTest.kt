@@ -244,4 +244,14 @@ class UriTest {
         assertEquals(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0"), resolved.host)
         assertEquals("foo://[fe80::1%25eth0]/a/x", resolved.uriString)
     }
+
+    @Test
+    fun `resolve without explicit options still resolves a zoned base`() {
+        val base = Uri.parse("foo://[fe80::1%25eth0]/a/b", zoneOptions).getOrThrow()
+
+        val resolved = base.resolve("x").getOrThrow()
+
+        assertEquals(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0"), resolved.host)
+        assertEquals("foo://[fe80::1%25eth0]/a/x", resolved.uriString)
+    }
 }

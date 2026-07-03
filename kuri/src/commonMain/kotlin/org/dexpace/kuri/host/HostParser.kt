@@ -66,7 +66,9 @@ internal object HostParser {
      * @param profile selects the WHATWG (`Url`) or RFC 3986 (`Uri`) acceptance rules.
      * @param isSpecial whether the scheme is special; gates the `Url` domain/IPv4 pipeline ([HOST-3]).
      * @param isFile whether the scheme is `file`; an empty `file` host is permitted ([HOST-39]).
-     * @param allowIpv6ZoneId whether an RFC 6874 `%25` IPv6 zone id is accepted (default off, [HOST-17]).
+     * @param allowIpv6ZoneId whether an RFC 6874 `%25` IPv6 zone id is accepted (default off, [HOST-18]);
+     *   honored by the `Uri` profile only. The `Url` profile ignores it and always rejects a zone id,
+     *   since the WHATWG URL parser has no zone-id production ([HOST-17]).
      * @return the parsed [Host], or a [UriParseError]-tagged failure.
      */
     internal fun parse(
@@ -77,7 +79,7 @@ internal object HostParser {
         allowIpv6ZoneId: Boolean = false,
     ): ParseResult<Host> =
         if (profile.isWhatwg) {
-            parseUrlHost(input, isSpecial, isFile, allowIpv6ZoneId)
+            parseUrlHost(input, isSpecial, isFile)
         } else {
             parseUriHost(input, allowIpv6ZoneId)
         }
@@ -89,22 +91,18 @@ internal object HostParser {
         input: String,
         isSpecial: Boolean,
         isFile: Boolean,
-        allowIpv6ZoneId: Boolean,
     ): ParseResult<Host> =
         when {
-            input.firstOrNull() == BRACKET_OPEN -> parseBracketedUrl(input, allowIpv6ZoneId)
+            input.firstOrNull() == BRACKET_OPEN -> parseBracketedUrl(input)
             !isSpecial -> OpaqueHost.parse(input)
             input.isEmpty() -> if (isFile) ParseResult.Ok(Host.Empty) else ParseResult.Err(UriParseError.EmptyHost)
             else -> parseSpecialDomain(input)
         }
 
-    /** Parses a `Url` `[`…`]` literal strictly as IPv6: a missing `]` is fatal ([HOST-4]). */
-    private fun parseBracketedUrl(
-        input: String,
-        allowIpv6ZoneId: Boolean,
-    ): ParseResult<Host> =
+    /** Parses a `Url` `[`…`]` literal strictly as IPv6, rejecting any zone id; a missing `]` is fatal ([HOST-4]). */
+    private fun parseBracketedUrl(input: String): ParseResult<Host> =
         if (input.endsWith(BRACKET_CLOSE)) {
-            Ipv6.parse(bracketInterior(input), allowIpv6ZoneId)
+            Ipv6.parse(bracketInterior(input))
         } else {
             bracketError(input)
         }

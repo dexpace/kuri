@@ -11,6 +11,7 @@ import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.host.HostParser
 import org.dexpace.kuri.scheme.Scheme
+import org.dexpace.kuri.scheme.schemeColonIndex
 import org.dexpace.kuri.text.isAsciiAlpha
 import org.dexpace.kuri.text.isAsciiAlphanumeric
 import org.dexpace.kuri.text.isAsciiDigit
@@ -78,17 +79,17 @@ internal object UriParser {
             input.length > MAX_INPUT_LENGTH ->
                 ParseResult.Err(UriParseError.InputTooLong(input.length, MAX_INPUT_LENGTH))
 
-            else -> decomposeAndBuild(input, options.allowIpv6ZoneId)
+            else -> decomposeAndBuild(input, options)
         }
 
     /** Runs the structural decomposition ([decompose]) and then the component build ([buildComponents]). */
     private fun decomposeAndBuild(
         input: String,
-        allowIpv6ZoneId: Boolean,
+        options: ParseOptions,
     ): ParseResult<ParsedComponents> =
         when (val sections = decompose(input)) {
             is ParseResult.Err -> sections
-            is ParseResult.Ok -> buildComponents(sections.value, allowIpv6ZoneId)
+            is ParseResult.Ok -> buildComponents(sections.value, options)
         }
 
     // --- structural decomposition (Appendix B, [PARSE-7]/[PARSE-14]/[PARSE-21]) -------------------
@@ -135,11 +136,9 @@ internal object UriParser {
      * precedes any `/` ([PARSE-15]). A present-but-ill-formed candidate is fatal ([PARSE-16]/[ERR-9]).
      */
     private fun splitScheme(hier: String): SchemeSplit {
-        val colon = hier.indexOf(':')
-        val slash = hier.indexOf('/')
-        val hasCandidate = colon >= 0 && (slash < 0 || colon < slash)
+        val colon = schemeColonIndex(hier)
         return when {
-            !hasCandidate -> SchemeSplit(scheme = null, restStart = 0, error = null)
+            colon < 0 -> SchemeSplit(scheme = null, restStart = 0, error = null)
             else -> validateCandidate(hier, colon)
         }
     }
@@ -226,9 +225,9 @@ internal object UriParser {
     /** Parses the authority (when present), then finishes the components; a host/port failure is fatal. */
     private fun buildComponents(
         sections: Sections,
-        allowIpv6ZoneId: Boolean,
+        options: ParseOptions,
     ): ParseResult<ParsedComponents> =
-        when (val authority = parseAuthority(sections, allowIpv6ZoneId)) {
+        when (val authority = parseAuthority(sections, options)) {
             is ParseResult.Err -> authority
             is ParseResult.Ok -> finishComponents(sections, authority.value)
         }
@@ -236,25 +235,25 @@ internal object UriParser {
     /** Parses the authority text into credentials, host, and port, or yields `null` when no `//` was present. */
     private fun parseAuthority(
         sections: Sections,
-        allowIpv6ZoneId: Boolean,
+        options: ParseOptions,
     ): ParseResult<Authority?> =
         when (val authority = sections.authority) {
             null -> ParseResult.Ok(null)
-            else -> parsePresentAuthority(authority, sections.authorityStart, allowIpv6ZoneId)
+            else -> parsePresentAuthority(authority, sections.authorityStart, options)
         }
 
     /** Splits userinfo from host:port at the LAST `@` ([PARSE-44]); a forbidden userinfo unit is fatal. */
     private fun parsePresentAuthority(
         authority: String,
         authorityStart: Int,
-        allowIpv6ZoneId: Boolean,
+        options: ParseOptions,
     ): ParseResult<Authority?> {
         require(authorityStart >= 0) { "authority start must be known: $authorityStart" }
         val at = authority.lastIndexOf('@')
         val userinfo = if (at >= 0) authority.substring(0, at) else ""
         val hostPort = if (at >= 0) authority.substring(at + 1) else authority
         return when (val error = rawError(userinfo, authorityStart)) {
-            null -> buildAuthority(userinfo, hostPort, allowIpv6ZoneId)
+            null -> buildAuthority(userinfo, hostPort, options)
             else -> ParseResult.Err(error)
         }
     }
@@ -263,13 +262,13 @@ internal object UriParser {
     private fun buildAuthority(
         userinfo: String,
         hostPort: String,
-        allowIpv6ZoneId: Boolean,
+        options: ParseOptions,
     ): ParseResult<Authority?> {
         val (username, password) = splitUserinfo(userinfo)
         val (host, portText) = splitHostPort(hostPort)
         return when (
             val parsed =
-                HostParser.parse(host, ParseProfile.URI, isSpecial = false, allowIpv6ZoneId = allowIpv6ZoneId)
+                HostParser.parse(host, ParseProfile.URI, isSpecial = false, allowIpv6ZoneId = options.allowIpv6ZoneId)
         ) {
             is ParseResult.Err -> parsed
             is ParseResult.Ok -> attachPort(username, password, parsed.value, portText)

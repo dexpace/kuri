@@ -230,11 +230,13 @@ class HostParserTest {
     // --- RFC 6874 zone identifiers ([HOST-17]/[HOST-18]) -----------------------------
 
     @Test
-    fun `parse accepts an opted-in zone id in the Url profile`() {
+    fun `the Url profile rejects a zone id even when the flag is set`() {
         val result =
             HostParser.parse("[fe80::1%25eth0]", ParseProfile.URL, isSpecial = true, allowIpv6ZoneId = true)
 
-        assertEquals(ParseResult.Ok(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0")), result)
+        val err = assertIs<ParseResult.Err>(result)
+        val cause = assertIs<UriParseError.InvalidHost>(err.error)
+        assertEquals(HostError.ZoneIdRejected, cause.reason)
     }
 
     @Test

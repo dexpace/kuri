@@ -21,21 +21,13 @@ import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.serialize.Serializer
 import org.dexpace.kuri.serialize.UriNormalizer
+import org.dexpace.kuri.serialize.guardRecomposedUriPath
 import kotlin.jvm.JvmName
 import kotlin.jvm.JvmOverloads
 import kotlin.jvm.JvmStatic
 
 /** The path-segment separator shared by the encoded-path projection (RFC 3986 §3.3). */
 private const val SLASH: String = "/"
-
-/** A leading `//` opens an authority; a path starting with it re-parses as a spurious host (RFC 3986 §3.3). */
-private const val DOUBLE_SLASH: String = "//"
-
-/** The RFC 3986 §4.2 `/.` prefix that keeps a `//`-leading, authority-less path from opening an authority. */
-private const val LEADING_DOT_GUARD: String = "/."
-
-/** The RFC 3986 §4.2 `./` prefix that keeps a colon-bearing first segment from re-parsing as a scheme. */
-private const val COLON_SEGMENT_GUARD: String = "./"
 
 /**
  * An immutable, preserve-by-default RFC 3986 generic-URI value (SPEC §3, §11; RFC 3986).
@@ -154,14 +146,15 @@ public class Uri internal constructor(
      * result is a [ParseResult.Err].
      *
      * @param reference the (possibly relative) reference to resolve.
-     * @param options the opt-in parsing configuration applied to the resolved reference, so a base
-     *   with a zone id (or other opt-in feature) round-trips through resolution ([HOST-18]).
+     * @param options the opt-in parsing configuration applied to the resolved reference; defaults to
+     *   the options this base's own components imply, so a zoned base resolves without the caller
+     *   re-supplying options ([HOST-18]).
      * @return [ParseResult.Ok] with the resolved [Uri], or [ParseResult.Err] when resolution fails.
      */
     @JvmOverloads
     public fun resolve(
         reference: String,
-        options: ParseOptions = ParseOptions.DEFAULT,
+        options: ParseOptions = roundTripOptions(components.host),
     ): ParseResult<Uri> =
         when (val resolved = Resolver.resolve(uriString, reference, options)) {
             is ParseResult.Err -> resolved
@@ -296,6 +289,7 @@ public class Uri internal constructor(
         private var encodedPath: String = ""
         private var query: String? = null
         private var fragment: String? = null
+        private var options: ParseOptions = ParseOptions.DEFAULT
 
         /** Creates an empty builder; set at least a [host] or a non-empty [encodedPath] before [build]. */
         public constructor()
@@ -309,6 +303,7 @@ public class Uri internal constructor(
             encodedPath = source.path
             query = source.query
             fragment = source.fragment
+            options = roundTripOptions(source.components.host)
         }
 
         /**
@@ -404,7 +399,7 @@ public class Uri internal constructor(
          */
         public fun build(): Uri {
             validateComposable()
-            return UriParser.parse(recompose()).fold(
+            return UriParser.parse(recompose(), options).fold(
                 onOk = { Uri(it) },
                 onErr = { throw UriSyntaxException(it) },
             )
@@ -431,30 +426,10 @@ public class Uri internal constructor(
             val sb = StringBuilder()
             if (scheme != null) sb.append(scheme).append(':')
             if (host != null) appendAuthority(sb)
-            sb.append(guardedPath())
+            sb.append(guardRecomposedUriPath(scheme, host != null, encodedPath))
             if (query != null) sb.append('?').append(query)
             if (fragment != null) sb.append('#').append(fragment)
             return sb.toString()
-        }
-
-        /**
-         * The [encodedPath] with the RFC 3986 §4.2 dot-segment guard that stops the re-parse from
-         * reinterpreting it: `/.` before a `//`-leading authority-less path, `./` before a
-         * colon-bearing first segment that would otherwise read as a scheme.
-         */
-        private fun guardedPath(): String =
-            when {
-                host != null -> encodedPath
-                encodedPath.startsWith(DOUBLE_SLASH) -> LEADING_DOT_GUARD + encodedPath
-                scheme == null && firstSegmentHasColon(encodedPath) -> COLON_SEGMENT_GUARD + encodedPath
-                else -> encodedPath
-            }
-
-        /** Mirrors [UriParser] scheme detection: a `:` before the first `/` reads the first segment as a scheme. */
-        private fun firstSegmentHasColon(path: String): Boolean {
-            val colon = path.indexOf(':')
-            val slash = path.indexOf('/')
-            return colon >= 0 && (slash < 0 || colon < slash)
         }
 
         /** Appends `//[userinfo@]host[:port]` for a present authority (RFC 3986 §3.2). */

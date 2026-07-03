@@ -11,6 +11,7 @@ import org.dexpace.kuri.idna.Idna
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSets
 import org.dexpace.kuri.scheme.Scheme
+import org.dexpace.kuri.scheme.schemeColonIndex
 
 /** First non-ASCII code point; a host carrying any point `>=` this is routed through IDNA. */
 private const val NON_ASCII_MIN: Int = 0x80
@@ -124,10 +125,8 @@ internal object IriMapping {
 
     /** A scheme is the prefix before a `:` that precedes any `/`, and only when it is a valid scheme. */
     private fun detectScheme(hier: String): String? {
-        val colon = hier.indexOf(':')
-        val slash = hier.indexOf('/')
-        val hasCandidate = colon >= 0 && (slash < 0 || colon < slash)
-        if (!hasCandidate) return null
+        val colon = schemeColonIndex(hier)
+        if (colon < 0) return null
         val candidate = hier.substring(0, colon)
         return if (Scheme.isValidScheme(candidate)) candidate else null
     }

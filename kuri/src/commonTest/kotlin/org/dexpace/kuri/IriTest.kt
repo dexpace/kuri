@@ -178,4 +178,12 @@ class IriTest {
 
         assertEquals("http://h/$grinning", Iri.toUnicode(uri))
     }
+
+    @Test
+    fun `renders a genuinely encoded replacement character for display`() {
+        // %EF%BF%BD is well-formed UTF-8 for U+FFFD, so it round-trips and must decode for display.
+        val uri = Uri.parse("http://h/%EF%BF%BD").getOrThrow()
+
+        assertEquals("http://h/" + Char(0xFFFD), Iri.toUnicode(uri))
+    }
 }

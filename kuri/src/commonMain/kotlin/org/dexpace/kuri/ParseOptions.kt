@@ -4,8 +4,26 @@
  */
 package org.dexpace.kuri
 
+import org.dexpace.kuri.host.Host
 import kotlin.jvm.JvmField
 import kotlin.jvm.JvmName
+
+/** A `ParseOptions` with the RFC 6874 zone-id opt-in enabled; the options a zoned value round-trips under. */
+internal val ZONE_ID_ENABLED: ParseOptions = ParseOptions.Builder().allowIpv6ZoneId(true).build()
+
+/** True when [this] host carries an RFC 6874 zone id — the sole feature whose re-parse needs an opt-in. */
+internal fun Host?.carriesZoneId(): Boolean = this is Host.Ipv6 && zoneId != null
+
+/**
+ * The [ParseOptions] a value whose authority is [host] needs to round-trip through serialize-then-parse.
+ *
+ * A value's opt-in features are fully reflected in its stored components (today only a zone id on an
+ * IPv6 host), so the round-trip options are derived from [host] rather than stored on the value
+ * ([HOST-18]). Every future opt-in feature MUST likewise be reflected in the stored components for
+ * this derivation to remain complete.
+ */
+internal fun roundTripOptions(host: Host?): ParseOptions =
+    if (host.carriesZoneId()) ZONE_ID_ENABLED else ParseOptions.DEFAULT
 
 /**
  * Immutable, opt-in parsing configuration accepted by the [Uri] parse and resolve factories

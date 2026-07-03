@@ -5,12 +5,15 @@
 package org.dexpace.kuri.parser
 
 import org.dexpace.kuri.ParseOptions
+import org.dexpace.kuri.ZONE_ID_ENABLED
+import org.dexpace.kuri.carriesZoneId
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.host.Ipv4
 import org.dexpace.kuri.host.Ipv6
 import org.dexpace.kuri.scheme.Scheme
+import org.dexpace.kuri.scheme.schemeColonIndex
 
 /** A generous upper bound on a path/URI length used only for defensive assertions (mirrors the parser cap). */
 private const val MAX_PATH_LENGTH: Int = 8192
@@ -137,11 +140,18 @@ internal object Resolver {
     ): ParsedComponents {
         require(base.scheme != null) { "structured resolution requires an absolute base scheme" }
         val target = transformReferences(partsOf(base), partsOf(reference))
-        return when (val parsed = UriParser.parse(recompose(target))) {
+        return when (val parsed = UriParser.parse(recompose(target), structuredOptions(base, reference))) {
             is ParseResult.Ok -> parsed.value
             is ParseResult.Err -> error("resolved reference is not a valid URI: ${parsed.error}")
         }
     }
+
+    /** Derives the round-trip [ParseOptions] for a structured resolve: a zone id on either input opts in. */
+    private fun structuredOptions(
+        base: ParsedComponents,
+        reference: ParsedComponents,
+    ): ParseOptions =
+        if (base.host.carriesZoneId() || reference.host.carriesZoneId()) ZONE_ID_ENABLED else ParseOptions.DEFAULT
 
     // --- §5.2.2 Transform References (STRICT) -----------------------------------------------------
 
@@ -333,11 +343,9 @@ internal object Resolver {
 
     /** Detects a leading `scheme:` exactly as [UriParser] does (a `:` before any `/`, valid per §3.1). */
     private fun splitSchemePrefix(hier: String): Pair<String?, String> {
-        val colon = hier.indexOf(':')
-        val slash = hier.indexOf('/')
-        val hasCandidate = colon >= 0 && (slash < 0 || colon < slash)
+        val colon = schemeColonIndex(hier)
         return when {
-            hasCandidate && Scheme.isValidScheme(hier.substring(0, colon)) ->
+            colon >= 0 && Scheme.isValidScheme(hier.substring(0, colon)) ->
                 Pair(hier.substring(0, colon), hier.substring(colon + 1))
 
             else -> Pair(null, hier)

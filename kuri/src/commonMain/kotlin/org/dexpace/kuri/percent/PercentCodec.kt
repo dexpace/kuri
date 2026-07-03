@@ -111,8 +111,9 @@ internal object PercentCodec {
      * transform; every other run and code unit is preserved literally.
      *
      * A decode run is a maximal run of *consecutive* non-ASCII triplets (octet `>= 0x80`), decoded to
-     * text ONLY when those octets form valid UTF-8 (their [decodeToString] carries no U+FFFD
-     * replacement); an invalid-UTF-8 run stays literal. An ASCII triplet (`%2F`, `%20`, `%41`)
+     * text ONLY when those octets form valid UTF-8 (re-encoding the decoded text reproduces the
+     * original octets, so a genuinely-encoded U+FFFD survives); an invalid-UTF-8 run stays literal.
+     * An ASCII triplet (`%2F`, `%20`, `%41`)
      * delimits runs and is preserved literally on its own, so reserved delimiters and structure
      * survive intact — `%20%C3%BC` yields `%20` followed by the decoded character, not a wholly
      * literal run. Total: it never throws and the result is never longer than [input].
@@ -168,7 +169,10 @@ internal object PercentCodec {
             target++
         }
         val decoded = bytes.decodeToString()
-        if (!decoded.contains(REPLACEMENT_CHARACTER)) {
+        // A run decodes only when it is well-formed UTF-8: re-encoding the decoded text must
+        // reproduce the exact octets. This preserves a genuinely-encoded U+FFFD (which round-trips)
+        // instead of misreading it as the replacement char that decodeToString emits for bad input.
+        if (decoded.encodeToByteArray().contentEquals(bytes)) {
             out.append(decoded)
         } else {
             out.appendRange(input, start, end)

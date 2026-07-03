@@ -144,4 +144,11 @@ class PercentCodecTest {
         assertEquals("abc/def", PercentCodec.decodeNonAscii("abc/def"))
         assertEquals("100%", PercentCodec.decodeNonAscii("100%"))
     }
+
+    @Test
+    fun `decodeNonAscii decodes a genuinely encoded replacement character`() {
+        // U+FFFD encodes to the well-formed UTF-8 run %EF%BF%BD, so it round-trips and must decode.
+        assertEquals(replacement, PercentCodec.decodeNonAscii("%EF%BF%BD"))
+        assertEquals("a${replacement}b", PercentCodec.decodeNonAscii("a%EF%BF%BDb"))
+    }
 }

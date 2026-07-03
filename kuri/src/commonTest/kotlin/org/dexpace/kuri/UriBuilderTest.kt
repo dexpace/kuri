@@ -6,6 +6,7 @@ package org.dexpace.kuri
 
 import org.dexpace.kuri.error.getOrNull
 import org.dexpace.kuri.error.getOrThrow
+import org.dexpace.kuri.host.Host
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -275,5 +276,17 @@ class UriBuilderTest {
         // a parsed "a:b" has scheme "a", and an authority value serializes unchanged.
         assertEquals("a", parseOk("a:b").scheme)
         assertEquals("http://h/p", parseOk("http://h/p").uriString)
+    }
+
+    @Test
+    fun `newBuilder then build round-trips a zoned ipv6 uri`() {
+        val zoneOptions = ParseOptions.Builder().allowIpv6ZoneId(true).build()
+        val original = Uri.parse("foo://[fe80::1%25eth0]/a", zoneOptions).getOrThrow()
+
+        val rebuilt = original.newBuilder().build()
+
+        assertEquals(original, rebuilt)
+        assertEquals("foo://[fe80::1%25eth0]/a", rebuilt.uriString)
+        assertEquals(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0"), rebuilt.host)
     }
 }
