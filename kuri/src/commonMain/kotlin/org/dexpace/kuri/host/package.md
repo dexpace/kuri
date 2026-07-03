@@ -11,6 +11,7 @@ exhaustively. Its variants are [Host.RegName] (a registered name or canonical do
 authority at all and must not be conflated with [Host.Empty].
 
 Stored values are always already-canonical and never carry the surrounding `[`/`]` brackets —
-bracketing is a serialization concern. [Host.serialize] renders a host back to its canonical
-authority text, reapplying the RFC 3986 §3.2.2 / WHATWG §11.2 bracketing rules for IPv6 and
-IP-future literals.
+bracketing is a serialization concern. A host renders back to its canonical authority text via the
+[Host.asText] member (or the equivalent [Host.serialize] extension), reapplying the RFC 3986
+§3.2.2 / WHATWG §11.2 bracketing rules for IPv6 and IP-future literals. For the numeric form,
+[Host.Ipv4.octets] exposes the four structured bytes, high-order octet first.

@@ -8,7 +8,6 @@ import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.error.HostError
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
-import org.dexpace.kuri.error.isOk
 import org.dexpace.kuri.idna.Idna
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.text.isAsciiAlphanumeric

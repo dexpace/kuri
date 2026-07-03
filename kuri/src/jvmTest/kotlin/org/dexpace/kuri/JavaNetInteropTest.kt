@@ -4,8 +4,6 @@
  */
 package org.dexpace.kuri
 
-import org.dexpace.kuri.error.getOrThrow
-import org.dexpace.kuri.error.isOk
 import java.net.URI
 import java.net.URL
 import kotlin.test.Test

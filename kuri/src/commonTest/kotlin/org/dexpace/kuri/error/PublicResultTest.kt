@@ -7,11 +7,14 @@ package org.dexpace.kuri.error
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
- * Behavioural tests for the public result helpers ([getOrThrow], [fold]) and [UriSyntaxException].
+ * Behavioural tests for the public result members ([ParseResult.getOrThrow], [ParseResult.getOrNull],
+ * [ParseResult.isOk]), the [fold] helper, [UriParseError.message], and [UriSyntaxException].
  */
 internal class PublicResultTest {
     private companion object {
@@ -63,6 +66,39 @@ internal class PublicResultTest {
 
         // assert
         assertEquals("err:$error", folded)
+    }
+
+    @Test
+    fun `isOk and getOrNull and getOrThrow return the value for an Ok`() {
+        // arrange
+        val result: ParseResult<Int> = ParseResult.Ok(7)
+
+        // act + assert
+        assertTrue(result.isOk())
+        assertEquals(7, result.getOrNull())
+        assertEquals(7, result.getOrThrow())
+    }
+
+    @Test
+    fun `isOk and getOrNull report absence for an Err`() {
+        // arrange
+        val result: ParseResult<Int> = ParseResult.Err(UriParseError.MissingScheme)
+
+        // act + assert
+        assertFalse(result.isOk())
+        assertNull(result.getOrNull())
+    }
+
+    @Test
+    fun `message renders a non-blank human string for each representative variant`() {
+        // arrange + act + assert
+        assertEquals(
+            "invalid scheme at offset $OFFSET: leading digit",
+            UriParseError.InvalidScheme(OFFSET, "leading digit").message,
+        )
+        assertEquals("missing required scheme", UriParseError.MissingScheme.message)
+        assertEquals("invalid port: \"99999\"", UriParseError.InvalidPort("99999").message)
+        assertTrue(UriParseError.EmptyHost.message.isNotBlank(), "every variant renders a message")
     }
 
     @Test

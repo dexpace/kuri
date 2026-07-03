@@ -7,10 +7,11 @@ package org.dexpace.kuri
 import org.dexpace.kuri.error.HostError
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
-import org.dexpace.kuri.error.getOrNull
+import org.dexpace.kuri.error.UriSyntaxException
 import org.dexpace.kuri.host.Host
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
@@ -67,6 +68,48 @@ class UrlTest {
     fun `canParse reflects parse success`() {
         assertTrue(Url.canParse("https://example.com/"))
         assertFalse(Url.canParse("http://["))
+    }
+
+    @Test
+    fun `parseOrNull with a base resolves a relative reference`() {
+        val base = parseOk("http://a/b/c/d")
+
+        assertEquals("http://a/b/g", Url.parseOrNull("../g", base)?.href)
+    }
+
+    @Test
+    fun `parseOrNull with a base returns null when the reference does not resolve`() {
+        val base = parseOk("http://a/b/c/d")
+
+        assertNull(Url.parseOrNull("http://[", base))
+    }
+
+    @Test
+    fun `canParse with a base reflects whether the reference resolves`() {
+        val base = parseOk("http://a/b/c/d")
+
+        assertTrue(Url.canParse("../g", base))
+        assertFalse(Url.canParse("http://[", base))
+    }
+
+    @Test
+    fun `parseOrThrow returns the value on success`() {
+        assertEquals("https://example.com/", Url.parseOrThrow("https://example.com/").href)
+    }
+
+    @Test
+    fun `parseOrThrow resolves a relative reference against a base`() {
+        val base = parseOk("http://a/b/c/d")
+
+        assertEquals("http://a/b/g", Url.parseOrThrow("../g", base).href)
+    }
+
+    @Test
+    fun `parseOrThrow throws UriSyntaxException carrying the structured error on a malformed input`() {
+        val exception = assertFailsWith<UriSyntaxException> { Url.parseOrThrow("http://[") }
+
+        assertTrue(exception.message?.isNotBlank() == true, "the exception carries a human-readable message")
+        assertEquals(exception.error.message, exception.message)
     }
 
     @Test

@@ -25,3 +25,6 @@ gradle-app.setting
 
 # Kotlin build cache
 .kotlin/
+
+# Machine-specific SDK/toolchain locations (e.g. the Android sdk.dir)
+local.properties

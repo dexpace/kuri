@@ -10,6 +10,8 @@ plugins {
     alias(libs.plugins.detekt)
     alias(libs.plugins.kover)
     alias(libs.plugins.binary.compat)
+    alias(libs.plugins.dokka)
+    `maven-publish`
 }
 
 group = "org.dexpace"
@@ -109,6 +111,13 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
+        // The JVM test set also holds a Java interop test (src/jvmTest/java) that guards the
+        // documented Java call sites; it uses JUnit 4 directly, so bind kotlin.test to the JUnit 4
+        // backend and put JUnit 4 on the JVM test classpath.
+        jvmTest.dependencies {
+            implementation(kotlin("test-junit"))
+            implementation("junit:junit:4.13.2")
+        }
         // Instrumented tests run under AndroidJUnitRunner (JUnit4), so bind kotlin.test to JUnit4
         // and pull in the AndroidX test runtime that provides the runner.
         getByName("androidDeviceTest").dependencies {
@@ -116,6 +125,20 @@ kotlin {
             implementation("androidx.test:runner:1.6.2")
             implementation("androidx.test.ext:junit:1.2.1")
         }
+    }
+}
+
+// API reference (Dokka v2). Pull the per-package `package.md` prose into the generated site so each
+// public package carries its overview. `configureEach` applies the includes across every source set;
+// the package docs describe the common packages that all platform source sets share.
+dokka {
+    dokkaSourceSets.configureEach {
+        includes.from(
+            "src/commonMain/kotlin/org/dexpace/kuri/package.md",
+            "src/commonMain/kotlin/org/dexpace/kuri/error/package.md",
+            "src/commonMain/kotlin/org/dexpace/kuri/host/package.md",
+            "src/commonMain/kotlin/org/dexpace/kuri/query/package.md",
+        )
     }
 }
 
@@ -139,6 +162,37 @@ kover {
         verify {
             rule {
                 minBound(80)
+            }
+        }
+    }
+}
+
+// The Kotlin Multiplatform plugin auto-registers one Maven publication per target (plus the root
+// `kotlinMultiplatform` publication); here we only attach the shared POM metadata every published
+// artifact needs. Coordinates come from the module `group`/`version` above.
+publishing {
+    publications.withType<MavenPublication>().configureEach {
+        pom {
+            name.set("kuri")
+            description.set("A standards-faithful URI and URL library for Kotlin and Java.")
+            url.set("https://github.com/dexpace/kuri")
+            licenses {
+                license {
+                    name.set("MIT License")
+                    url.set("https://opensource.org/licenses/MIT")
+                    distribution.set("repo")
+                }
+            }
+            developers {
+                developer {
+                    id.set("OmarAljarrah")
+                    name.set("Omar Aljarrah")
+                }
+            }
+            scm {
+                url.set("https://github.com/dexpace/kuri")
+                connection.set("scm:git:https://github.com/dexpace/kuri.git")
+                developerConnection.set("scm:git:ssh://git@github.com/dexpace/kuri.git")
             }
         }
     }

@@ -5,7 +5,6 @@
 package org.dexpace.kuri
 
 import org.dexpace.kuri.error.UriSyntaxException
-import org.dexpace.kuri.error.getOrNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

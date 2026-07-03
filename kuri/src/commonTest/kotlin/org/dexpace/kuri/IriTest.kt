@@ -7,8 +7,6 @@ package org.dexpace.kuri
 import org.dexpace.kuri.error.HostError
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
-import org.dexpace.kuri.error.getOrThrow
-import org.dexpace.kuri.error.isOk
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.idna.Idna
 import kotlin.test.Test

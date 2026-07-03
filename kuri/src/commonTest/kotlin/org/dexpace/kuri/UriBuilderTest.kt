@@ -5,8 +5,6 @@
 package org.dexpace.kuri
 
 import org.dexpace.kuri.error.UriSyntaxException
-import org.dexpace.kuri.error.getOrNull
-import org.dexpace.kuri.error.getOrThrow
 import org.dexpace.kuri.host.Host
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -314,5 +312,43 @@ class UriBuilderTest {
                 .host("[fe80::1%25eth0]")
                 .build()
         }
+    }
+
+    @Test
+    fun `addPathSegment percent-encodes a slash so it stays within one segment`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("foo")
+                .host("h")
+                .addPathSegment("a b")
+                .addPathSegment("c/d")
+                .build()
+
+        assertEquals("foo://h/a%20b/c%2Fd", uri.uriString)
+        assertEquals(listOf("a b", "c/d"), uri.pathSegments)
+    }
+
+    @Test
+    fun `addEncodedPathSegment appends the segment verbatim`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("foo")
+                .host("h")
+                .addEncodedPathSegment("a")
+                .addEncodedPathSegment("b%20c")
+                .build()
+
+        assertEquals("foo://h/a/b%20c", uri.uriString)
+        assertEquals(listOf("a", "b c"), uri.pathSegments)
+    }
+
+    @Test
+    fun `encodedPath is an alias of path`() {
+        val uri = parseOk("http://h/a/b%20c")
+
+        assertEquals(uri.path, uri.encodedPath)
+        assertEquals("/a/b%20c", uri.encodedPath)
     }
 }

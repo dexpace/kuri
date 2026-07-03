@@ -9,9 +9,9 @@ private const val ZONE_PREFIX: String = "%25"
 
 /**
  * Serializes a [Host] to its authority text, applying the §11.2 / RFC 3986 §3.2.2 bracketing rules
- * (SPEC [NORM-15] step 2, [NORM-16]; WHATWG URL serializer "host serializer").
+ * (WHATWG URL serializer "host serializer").
  *
- * The stored host never carries brackets ([MODEL-18]); they are a serialization concern reapplied
+ * The stored host never carries brackets; they are a serialization concern reapplied
  * here. The mapping is total over the sealed [Host] surface:
  *
  * - [Host.RegName] / [Host.Opaque] — the stored value verbatim (already canonical per §7).
@@ -41,7 +41,11 @@ internal fun serializeHost(host: Host): String =
  * RFC 3986 §3.2.2 bracketing rules so callers can turn a parsed [Host] back into its canonical
  * string form. The result carries brackets for [Host.Ipv6] / [Host.IpFuture] and none otherwise.
  *
+ * Equivalent to the [Host.asText] member; both coexist so Kotlin callers keep the extension
+ * form while the member stays discoverable on a [Host] value (and from Java).
+ *
  * @return the host's canonical authority text.
+ * @see Host.asText
  */
 public fun Host.serialize(): String = serializeHost(this)
 
