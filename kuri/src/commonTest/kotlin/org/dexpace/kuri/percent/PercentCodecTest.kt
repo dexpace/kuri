@@ -123,9 +123,13 @@ class PercentCodecTest {
     }
 
     @Test
-    fun `decodeNonAscii keeps a run literal when it mixes ascii and non-ascii octets`() {
-        // %20 (ascii) abuts the ü run, so the maximal triplet run is mixed and stays literal.
-        assertEquals("%20%C3%BC", PercentCodec.decodeNonAscii("%20%C3%BC"))
+    fun `decodeNonAscii delimits decode runs by an abutting ascii triplet`() {
+        // %20 (ascii) delimits the run: it is preserved literally and the ü run decodes on its own.
+        assertEquals("%20" + Char(0x00FC), PercentCodec.decodeNonAscii("%20%C3%BC"))
+        // A leading non-ascii run followed by an ascii triplet: the run decodes, %2F stays literal.
+        assertEquals(Char(0x00FC).toString() + "x%2F", PercentCodec.decodeNonAscii("%C3%BCx%2F"))
+        // An ascii triplet between two non-ascii runs: both runs decode, %2F stays literal.
+        assertEquals(Char(0x00DF).toString() + "%2F" + Char(0x00FC), PercentCodec.decodeNonAscii("%C3%9F%2F%C3%BC"))
     }
 
     @Test

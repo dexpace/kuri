@@ -110,11 +110,12 @@ internal object PercentCodec {
      * Decodes only the *non-ASCII* percent-encoded runs of [input], for the RFC 3987 §3.2 display
      * transform; every other run and code unit is preserved literally.
      *
-     * A maximal run of `%HH` triplets is decoded to text ONLY when every octet in the run is
-     * non-ASCII (`>= 0x80`) AND the octets form valid UTF-8 (their [decodeToString] carries no U+FFFD
-     * replacement); otherwise the run's triplets are emitted verbatim. An ASCII triplet (`%2F`,
-     * `%20`, `%41`) or an invalid-UTF-8 run therefore stays literal, so reserved delimiters and
-     * structure survive intact. Total: it never throws and the result is never longer than [input].
+     * A decode run is a maximal run of *consecutive* non-ASCII triplets (octet `>= 0x80`), decoded to
+     * text ONLY when those octets form valid UTF-8 (their [decodeToString] carries no U+FFFD
+     * replacement); an invalid-UTF-8 run stays literal. An ASCII triplet (`%2F`, `%20`, `%41`)
+     * delimits runs and is preserved literally on its own, so reserved delimiters and structure
+     * survive intact — `%20%C3%BC` yields `%20` followed by the decoded character, not a wholly
+     * literal run. Total: it never throws and the result is never longer than [input].
      *
      * @param input text that may contain percent-encoded triplets.
      * @return [input] with its non-ASCII UTF-8 triplet runs decoded to text; other runs kept literal.
@@ -135,9 +136,11 @@ internal object PercentCodec {
     }
 
     /**
-     * Decodes the maximal triplet run at [start] to text when every octet is non-ASCII and the run
-     * is valid UTF-8; otherwise appends the run's literal triplets `input[start, end)` verbatim
-     * ([PCT-25] gathering rules, applied display-only). Returns the index just past the run.
+     * Decodes the maximal run of *consecutive non-ASCII* triplets starting at [start] to text when
+     * that run is valid UTF-8; otherwise appends the run's literal triplets `input[start, end)`
+     * verbatim. An ASCII triplet at [start] ends no run: it is emitted literally on its own so it
+     * delimits adjacent non-ASCII runs ([PCT-25] gathering, applied display-only). Returns the index
+     * just past what was emitted.
      */
     private fun appendNonAsciiRun(
         out: StringBuilder,
@@ -146,30 +149,38 @@ internal object PercentCodec {
     ): Int {
         require(input[start] == '%') { "run must start at a percent sign" }
         var end = start
-        while (end < input.length && input[end] == '%' && hasHexPairAt(input, end)) {
+        while (end < input.length && isNonAsciiTripletAt(input, end)) {
             end += TRIPLET_LENGTH
         }
+        if (end == start) {
+            // The triplet at start is an ASCII octet; it delimits runs and is preserved on its own.
+            out.appendRange(input, start, start + TRIPLET_LENGTH)
+            return start + TRIPLET_LENGTH
+        }
         val count = (end - start) / TRIPLET_LENGTH
-        check(count >= 1) { "triplet run must contain at least one triplet" }
+        check(count >= 1) { "a decode run must contain at least one non-ASCII triplet" }
         val bytes = ByteArray(count)
-        var allNonAscii = true
         var source = start
         var target = 0
         while (target < count) {
-            val octet = tripletByte(input, source)
-            if (octet < NON_ASCII_MIN) allNonAscii = false
-            bytes[target] = octet.toByte()
+            bytes[target] = tripletByte(input, source).toByte()
             source += TRIPLET_LENGTH
             target++
         }
-        val decoded = if (allNonAscii) bytes.decodeToString() else null
-        if (decoded != null && !decoded.contains(REPLACEMENT_CHARACTER)) {
+        val decoded = bytes.decodeToString()
+        if (!decoded.contains(REPLACEMENT_CHARACTER)) {
             out.append(decoded)
         } else {
             out.appendRange(input, start, end)
         }
         return end
     }
+
+    /** True when a non-ASCII triplet (`%HH` with octet `>= 0x80`) begins at [i]; [i] must be in bounds. */
+    private fun isNonAsciiTripletAt(
+        input: String,
+        i: Int,
+    ): Boolean = input[i] == '%' && hasHexPairAt(input, i) && tripletByte(input, i) >= NON_ASCII_MIN
 
     /**
      * Returns the index of the first code unit that requires encoding under [set], or `-1` when

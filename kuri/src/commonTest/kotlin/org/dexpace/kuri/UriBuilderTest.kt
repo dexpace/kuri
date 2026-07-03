@@ -5,10 +5,12 @@
 package org.dexpace.kuri
 
 import org.dexpace.kuri.error.getOrNull
+import org.dexpace.kuri.error.getOrThrow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.test.fail
 
 class UriBuilderTest {
@@ -235,5 +237,43 @@ class UriBuilderTest {
 
         assertEquals(original, rebuilt)
         assertEquals("a/b:c/d", rebuilt.uriString)
+    }
+
+    @Test
+    fun `normalizing a colon-first path re-applies the guard so no phantom scheme returns`() {
+        // The builder guards "a:b" to "./a:b"; normalized() strips the "./" dot-segment, which would
+        // leave the stored path re-parsing as scheme "a" — the serializer must re-apply the guard.
+        val u =
+            Uri
+                .Builder()
+                .encodedPath("a:b")
+                .build()
+                .normalized()
+
+        assertTrue(u.uriString.startsWith("./"), "the serialized normalized value keeps the ./ guard")
+        assertNull(Uri.parse(u.uriString).getOrThrow().scheme, "no phantom scheme is reintroduced")
+    }
+
+    @Test
+    fun `normalizing a double-slash path re-applies the guard so no phantom authority returns`() {
+        // The builder guards "//x/y" to "/.//x/y"; normalized() strips the "/." dot-segment, which
+        // would leave a "//"-leading stored path re-parsing with an authority — reguard on output.
+        val u =
+            Uri
+                .Builder()
+                .encodedPath("//x/y")
+                .build()
+                .normalized()
+
+        assertTrue(u.uriString.startsWith("/."), "the serialized normalized value keeps the /. guard")
+        assertNull(Uri.parse(u.uriString).getOrThrow().host, "no phantom authority is reintroduced")
+    }
+
+    @Test
+    fun `a normally-parsed colon uri keeps its scheme and is left unguarded`() {
+        // Parsing never produces the unsafe scheme-less colon-first state, so the guard never fires:
+        // a parsed "a:b" has scheme "a", and an authority value serializes unchanged.
+        assertEquals("a", parseOk("a:b").scheme)
+        assertEquals("http://h/p", parseOk("http://h/p").uriString)
     }
 }

@@ -20,6 +20,12 @@ private const val DOUBLE_SLASH: String = "//"
 private const val LEADING_DOT_GUARD: String = "/."
 
 /**
+ * The RFC 3986 §4.2 dot-segment guard prepended to a scheme-less, authority-less path whose first
+ * segment contains a colon, so it does not re-parse as a scheme ([NORM-18]).
+ */
+private const val COLON_SEGMENT_GUARD: String = "./"
+
+/**
  * The §11.2 recomposition of stored components back into the canonical string (SPEC [NORM-15]..
  * [NORM-18], [NORM-30], [NORM-31]; RFC 3986 §5.3; WHATWG URL serializer).
  *
@@ -27,7 +33,9 @@ private const val LEADING_DOT_GUARD: String = "/."
  * profiles ([NORM-15]); the profiles differ only in the path rule and the (here identical) userinfo
  * rule. The `Url` branch follows the WHATWG URL serializer, including the `/.` guard for a
  * no-authority hierarchical path that begins `//`; the `Uri` branch follows RFC 3986 §5.3 over the
- * preserved (or explicitly normalized) components.
+ * preserved (or explicitly normalized) components and applies the same leading-`/.` guard plus the
+ * §4.2 `./` dot-segment guard for a scheme-less, authority-less colon-first path, so every serialized
+ * `Uri` (including `normalized()`/`resolve()` output) re-parses to the same structure.
  */
 internal object Serializer {
     /**
@@ -70,10 +78,33 @@ internal object Serializer {
         val sb = StringBuilder()
         if (c.scheme != null) sb.append(c.scheme).append(':')
         if (c.host != null) sb.append(DOUBLE_SLASH).append(serializeAuthority(c))
-        sb.append(c.path.toUriPathString())
+        sb.append(guardedUriPath(c))
         appendQueryFragment(sb, c, excludeFragment)
         check(c.host == null || sb.contains(DOUBLE_SLASH)) { "an authority must emit //" }
         return sb.toString()
+    }
+
+    /**
+     * The `Uri`-profile path, guarded so the recomposition re-parses to the same structure (RFC 3986
+     * §4.2; [NORM-18]): with no authority, a path opening `//` gets the `/.` guard, and a scheme-less,
+     * authority-less path whose first segment contains `:` gets the `./` guard. Guards fire only on
+     * component states that parsing never produces, so a parsed value round-trips unchanged.
+     */
+    private fun guardedUriPath(c: ParsedComponents): String {
+        val path = c.path.toUriPathString()
+        return when {
+            c.host != null -> path
+            path.startsWith(DOUBLE_SLASH) -> LEADING_DOT_GUARD + path
+            c.scheme == null && firstSegmentHasColon(path) -> COLON_SEGMENT_GUARD + path
+            else -> path
+        }
+    }
+
+    /** True when the first path segment (up to the first `/`) contains a `:` (RFC 3986 `segment-nz-nc`). */
+    private fun firstSegmentHasColon(path: String): Boolean {
+        val colon = path.indexOf(':')
+        val slash = path.indexOf('/')
+        return colon >= 0 && (slash < 0 || colon < slash)
     }
 
     /** §11.2 [NORM-16] authority `[userinfo "@"] host [":" port]`; the credentials rule is shared (below). */

@@ -2075,6 +2075,8 @@ Serialization recomposes the stored components into the canonical string returne
 
 **[NORM-18]** Leading-`/.` guard. When the value has no authority (`Host` is null), `scheme` may be present, and the serialized path begins with `//` (its first segment is empty and at least one more segment follows), the implementation MUST prepend `/.` to the path before appending it, so that the recomposed string does not re-parse with a spurious authority. This guard MUST NOT be applied to a value that has an authority, and MUST NOT be applied to an opaque/`Opaque`-host or opaque-path `Uri` whose path is not hierarchical.
 
+The `Uri`-profile serializer applies this same leading-`/.` guard AND the RFC 3986 §4.2 `./` dot-segment guard for a scheme-less, authority-less path whose first segment contains a colon (which would otherwise re-parse as a scheme), so every serialized `Uri` — including the output of `normalized()`/`resolve()`, whose `removeDotSegments` can strip a builder-applied guard and leave the stored path in exactly such an unsafe state — re-parses to the same structure.
+
 Note: the leading-`/.` trick corresponds to the WHATWG serializer step that prepends `/.` when the host is null and the path would otherwise begin with two slashes; cf. RFC 3986 §5.3.
 
 ### 11.3 Equality & hashCode contract
