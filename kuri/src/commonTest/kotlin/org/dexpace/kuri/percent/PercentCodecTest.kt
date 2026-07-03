@@ -100,4 +100,55 @@ class PercentCodecTest {
     fun `encode replaces a lone surrogate with the replacement character octets per PCT-21`() {
         assertEquals("%EF%BF%BD", PercentCodec.encode(Char(0xD83C).toString(), PercentEncodeSets.PATH))
     }
+
+    @Test
+    fun `decodeNonAscii decodes a multi-octet non-ascii run`() {
+        assertEquals("☃", PercentCodec.decodeNonAscii("%E2%98%83"))
+        assertEquals("🍩", PercentCodec.decodeNonAscii("%F0%9F%8D%A9"))
+    }
+
+    @Test
+    fun `decodeNonAscii leaves ascii triplets literal`() {
+        assertEquals("%2F", PercentCodec.decodeNonAscii("%2F"))
+        assertEquals("%20", PercentCodec.decodeNonAscii("%20"))
+        assertEquals("a%41b", PercentCodec.decodeNonAscii("a%41b"))
+    }
+
+    @Test
+    fun `decodeNonAscii leaves an invalid utf8 run literal`() {
+        // Both octets are non-ascii but 0xC3 0xC3 is not valid utf8, so the run stays literal.
+        assertEquals("%C3%C3", PercentCodec.decodeNonAscii("%C3%C3"))
+        // A truncated 3-byte sequence is likewise invalid and kept verbatim.
+        assertEquals("%E2%98", PercentCodec.decodeNonAscii("%E2%98"))
+    }
+
+    @Test
+    fun `decodeNonAscii delimits decode runs by an abutting ascii triplet`() {
+        // %20 (ascii) delimits the run: it is preserved literally and the ü run decodes on its own.
+        assertEquals("%20" + Char(0x00FC), PercentCodec.decodeNonAscii("%20%C3%BC"))
+        // A leading non-ascii run followed by an ascii triplet: the run decodes, %2F stays literal.
+        assertEquals(Char(0x00FC).toString() + "x%2F", PercentCodec.decodeNonAscii("%C3%BCx%2F"))
+        // An ascii triplet between two non-ascii runs: both runs decode, %2F stays literal.
+        assertEquals(Char(0x00DF).toString() + "%2F" + Char(0x00FC), PercentCodec.decodeNonAscii("%C3%9F%2F%C3%BC"))
+    }
+
+    @Test
+    fun `decodeNonAscii decodes non-ascii runs bounded by literal text`() {
+        assertEquals("/fa" + Char(0x00DF), PercentCodec.decodeNonAscii("/fa%C3%9F"))
+        assertEquals("a☃b", PercentCodec.decodeNonAscii("a%E2%98%83b"))
+    }
+
+    @Test
+    fun `decodeNonAscii is identity for empty and triplet-free input`() {
+        assertEquals("", PercentCodec.decodeNonAscii(""))
+        assertEquals("abc/def", PercentCodec.decodeNonAscii("abc/def"))
+        assertEquals("100%", PercentCodec.decodeNonAscii("100%"))
+    }
+
+    @Test
+    fun `decodeNonAscii decodes a genuinely encoded replacement character`() {
+        // U+FFFD encodes to the well-formed UTF-8 run %EF%BF%BD, so it round-trips and must decode.
+        assertEquals(replacement, PercentCodec.decodeNonAscii("%EF%BF%BD"))
+        assertEquals("a${replacement}b", PercentCodec.decodeNonAscii("a%EF%BF%BDb"))
+    }
 }

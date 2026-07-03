@@ -97,6 +97,18 @@ url.hostName();  // "example.com"
 
 `Url.toUri()` is near-lossless; `Uri.toUrl()` may fail when a generic URI is not a valid web URL.
 
+**Zone identifiers (RFC 6874).** IPv6 zone identifiers are off by default and opt-in on the `Uri` profile
+only — the `Url` (WHATWG) profile always rejects them. Enable them with a `ParseOptions`:
+
+```kotlin
+val options = ParseOptions.Builder().allowIpv6ZoneId(true).build()
+val uri = Uri.parse("http://[fe80::1%25eth0]/", options).getOrThrow()
+```
+
+**Internationalized identifiers (RFC 3987).** For the `Uri` profile, IRI↔URI conversion is available
+through the `Iri` facility — `Iri.toUri(iri)` maps an IRI to its ASCII `Uri` and `Iri.toUnicode(uri)`
+renders the Unicode form; the `Url` profile applies host IDNA (UTS #46) by default.
+
 ## Parsing and errors
 
 Parsing returns a `ParseResult<T>` — errors are values, not exceptions — and you choose how to consume it:
@@ -145,7 +157,7 @@ kuri implements the standards below; per-standard conformance is measured in [Co
 |-----------------------------------|--------------------------------------------------------------------|------------|---------|
 | [RFC 3986][rfc3986] (STD 66)      | URI generic syntax; the `Uri` model and parsing authority          | Conformant | Default |
 | [RFC 3987][rfc3987]               | Internationalized Resource Identifiers (IRIs)                      | Supported  | Default |
-| [WHATWG URL Standard][whatwg-url] | the `Url` model — parser, special schemes, canonical serialization | Ratcheting | Default |
+| [WHATWG URL Standard][whatwg-url] | the `Url` model — parser, special schemes, canonical serialization | Conformant | Default |
 
 **Hosts, internationalization, and IP addresses**
 
@@ -163,7 +175,7 @@ kuri implements the standards below; per-standard conformance is measured in [Co
 
 | Standard                                       | Governs                                      | Compliance | Support |
 |------------------------------------------------|----------------------------------------------|------------|---------|
-| [`application/x-www-form-urlencoded`][formenc] | Form-encoded query parsing and serialization | Conformant | Default |
+| [`application/x-www-form-urlencoded`][formenc] | Form-encoded query parsing and serialization | Supported  | Default |
 
 **Notation and requirement levels**
 
@@ -215,10 +227,10 @@ Behavior is checked against the conformance corpora the standards ship with:
 
 | Suite                                                  | Result          |
 |--------------------------------------------------------|-----------------|
-| WHATWG `urltestdata.json` — parsing                    | 880 / 886       |
-| WHATWG `urltestdata.json` — parse → serialize (`href`) | 611 / 611       |
-| IDNA `IdnaTestV2` + `toascii`                          | 2732 / 2760     |
-| Unicode `NormalizationTest.txt` (NFC)                  | 19 966 / 19 966 |
+| WHATWG `urltestdata.json` — parsing                    | 888 / 888       |
+| WHATWG `urltestdata.json` — parse → serialize (`href`) | 621 / 621       |
+| IDNA `IdnaTestV2` + `toascii`                          | 2756 / 2760     |
+| Unicode `NormalizationTest.txt` (NFC)                  | 20 034 / 20 034 |
 | RFC 3986 §5.4 reference resolution                     | all rows        |
 
 Any case that does not yet pass is pinned in a checked-in known-failures baseline; the build fails if a passing case

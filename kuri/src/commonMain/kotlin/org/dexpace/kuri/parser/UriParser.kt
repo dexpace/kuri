@@ -4,12 +4,14 @@
  */
 package org.dexpace.kuri.parser
 
+import org.dexpace.kuri.ParseOptions
 import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.host.HostParser
 import org.dexpace.kuri.scheme.Scheme
+import org.dexpace.kuri.scheme.schemeColonIndex
 import org.dexpace.kuri.text.isAsciiAlpha
 import org.dexpace.kuri.text.isAsciiAlphanumeric
 import org.dexpace.kuri.text.isAsciiDigit
@@ -65,21 +67,29 @@ internal object UriParser {
      * (no scheme) is accepted and parsed standalone, deferring base merging to §9 ([PARSE-19]).
      *
      * @param input the URI-reference text exactly as supplied; no pre-processing is applied.
+     * @param options the opt-in parsing configuration; only [ParseOptions.allowIpv6ZoneId] is read
+     *   here and forwarded to the host pipeline ([HOST-18]).
      * @return the decomposed components, or the first fatal [UriParseError] in input order.
      */
-    internal fun parse(input: String): ParseResult<ParsedComponents> =
+    internal fun parse(
+        input: String,
+        options: ParseOptions = ParseOptions.DEFAULT,
+    ): ParseResult<ParsedComponents> =
         when {
             input.length > MAX_INPUT_LENGTH ->
                 ParseResult.Err(UriParseError.InputTooLong(input.length, MAX_INPUT_LENGTH))
 
-            else -> decomposeAndBuild(input)
+            else -> decomposeAndBuild(input, options)
         }
 
     /** Runs the structural decomposition ([decompose]) and then the component build ([buildComponents]). */
-    private fun decomposeAndBuild(input: String): ParseResult<ParsedComponents> =
+    private fun decomposeAndBuild(
+        input: String,
+        options: ParseOptions,
+    ): ParseResult<ParsedComponents> =
         when (val sections = decompose(input)) {
             is ParseResult.Err -> sections
-            is ParseResult.Ok -> buildComponents(sections.value)
+            is ParseResult.Ok -> buildComponents(sections.value, options)
         }
 
     // --- structural decomposition (Appendix B, [PARSE-7]/[PARSE-14]/[PARSE-21]) -------------------
@@ -126,11 +136,9 @@ internal object UriParser {
      * precedes any `/` ([PARSE-15]). A present-but-ill-formed candidate is fatal ([PARSE-16]/[ERR-9]).
      */
     private fun splitScheme(hier: String): SchemeSplit {
-        val colon = hier.indexOf(':')
-        val slash = hier.indexOf('/')
-        val hasCandidate = colon >= 0 && (slash < 0 || colon < slash)
+        val colon = schemeColonIndex(hier)
         return when {
-            !hasCandidate -> SchemeSplit(scheme = null, restStart = 0, error = null)
+            colon < 0 -> SchemeSplit(scheme = null, restStart = 0, error = null)
             else -> validateCandidate(hier, colon)
         }
     }
@@ -215,30 +223,37 @@ internal object UriParser {
     // --- component build & validation ([PARSE-26]..[PARSE-43]) ------------------------------------
 
     /** Parses the authority (when present), then finishes the components; a host/port failure is fatal. */
-    private fun buildComponents(sections: Sections): ParseResult<ParsedComponents> =
-        when (val authority = parseAuthority(sections)) {
+    private fun buildComponents(
+        sections: Sections,
+        options: ParseOptions,
+    ): ParseResult<ParsedComponents> =
+        when (val authority = parseAuthority(sections, options)) {
             is ParseResult.Err -> authority
             is ParseResult.Ok -> finishComponents(sections, authority.value)
         }
 
     /** Parses the authority text into credentials, host, and port, or yields `null` when no `//` was present. */
-    private fun parseAuthority(sections: Sections): ParseResult<Authority?> =
+    private fun parseAuthority(
+        sections: Sections,
+        options: ParseOptions,
+    ): ParseResult<Authority?> =
         when (val authority = sections.authority) {
             null -> ParseResult.Ok(null)
-            else -> parsePresentAuthority(authority, sections.authorityStart)
+            else -> parsePresentAuthority(authority, sections.authorityStart, options)
         }
 
     /** Splits userinfo from host:port at the LAST `@` ([PARSE-44]); a forbidden userinfo unit is fatal. */
     private fun parsePresentAuthority(
         authority: String,
         authorityStart: Int,
+        options: ParseOptions,
     ): ParseResult<Authority?> {
         require(authorityStart >= 0) { "authority start must be known: $authorityStart" }
         val at = authority.lastIndexOf('@')
         val userinfo = if (at >= 0) authority.substring(0, at) else ""
         val hostPort = if (at >= 0) authority.substring(at + 1) else authority
         return when (val error = rawError(userinfo, authorityStart)) {
-            null -> buildAuthority(userinfo, hostPort)
+            null -> buildAuthority(userinfo, hostPort, options)
             else -> ParseResult.Err(error)
         }
     }
@@ -247,10 +262,14 @@ internal object UriParser {
     private fun buildAuthority(
         userinfo: String,
         hostPort: String,
+        options: ParseOptions,
     ): ParseResult<Authority?> {
         val (username, password) = splitUserinfo(userinfo)
         val (host, portText) = splitHostPort(hostPort)
-        return when (val parsed = HostParser.parse(host, ParseProfile.URI, isSpecial = false)) {
+        return when (
+            val parsed =
+                HostParser.parse(host, ParseProfile.URI, isSpecial = false, allowIpv6ZoneId = options.allowIpv6ZoneId)
+        ) {
             is ParseResult.Err -> parsed
             is ParseResult.Ok -> attachPort(username, password, parsed.value, portText)
         }
@@ -319,8 +338,9 @@ internal object UriParser {
     /**
      * Interprets the optional [text] as an RFC 3986 `*DIGIT` port ([PARSE-33]).
      *
-     * `null`/empty denotes no explicit port. A non-digit code point, or an all-digit value that
-     * overflows [Int], is fatal ([PARSE-32]); the `Uri` profile applies no 65535 range cap.
+     * `null`/empty denotes no explicit port. A non-digit code point is fatal ([PARSE-32]); an
+     * all-digit value that overflows [Int] is fatal ([PARSE-33]; [DEV-3]). The `Uri` profile
+     * applies no 65535 range cap.
      */
     private fun parsePort(text: String?): ParseResult<Int?> =
         when {

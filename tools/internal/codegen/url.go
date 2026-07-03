@@ -27,7 +27,7 @@ const fieldIndent = 16
 // after input/base/failure. href is emitted separately, after this group.
 var expectedFields = []string{
 	"protocol", "username", "password", "hostname",
-	"port", "pathname", "search", "hash",
+	"port", "pathname", "search", "hash", "origin",
 }
 
 // urlCase is one in-scope corpus entry, modelled as UTF-16 code-unit sequences so
@@ -236,7 +236,9 @@ func dataClassLines() []string {
 		" * A [failure] case asserts the parse must fail; otherwise the expected getter strings",
 		" * (`protocol` = scheme + `:`, `hostname` = serialized host, `port` = string with `\"\"`",
 		" * for none, `search`/`hash` including their leading `?`/`#`) are compared against the",
-		" * parsed [org.dexpace.kuri.parser.ParsedComponents]. [href] is the full WHATWG-serialized",
+		" * parsed [org.dexpace.kuri.parser.ParsedComponents]. [origin] is the WHATWG ASCII origin",
+		" * serialization (a tuple `scheme://host[:port]`, or `\"null\"` for an opaque origin), or `\"\"`",
+		" * when the corpus omits it or the case is a [failure]. [href] is the full WHATWG-serialized",
 		" * URL (the parse -> serialize round-trip target). [base] is the optional base URL the",
 		" * input resolves against (`null` for an absolute parse).",
 		" */",
@@ -252,6 +254,7 @@ func dataClassLines() []string {
 		"    val pathname: String,",
 		"    val search: String,",
 		"    val hash: String,",
+		"    val origin: String,",
 		"    val href: String,",
 		")",
 	}

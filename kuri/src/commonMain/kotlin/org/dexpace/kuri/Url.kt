@@ -24,6 +24,7 @@ import org.dexpace.kuri.query.newBuilder
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.serialize.Serializer
 import kotlin.jvm.JvmName
+import kotlin.jvm.JvmOverloads
 import kotlin.jvm.JvmStatic
 
 /** The sentinel [Url.effectivePort] returns when a port is neither stated nor defaulted by the scheme. */
@@ -34,6 +35,18 @@ private const val MAX_PORT: Int = 65535
 
 /** The `application/x-www-form-urlencoded`-free path-segment encode set: the path set plus `/`. */
 private val PATH_SEGMENT_ENCODE_SET: PercentEncodeSet = PercentEncodeSets.PATH.including('/')
+
+/** The ASCII serialization of an opaque origin: the literal `"null"` (WHATWG "opaque origin"). */
+private const val OPAQUE_ORIGIN: String = "null"
+
+/** The `blob` scheme, whose origin is that of the URL parsed from its path ([NORM-32]). */
+private const val BLOB_SCHEME: String = "blob"
+
+/** The `file` scheme: special, yet its origin is opaque like a non-special scheme ([NORM-32]). */
+private const val FILE_SCHEME: String = "file"
+
+/** The inner schemes whose origin a `blob:` URL adopts; any other inner scheme is opaque ([NORM-32]). */
+private val BLOB_INNER_ORIGIN_SCHEMES: Set<String> = setOf("http", "https", FILE_SCHEME)
 
 /**
  * An immutable, fully-canonical WHATWG URL value (SPEC §3, §11; WHATWG URL Living Standard).
@@ -138,14 +151,22 @@ public class Url internal constructor(
         get() = components.host?.let { serializeAuthority(it) }
 
     /**
-     * The WHATWG origin tuple serialized as `scheme://host[:port]` ([MODEL-34], §11).
+     * The ASCII serialization of this URL's WHATWG origin ([MODEL-34], §11.6/[NORM-32]).
      *
-     * The port appears only when a non-default port is present; for a value without an authority the
-     * result degrades to `scheme://`. The origin is a projection and is not guaranteed to round-trip.
+     * Three cases apply: a **tuple origin** `scheme://host[:port]` (port only when non-null, userinfo
+     * never included) for a special scheme other than `file`; for a `blob:` URL, the origin of the URL
+     * parsed from its path when that inner scheme is `http`/`https`/`file`, otherwise opaque; and an
+     * **opaque origin** for `file:` and every non-special scheme, serialized as the literal `"null"`.
+     * The origin is a derived projection, not stored, and is not guaranteed to round-trip.
      */
     @get:JvmName("origin")
     public val origin: String
-        get() = "$scheme://${hostName ?: ""}${port?.let { ":$it" } ?: ""}"
+        get() =
+            when {
+                scheme == BLOB_SCHEME -> blobOrigin()
+                Scheme.isSpecial(scheme) && scheme != FILE_SCHEME -> tupleOrigin()
+                else -> OPAQUE_ORIGIN
+            }
 
     /** Cached canonical serialization, computed once ([NORM-23] permits caching an immutable value). */
     private val canonicalHref: String by lazy { Serializer.serialize(components, ParseProfile.URL) }
@@ -219,28 +240,33 @@ public class Url internal constructor(
         return "$username$passwordPart@"
     }
 
+    /** The tuple origin `scheme://host[:port]`: host elides to `""`, port and userinfo are omitted ([NORM-32]). */
+    private fun tupleOrigin(): String = "$scheme://${hostName.orEmpty()}${port?.let { ":$it" } ?: ""}"
+
+    /** A `blob:` URL's origin: that of the URL parsed from its path when unwrappable, else opaque ([NORM-32]). */
+    private fun blobOrigin(): String {
+        val inner = parse(encodedPath).getOrNull() ?: return OPAQUE_ORIGIN
+        return if (inner.scheme in BLOB_INNER_ORIGIN_SCHEMES) inner.origin else OPAQUE_ORIGIN
+    }
+
     /** Parse factories for [Url] (SPEC §7.5, §12.1); each returns a value rather than throwing ([ERR-1]). */
     public companion object {
         /**
-         * Parses [input] as an absolute WHATWG URL ([ERR-1], [ERR-2]).
+         * Parses [input] as a WHATWG URL, resolving a relative reference against [base] when
+         * supplied (SPEC §9; [ERR-1], [ERR-2]).
          *
-         * @param input the URL text to parse.
-         * @return [ParseResult.Ok] with the canonical [Url], or [ParseResult.Err] on failure.
-         */
-        @JvmStatic
-        public fun parse(input: String): ParseResult<Url> = UrlParser.parse(input).map { Url(it) }
-
-        /**
-         * Parses [input], resolving a relative reference against [base] when supplied (SPEC §9).
+         * The WHATWG URL parser takes no configuration, so this factory accepts no [ParseOptions];
+         * an IPv6 zone identifier is always rejected under the `Url` profile ([HOST-17]).
          *
          * @param input the (possibly relative) URL text to parse.
          * @param base the base URL for relative resolution, or `null` for an absolute parse.
          * @return [ParseResult.Ok] with the canonical [Url], or [ParseResult.Err] on failure.
          */
         @JvmStatic
+        @JvmOverloads
         public fun parse(
             input: String,
-            base: Url?,
+            base: Url? = null,
         ): ParseResult<Url> = UrlParser.parse(input, base?.components).map { Url(it) }
 
         /**

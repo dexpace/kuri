@@ -5,6 +5,7 @@
 
 package org.dexpace.kuri.parser
 
+import org.dexpace.kuri.Url
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.host.Ipv4
@@ -28,7 +29,8 @@ private const val KEY_SEPARATOR: String = "\u0000"
  * Each case resolves [UrlCase.input] against the parsed [UrlCase.base] (the WPT bases are always
  * valid, so a base that fails to parse is surfaced as a real bug, not skipped). A [UrlCase.failure]
  * case must yield [ParseResult.Err]; otherwise the parsed [ParsedComponents] are reconstructed into
- * the WPT getter strings (`protocol`, `hostname`, `port`, `pathname`, `search`, `hash`) and compared.
+ * the WPT getter strings (`protocol`, `hostname`, `port`, `pathname`, `search`, `hash`) and compared,
+ * and — when the corpus supplies one — the built [Url]'s `origin` is checked against `origin` (§11.6).
  *
  * Reconstruction mirrors the WHATWG component serializers (§11) for the getters under test: a path
  * as the concatenation of `"/" + segment` (so the empty list renders `""` and the special root
@@ -68,6 +70,16 @@ class UrlConformanceTest {
     private fun expectedPort(port: String): Int? = if (port.isEmpty()) null else port.toInt()
 
     /**
+     * True when [components] has the WPT-expected [UrlCase.origin] (§11.6/[NORM-32]). The corpus never
+     * carries an empty-string origin, so `""` reliably means the case omits an origin expectation and
+     * the check is vacuously satisfied; otherwise the built [Url]'s `origin` must equal the corpus value.
+     */
+    private fun originMatches(
+        components: ParsedComponents,
+        case: UrlCase,
+    ): Boolean = case.origin.isEmpty() || Url(components).origin == case.origin
+
+    /**
      * Serializes a parsed `query`/`fragment` to its WPT `search`/`hash` getter form (§11): an absent
      * (null) or present-but-empty value yields `""`, otherwise the value prefixed with [prefix]
      * (`?`/`#`). The getter cannot distinguish null from `""`, so both collapse to `""` here.
@@ -77,7 +89,7 @@ class UrlConformanceTest {
         prefix: Char,
     ): String = if (value.isNullOrEmpty()) "" else prefix + value
 
-    /** True when every reconstructed component of [components] equals the [case]'s expected WPT field. */
+    /** True when every reconstructed component of [components] (including `origin`) matches the [case]. */
     private fun componentsMatch(
         components: ParsedComponents,
         case: UrlCase,
@@ -92,6 +104,7 @@ class UrlConformanceTest {
                 serializePath(components.path) == case.pathname,
                 serializeOptional(components.query, '?') == case.search,
                 serializeOptional(components.fragment, '#') == case.hash,
+                originMatches(components, case),
             )
         return checks.all { it }
     }

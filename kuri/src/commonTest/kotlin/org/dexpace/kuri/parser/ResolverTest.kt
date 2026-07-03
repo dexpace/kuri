@@ -4,8 +4,10 @@
  */
 package org.dexpace.kuri.parser
 
+import org.dexpace.kuri.ParseOptions
 import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.serialize.Serializer
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -111,6 +113,18 @@ internal class ResolverTest {
         val resolved = Resolver.resolve(base, reference)
 
         assertEquals("http://h/a/g/x", Serializer.serialize(resolved, ParseProfile.URI))
+    }
+
+    @Test
+    fun `structured resolve preserves a zoned base`() {
+        val zoneOptions = ParseOptions.Builder().allowIpv6ZoneId(true).build()
+        val base = UriParser.parse("foo://[fe80::1%25eth0]/a/b", zoneOptions).getOrThrow()
+        val reference = UriParser.parse("x", zoneOptions).getOrThrow()
+
+        val resolved = Resolver.resolve(base, reference)
+
+        assertEquals(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0"), resolved.host)
+        assertEquals("foo://[fe80::1%25eth0]/a/x", Serializer.serialize(resolved, ParseProfile.URI))
     }
 
     private fun assertResolves(cases: List<Pair<String, String>>) {

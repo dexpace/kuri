@@ -4,17 +4,24 @@
  */
 package org.dexpace.kuri
 
+import org.dexpace.kuri.error.HostError
+import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.error.getOrNull
+import org.dexpace.kuri.error.getOrThrow
 import org.dexpace.kuri.host.Host
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
 class UriTest {
     private fun parseOk(input: String): Uri = Uri.parse(input).getOrNull() ?: fail("expected $input to parse")
+
+    private val zoneOptions: ParseOptions = ParseOptions.Builder().allowIpv6ZoneId(true).build()
 
     @Test
     fun `exposes every component of a generic uri`() {
@@ -209,5 +216,42 @@ class UriTest {
     fun `static parse factory is reachable`() {
         val result = Uri.parse("foo://h/p")
         assertEquals("foo://h/p", result.getOrNull()?.uriString)
+    }
+
+    // --- RFC 6874 zone identifiers ([HOST-18]) ---------------------------------------
+
+    @Test
+    fun `opted-in parse accepts an ipv6 zone id`() {
+        val uri = Uri.parse("//[fe80::1%25eth0]", zoneOptions).getOrNull() ?: fail("expected zoned parse")
+
+        assertEquals(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0"), uri.host)
+        assertEquals("//[fe80::1%25eth0]", uri.uriString)
+    }
+
+    @Test
+    fun `default parse rejects an ipv6 zone id`() {
+        val err = assertIs<ParseResult.Err>(Uri.parse("//[fe80::1%25eth0]"))
+        val cause = assertIs<UriParseError.InvalidHost>(err.error)
+        assertEquals(HostError.ZoneIdRejected, cause.reason)
+    }
+
+    @Test
+    fun `a zoned base resolves a reference under the same options`() {
+        val base = Uri.parse("foo://[fe80::1%25eth0]/a/b", zoneOptions).getOrThrow()
+
+        val resolved = base.resolve("x", zoneOptions).getOrThrow()
+
+        assertEquals(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0"), resolved.host)
+        assertEquals("foo://[fe80::1%25eth0]/a/x", resolved.uriString)
+    }
+
+    @Test
+    fun `resolve without explicit options still resolves a zoned base`() {
+        val base = Uri.parse("foo://[fe80::1%25eth0]/a/b", zoneOptions).getOrThrow()
+
+        val resolved = base.resolve("x").getOrThrow()
+
+        assertEquals(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0"), resolved.host)
+        assertEquals("foo://[fe80::1%25eth0]/a/x", resolved.uriString)
     }
 }

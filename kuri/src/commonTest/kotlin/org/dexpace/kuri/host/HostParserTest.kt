@@ -5,6 +5,7 @@
 package org.dexpace.kuri.host
 
 import org.dexpace.kuri.ParseProfile
+import org.dexpace.kuri.error.HostError
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import kotlin.test.Test
@@ -224,5 +225,43 @@ class HostParserTest {
         val result = HostParser.parse("[v.fe]", ParseProfile.URI, isSpecial = false)
 
         assertIs<ParseResult.Err>(result)
+    }
+
+    // --- RFC 6874 zone identifiers ([HOST-17]/[HOST-18]) -----------------------------
+
+    @Test
+    fun `the Url profile rejects a zone id even when the flag is set`() {
+        val result =
+            HostParser.parse("[fe80::1%25eth0]", ParseProfile.URL, isSpecial = true, allowIpv6ZoneId = true)
+
+        val err = assertIs<ParseResult.Err>(result)
+        val cause = assertIs<UriParseError.InvalidHost>(err.error)
+        assertEquals(HostError.ZoneIdRejected, cause.reason)
+    }
+
+    @Test
+    fun `parse accepts an opted-in zone id in the Uri profile`() {
+        val result =
+            HostParser.parse("[fe80::1%25eth0]", ParseProfile.URI, isSpecial = false, allowIpv6ZoneId = true)
+
+        assertEquals(ParseResult.Ok(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0")), result)
+    }
+
+    @Test
+    fun `parse rejects a zone id with the opt-in off in the Url profile`() {
+        val result = HostParser.parse("[fe80::1%25eth0]", ParseProfile.URL, isSpecial = true)
+
+        val err = assertIs<ParseResult.Err>(result)
+        val cause = assertIs<UriParseError.InvalidHost>(err.error)
+        assertEquals(HostError.ZoneIdRejected, cause.reason)
+    }
+
+    @Test
+    fun `parse rejects a zone id with the opt-in off in the Uri profile`() {
+        val result = HostParser.parse("[fe80::1%25eth0]", ParseProfile.URI, isSpecial = false)
+
+        val err = assertIs<ParseResult.Err>(result)
+        val cause = assertIs<UriParseError.InvalidHost>(err.error)
+        assertEquals(HostError.ZoneIdRejected, cause.reason)
     }
 }

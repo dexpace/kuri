@@ -33,6 +33,18 @@ internal class UriNormalizerTest {
     }
 
     @Test
+    fun `normalize decodes a percent-encoded dot-segment before removing it`() {
+        // In the Uri profile "%2E" decodes to "." under unreserved-octet decoding ([NORM-8],
+        // RFC 3986 §6.2.2.2, since "." is an unreserved char), and that decode runs BEFORE
+        // dot-segment removal ([NORM-9], §6.2.2.3). So "a/%2E%2E/b" first becomes "a/../b", which
+        // remove_dot_segments then collapses to "/b". This is NOT the Url-profile deviation of
+        // treating %2E as a dot inside remove_dot_segments; that does not apply here.
+        assertEquals("http://h/b", normalizedUri("http://h/a/%2E%2E/b"))
+        // Lowercase "%2e" is uppercased to "%2E" first ([NORM-6], §6.2.2.1), then decoded ([NORM-8]).
+        assertEquals("http://h/b", normalizedUri("http://h/a/%2e%2e/b"))
+    }
+
+    @Test
     fun `normalize elides a port equal to the scheme default`() {
         assertEquals("http://h/", normalizedUri("http://h:80/"))
     }

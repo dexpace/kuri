@@ -13,13 +13,12 @@ package org.dexpace.kuri.error
  * an `at` offset into the original input (in UTF-16 code units, before any
  * stripping/trimming, [ERR-8]) or an explanatory sub-value.
  *
- * This is a deliberately faithful *starter subset* of the §12.2 catalog: it
- * holds only the variants that do not yet depend on parser-internal types (host
- * pipeline, resource-limit registry). The remaining variants
- * (`InvalidAuthority`, `InvalidHost`, `ForbiddenHostCodePoint`, `LimitExceeded`)
- * land with the parser. The hierarchy is `sealed` so a `when` over it is
- * exhaustive without an `else` ([ERR-18]); adding a variant is an intentional,
- * API-visible change.
+ * The parser produces a fixed slice of this catalog: structural failures
+ * ([InvalidScheme], [MissingScheme], [InvalidPercentEncoding], [InvalidPort]),
+ * host failures ([EmptyHost], [InvalidHost] carrying a [HostError], and
+ * [ForbiddenHostCodePoint]), and the size failure [InputTooLong]. The hierarchy
+ * is `sealed` so a `when` over it is exhaustive without an `else` ([ERR-18]);
+ * adding a variant is an intentional, API-visible change.
  */
 public sealed interface UriParseError {
     /**

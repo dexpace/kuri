@@ -27,6 +27,19 @@ private fun isSchemeTailChar(c: Char): Boolean =
     c.isAsciiAlpha() || c.isAsciiDigit() || c == '+' || c == '-' || c == '.'
 
 /**
+ * The index of the `:` in [text] that would introduce a `scheme:` prefix — the first `:` when it
+ * precedes any `/` (RFC 3986 §3.1) — or `-1` when the first segment carries no such colon.
+ *
+ * This is the single source of the "a colon before the first slash reads as a scheme" rule shared
+ * by the parser's scheme detection and the serializer/builder recomposition guards.
+ */
+internal fun schemeColonIndex(text: String): Int {
+    val colon = text.indexOf(':')
+    val slash = text.indexOf('/')
+    return if (colon >= 0 && (slash < 0 || colon < slash)) colon else -1
+}
+
+/**
  * Syntax, normalization, and special-scheme queries for the URI/URL scheme component (SPEC §6).
  *
  * The grammar and the special-scheme registry are identical in both profiles; only the

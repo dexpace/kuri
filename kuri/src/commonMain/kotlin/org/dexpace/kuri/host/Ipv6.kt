@@ -8,6 +8,7 @@ import org.dexpace.kuri.error.HostError
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.text.hexDigitToInt
+import org.dexpace.kuri.text.isAsciiAlphanumeric
 import org.dexpace.kuri.text.isAsciiDigit
 import org.dexpace.kuri.text.isAsciiHexDigit
 
@@ -47,26 +48,139 @@ private const val UNSET_COMPRESS: Int = -1
 /** Sentinel for "no octet/piece value accumulated yet". */
 private const val NO_VALUE: Int = -1
 
+/** The RFC 6874 zone introducer `%25` that separates the address from its `ZoneID` ([HOST-18]). */
+private const val ZONE_INTRODUCER: String = "%25"
+
+/** Length of a `pct-encoded` triplet, `%HH`, consumed whole by the `ZoneID` scanner ([HOST-18]). */
+private const val PCT_TRIPLET_LENGTH: Int = 3
+
+/** RFC 3986 `unreserved` symbol characters beyond ALPHA/DIGIT (`ALPHA / DIGIT / "-._~"`). */
+private const val ZONE_UNRESERVED_SYMBOLS: String = "-._~"
+
 /**
  * The IPv6 literal parser and RFC 5952 serializer (SPEC §7.2).
  *
  * Both operate on the *bracket-free* address: the parser consumes the contents of
- * an `[...]` literal (the brackets and any zone id are handled by the host pipeline,
- * §7.2.2), and the serializer emits the canonical address without brackets. Zone
- * ids are not handled here — a stray `%` is rejected as a malformed literal, which
- * realises the default-off [HOST-17] behaviour.
+ * an `[...]` literal (the brackets are handled by the host pipeline, §7.2.2), and the
+ * serializer emits the canonical address without brackets.
+ *
+ * An RFC 6874 zone identifier is an opt-in ([HOST-17]/[HOST-18], surfaced through
+ * `ParseOptions.allowIpv6ZoneId`). With the opt-in **off** (the default), any `%` in the
+ * literal yields [HostError.ZoneIdRejected]. With it **on**, a `%25`-introduced `ZoneID`
+ * (`1*(unreserved / pct-encoded)`) is accepted and stored **raw** — exactly as it appears
+ * between `%25` and the end, without percent-decoding ([MODEL-19]) — so the serializers can
+ * re-emit `%25` + that text verbatim. A malformed zone (a `%` that is not `%25`, an empty
+ * `ZoneID`, or an illegal `ZoneID` code point) is [HostError.Ipv6Malformed], distinct from the
+ * opt-off [HostError.ZoneIdRejected]. Because the zone text is stored raw rather than as chosen
+ * options, a zoned value round-trips through `toString` then `parse` only under the same opt-in.
  */
+@Suppress("TooManyFunctions") // The zone-id opt-in adds a few one-purpose helpers atop the RFC 5952 core.
 internal object Ipv6 {
     /**
      * Parses the bracket-free contents of an IPv6 literal into eight 16-bit pieces
-     * ([HOST-6]..[HOST-14]). Honours a single `::` compression and an optional
-     * embedded-IPv4 trailer in the low 32 bits; rejects every other deviation.
+     * ([HOST-6]..[HOST-14]), optionally with an RFC 6874 zone id ([HOST-18]). Honours a single
+     * `::` compression and an optional embedded-IPv4 trailer in the low 32 bits; rejects every
+     * other deviation.
+     *
+     * Dispatch is on the first `%`: with none, the literal is a plain address (zone id `null`);
+     * with one and [allowZoneId] off, the literal is rejected as [HostError.ZoneIdRejected]; with
+     * one and [allowZoneId] on, the `%25`-introduced zone is validated and stored raw.
      *
      * @param input the literal contents with the surrounding `[`/`]` already removed.
-     * @return [ParseResult.Ok] holding a fully expanded eight-piece address, or
-     *   [ParseResult.Err] carrying [HostError.Ipv6Malformed] on any violation.
+     * @param allowZoneId whether an RFC 6874 `%25` zone id is accepted (default off, [HOST-17]).
+     * @return [ParseResult.Ok] holding a fully expanded eight-piece address (with an optional raw
+     *   `zoneId`), or [ParseResult.Err] carrying [HostError.ZoneIdRejected] (opt-off) or
+     *   [HostError.Ipv6Malformed] (any other violation).
      */
-    fun parse(input: String): ParseResult<Host.Ipv6> = Scanner(input).run()
+    fun parse(
+        input: String,
+        allowZoneId: Boolean = false,
+    ): ParseResult<Host.Ipv6> {
+        val pctIndex = input.indexOf('%')
+        return when {
+            pctIndex < 0 -> Scanner(input).run()
+            !allowZoneId -> ParseResult.Err(UriParseError.InvalidHost(input, HostError.ZoneIdRejected))
+            else -> parseWithZone(input, pctIndex)
+        }
+    }
+
+    /**
+     * Parses a zoned literal `IPv6address %25 ZoneID` once the opt-in is on ([HOST-18]).
+     *
+     * The `%` at [pctIndex] MUST begin the exact `%25` introducer, else the literal is malformed
+     * (so `fe80::1%eth0` stays malformed even when opted in). The `ZoneID` is validated as
+     * RFC 6874 `1*(unreserved / pct-encoded)`, the address before `%25` is scanned normally, and
+     * the raw zone text is attached on success ([MODEL-19]).
+     */
+    private fun parseWithZone(
+        input: String,
+        pctIndex: Int,
+    ): ParseResult<Host.Ipv6> {
+        require(pctIndex in input.indices) { "percent index out of range: $pctIndex" }
+        if (!input.startsWith(ZONE_INTRODUCER, pctIndex)) return malformed(input)
+        val address = input.substring(0, pctIndex)
+        val rawZone = input.substring(pctIndex + ZONE_INTRODUCER.length)
+        return if (isValidZoneId(rawZone)) attachZone(address, rawZone) else malformed(input)
+    }
+
+    /** Scans the pre-`%25` [address] and, on success, attaches the raw [rawZone] to the host ([MODEL-19]). */
+    private fun attachZone(
+        address: String,
+        rawZone: String,
+    ): ParseResult<Host.Ipv6> =
+        when (val parsed = Scanner(address).run()) {
+            is ParseResult.Err -> parsed
+            is ParseResult.Ok -> ParseResult.Ok(parsed.value.copy(zoneId = rawZone))
+        }
+
+    /** The malformed-literal failure for a zoned literal that breaks the RFC 6874 grammar ([HOST-18]). */
+    private fun malformed(input: String): ParseResult<Host.Ipv6> =
+        ParseResult.Err(UriParseError.InvalidHost(input, HostError.Ipv6Malformed))
+
+    /**
+     * Tests the RFC 6874 `ZoneID = 1*(unreserved / pct-encoded)` over [rawZone] ([HOST-18]).
+     *
+     * Non-empty, and every code point is either `unreserved` or part of a valid `%HH` triplet.
+     */
+    private fun isValidZoneId(rawZone: String): Boolean {
+        var index = 0
+        var valid = rawZone.isNotEmpty()
+        while (index < rawZone.length && valid) {
+            val step = zoneUnitLength(rawZone, index)
+            if (step == 0) valid = false else index += step
+        }
+        check(!valid || index == rawZone.length) { "zone-id scan overran its input: $index" }
+        return valid
+    }
+
+    /** Length of the `ZoneID` unit at [index]: `3` for a `%HH` triplet, `1` for unreserved, `0` if invalid. */
+    private fun zoneUnitLength(
+        rawZone: String,
+        index: Int,
+    ): Int {
+        require(index in rawZone.indices) { "zone index out of range: $index" }
+        val c = rawZone[index]
+        return when {
+            c == '%' && isPctTriplet(rawZone, index) -> PCT_TRIPLET_LENGTH
+            isZoneUnreserved(c) -> 1
+            else -> 0
+        }
+    }
+
+    /** True when [c] is an RFC 3986 `unreserved` code point (`ALPHA / DIGIT / "-._~"`). */
+    private fun isZoneUnreserved(c: Char): Boolean = c.isAsciiAlphanumeric() || c in ZONE_UNRESERVED_SYMBOLS
+
+    /** True when a `%` at [index] introduces a valid `pct-encoded` triplet (`%` then two HEXDIG). */
+    private fun isPctTriplet(
+        rawZone: String,
+        index: Int,
+    ): Boolean {
+        require(index in rawZone.indices) { "pct index out of range: $index" }
+        require(rawZone[index] == '%') { "pct triplet must start with '%'" }
+        return index + 2 < rawZone.length &&
+            rawZone[index + 1].isAsciiHexDigit() &&
+            rawZone[index + 2].isAsciiHexDigit()
+    }
 
     /**
      * Serializes eight 16-bit pieces to their RFC 5952 canonical form ([HOST-15],

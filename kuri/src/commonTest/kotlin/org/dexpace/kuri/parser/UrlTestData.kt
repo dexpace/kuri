@@ -15,7 +15,9 @@ package org.dexpace.kuri.parser
  * A [failure] case asserts the parse must fail; otherwise the expected getter strings
  * (`protocol` = scheme + `:`, `hostname` = serialized host, `port` = string with `""`
  * for none, `search`/`hash` including their leading `?`/`#`) are compared against the
- * parsed [org.dexpace.kuri.parser.ParsedComponents]. [href] is the full WHATWG-serialized
+ * parsed [org.dexpace.kuri.parser.ParsedComponents]. [origin] is the WHATWG ASCII origin
+ * serialization (a tuple `scheme://host[:port]`, or `"null"` for an opaque origin), or `""`
+ * when the corpus omits it or the case is a [failure]. [href] is the full WHATWG-serialized
  * URL (the parse -> serialize round-trip target). [base] is the optional base URL the
  * input resolves against (`null` for an absolute parse).
  */
@@ -31,6 +33,7 @@ internal data class UrlCase(
     val pathname: String,
     val search: String,
     val hash: String,
+    val origin: String,
     val href: String,
 )
 
@@ -68,6 +71,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/",
             ),
             UrlCase(
@@ -82,6 +86,7 @@ private object UrlConformanceCaseData {
                 pathname = "/bar;par",
                 search = "?b",
                 hash = "#c",
+                origin = "http://foo:21",
                 href = "http://user:pass@foo:21/bar;par?b#c",
             ),
             UrlCase(
@@ -96,6 +101,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://test",
                 href = "https://test@test/",
             ),
             UrlCase(
@@ -110,6 +116,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://test",
                 href = "https://test/",
             ),
             UrlCase(
@@ -124,6 +131,7 @@ private object UrlConformanceCaseData {
                 pathname = "/x",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "non-special://test@test/x",
             ),
             UrlCase(
@@ -138,6 +146,7 @@ private object UrlConformanceCaseData {
                 pathname = "/x",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "non-special://test/x",
             ),
             UrlCase(
@@ -152,6 +161,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/foo.com",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/foo.com",
             ),
             UrlCase(
@@ -166,6 +176,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/:foo.com",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/:foo.com",
             ),
             UrlCase(
@@ -180,6 +191,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/foo.com",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/foo.com",
             ),
             UrlCase(
@@ -194,6 +206,7 @@ private object UrlConformanceCaseData {
                 pathname = " foo.com",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "a: foo.com",
             ),
             UrlCase(
@@ -208,6 +221,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%20b%20",
                 search = "?%20d%20",
                 hash = "#%20e",
+                origin = "http://f:21",
                 href = "http://f:21/%20b%20?%20d%20#%20e",
             ),
             UrlCase(
@@ -222,6 +236,7 @@ private object UrlConformanceCaseData {
                 pathname = "x x",
                 search = "",
                 hash = "#x%20x",
+                origin = "",
                 href = "lolscheme:x x#x%20x",
             ),
             UrlCase(
@@ -236,6 +251,7 @@ private object UrlConformanceCaseData {
                 pathname = "/c",
                 search = "",
                 hash = "",
+                origin = "http://f",
                 href = "http://f/c",
             ),
             UrlCase(
@@ -250,6 +266,7 @@ private object UrlConformanceCaseData {
                 pathname = "/c",
                 search = "",
                 hash = "",
+                origin = "http://f:0",
                 href = "http://f:0/c",
             ),
             UrlCase(
@@ -264,6 +281,7 @@ private object UrlConformanceCaseData {
                 pathname = "/c",
                 search = "",
                 hash = "",
+                origin = "http://f:0",
                 href = "http://f:0/c",
             ),
             UrlCase(
@@ -278,6 +296,7 @@ private object UrlConformanceCaseData {
                 pathname = "/c",
                 search = "",
                 hash = "",
+                origin = "http://f",
                 href = "http://f/c",
             ),
             UrlCase(
@@ -292,6 +311,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -306,6 +326,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -320,6 +341,7 @@ private object UrlConformanceCaseData {
                 pathname = "/c",
                 search = "",
                 hash = "",
+                origin = "http://f",
                 href = "http://f/c",
             ),
             UrlCase(
@@ -334,6 +356,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -348,6 +371,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -362,6 +386,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -376,6 +401,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -390,6 +416,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/bar",
             ),
             UrlCase(
@@ -404,6 +431,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/bar",
             ),
             UrlCase(
@@ -418,6 +446,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/:foo.com/",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/:foo.com/",
             ),
             UrlCase(
@@ -432,6 +461,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/:foo.com/",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/:foo.com/",
             ),
             UrlCase(
@@ -446,6 +476,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/:",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/:",
             ),
             UrlCase(
@@ -460,6 +491,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/:a",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/:a",
             ),
             UrlCase(
@@ -474,6 +506,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/:/",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/:/",
             ),
             UrlCase(
@@ -488,6 +521,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/:/",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/:/",
             ),
             UrlCase(
@@ -502,6 +536,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/:",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/:#",
             ),
             UrlCase(
@@ -516,6 +551,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/bar#",
             ),
             UrlCase(
@@ -530,6 +566,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar",
                 search = "",
                 hash = "#/",
+                origin = "http://example.org",
                 href = "http://example.org/foo/bar#/",
             ),
             UrlCase(
@@ -544,6 +581,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar",
                 search = "",
                 hash = "#\\",
+                origin = "http://example.org",
                 href = "http://example.org/foo/bar#\\",
             ),
             UrlCase(
@@ -558,6 +596,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar",
                 search = "",
                 hash = "#;?",
+                origin = "http://example.org",
                 href = "http://example.org/foo/bar#;?",
             ),
             UrlCase(
@@ -572,6 +611,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/bar?",
             ),
             UrlCase(
@@ -586,6 +626,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/",
             ),
             UrlCase(
@@ -600,6 +641,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/:23",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/:23",
             ),
             UrlCase(
@@ -614,6 +656,7 @@ private object UrlConformanceCaseData {
                 pathname = "/:23",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/:23",
             ),
             UrlCase(
@@ -628,6 +671,7 @@ private object UrlConformanceCaseData {
                 pathname = "/x",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/x",
             ),
             UrlCase(
@@ -642,6 +686,7 @@ private object UrlConformanceCaseData {
                 pathname = "/hello",
                 search = "",
                 hash = "",
+                origin = "http://x",
                 href = "http://x/hello",
             ),
             UrlCase(
@@ -656,6 +701,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/::",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/::",
             ),
             UrlCase(
@@ -670,6 +716,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/::23",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/::23",
             ),
             UrlCase(
@@ -684,6 +731,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "foo://",
             ),
             UrlCase(
@@ -698,6 +746,7 @@ private object UrlConformanceCaseData {
                 pathname = "/d",
                 search = "",
                 hash = "",
+                origin = "http://c:29",
                 href = "http://a:b@c:29/d",
             ),
             UrlCase(
@@ -712,6 +761,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://xn--9ca",
                 href = "http://%C3%A9@xn--9ca/",
             ),
             UrlCase(
@@ -726,6 +776,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://%C3%A9@example.com/",
             ),
             UrlCase(
@@ -740,6 +791,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/:@c:29",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/:@c:29",
             ),
             UrlCase(
@@ -754,6 +806,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://d:2",
                 href = "http://&a:foo(b%5Dc@d:2/",
             ),
             UrlCase(
@@ -768,6 +821,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://d:2",
                 href = "http://:%3A%40c@d:2/",
             ),
             UrlCase(
@@ -782,6 +836,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://d",
                 href = "http://foo.com:b@d/",
             ),
             UrlCase(
@@ -796,6 +851,7 @@ private object UrlConformanceCaseData {
                 pathname = "//@",
                 search = "",
                 hash = "",
+                origin = "http://foo.com",
                 href = "http://foo.com//@",
             ),
             UrlCase(
@@ -810,6 +866,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://foo.com",
                 href = "http://foo.com/",
             ),
             UrlCase(
@@ -824,6 +881,7 @@ private object UrlConformanceCaseData {
                 pathname = "/b:c/d@foo.com/",
                 search = "",
                 hash = "",
+                origin = "http://a",
                 href = "http://a/b:c/d@foo.com/",
             ),
             UrlCase(
@@ -838,6 +896,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://c",
                 href = "http://a:b@c/",
             ),
             UrlCase(
@@ -852,6 +911,7 @@ private object UrlConformanceCaseData {
                 pathname = "/c",
                 search = "",
                 hash = "",
+                origin = "ws://b",
                 href = "ws://a@b/c",
             ),
             UrlCase(
@@ -866,6 +926,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "foo:/",
             ),
             UrlCase(
@@ -880,6 +941,7 @@ private object UrlConformanceCaseData {
                 pathname = "/bar.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "foo:/bar.com/",
             ),
             UrlCase(
@@ -894,6 +956,7 @@ private object UrlConformanceCaseData {
                 pathname = "///////",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "foo://///////",
             ),
         )
@@ -912,6 +975,7 @@ private object UrlConformanceCaseData {
                 pathname = "///////bar.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "foo://///////bar.com/",
             ),
             UrlCase(
@@ -926,6 +990,7 @@ private object UrlConformanceCaseData {
                 pathname = "//://///",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "foo:////://///",
             ),
             UrlCase(
@@ -940,6 +1005,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "c:/foo",
             ),
             UrlCase(
@@ -954,6 +1020,7 @@ private object UrlConformanceCaseData {
                 pathname = "/bar",
                 search = "",
                 hash = "",
+                origin = "http://foo",
                 href = "http://foo/bar",
             ),
             UrlCase(
@@ -968,6 +1035,7 @@ private object UrlConformanceCaseData {
                 pathname = "/path;a",
                 search = "??e",
                 hash = "#f#g",
+                origin = "http://foo",
                 href = "http://foo/path;a??e#f#g",
             ),
             UrlCase(
@@ -982,6 +1050,7 @@ private object UrlConformanceCaseData {
                 pathname = "/abcd",
                 search = "?efgh?ijkl",
                 hash = "",
+                origin = "http://foo",
                 href = "http://foo/abcd?efgh?ijkl",
             ),
             UrlCase(
@@ -996,6 +1065,7 @@ private object UrlConformanceCaseData {
                 pathname = "/abcd",
                 search = "",
                 hash = "#foo?bar",
+                origin = "http://foo",
                 href = "http://foo/abcd#foo?bar",
             ),
             UrlCase(
@@ -1010,6 +1080,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/[61:24:74]:98",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/[61:24:74]:98",
             ),
             UrlCase(
@@ -1024,6 +1095,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/[61:27]/:foo",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/[61:27]/:foo",
             ),
             UrlCase(
@@ -1038,6 +1110,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -1052,6 +1125,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -1066,6 +1140,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -1080,6 +1155,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -1094,6 +1170,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://[2001::1]",
                 href = "http://[2001::1]/",
             ),
             UrlCase(
@@ -1108,6 +1185,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://[::7f00:1]",
                 href = "http://[::7f00:1]/",
             ),
             UrlCase(
@@ -1122,6 +1200,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -1136,6 +1215,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://[::d01:4403]",
                 href = "http://[::d01:4403]/",
             ),
             UrlCase(
@@ -1150,6 +1230,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://[2001::1]",
                 href = "http://[2001::1]/",
             ),
             UrlCase(
@@ -1164,6 +1245,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/example.com/",
             ),
             UrlCase(
@@ -1178,6 +1260,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/",
             ),
             UrlCase(
@@ -1192,6 +1275,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ftp://example.com",
                 href = "ftp://example.com/",
             ),
             UrlCase(
@@ -1206,6 +1290,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://example.com",
                 href = "https://example.com/",
             ),
             UrlCase(
@@ -1220,6 +1305,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "madeupscheme:/example.com/",
             ),
             UrlCase(
@@ -1234,6 +1320,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///example.com/",
             ),
             UrlCase(
@@ -1248,6 +1335,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -1262,6 +1350,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -1276,6 +1365,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -1290,6 +1380,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -1304,6 +1395,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "ftps:/example.com/",
             ),
             UrlCase(
@@ -1318,6 +1410,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "gopher:/example.com/",
             ),
             UrlCase(
@@ -1332,6 +1425,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ws://example.com",
                 href = "ws://example.com/",
             ),
             UrlCase(
@@ -1346,6 +1440,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "wss://example.com",
                 href = "wss://example.com/",
             ),
             UrlCase(
@@ -1360,6 +1455,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "data:/example.com/",
             ),
             UrlCase(
@@ -1374,6 +1470,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "javascript:/example.com/",
             ),
             UrlCase(
@@ -1388,6 +1485,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "mailto:/example.com/",
             ),
             UrlCase(
@@ -1402,6 +1500,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/example.com/",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/example.com/",
             ),
             UrlCase(
@@ -1416,6 +1515,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ftp://example.com",
                 href = "ftp://example.com/",
             ),
             UrlCase(
@@ -1430,6 +1530,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://example.com",
                 href = "https://example.com/",
             ),
             UrlCase(
@@ -1444,6 +1545,7 @@ private object UrlConformanceCaseData {
                 pathname = "example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "madeupscheme:example.com/",
             ),
             UrlCase(
@@ -1458,6 +1560,7 @@ private object UrlConformanceCaseData {
                 pathname = "example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "ftps:example.com/",
             ),
             UrlCase(
@@ -1472,6 +1575,7 @@ private object UrlConformanceCaseData {
                 pathname = "example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "gopher:example.com/",
             ),
             UrlCase(
@@ -1486,6 +1590,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ws://example.com",
                 href = "ws://example.com/",
             ),
             UrlCase(
@@ -1500,6 +1605,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "wss://example.com",
                 href = "wss://example.com/",
             ),
             UrlCase(
@@ -1514,6 +1620,7 @@ private object UrlConformanceCaseData {
                 pathname = "example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "data:example.com/",
             ),
             UrlCase(
@@ -1528,6 +1635,7 @@ private object UrlConformanceCaseData {
                 pathname = "example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "javascript:example.com/",
             ),
             UrlCase(
@@ -1542,6 +1650,7 @@ private object UrlConformanceCaseData {
                 pathname = "example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "mailto:example.com/",
             ),
             UrlCase(
@@ -1556,6 +1665,7 @@ private object UrlConformanceCaseData {
                 pathname = "/a/b/c",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/a/b/c",
             ),
             UrlCase(
@@ -1570,6 +1680,7 @@ private object UrlConformanceCaseData {
                 pathname = "/a/%20/c",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/a/%20/c",
             ),
             UrlCase(
@@ -1584,6 +1695,7 @@ private object UrlConformanceCaseData {
                 pathname = "/a%2fc",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/a%2fc",
             ),
             UrlCase(
@@ -1598,6 +1710,7 @@ private object UrlConformanceCaseData {
                 pathname = "/a/%2f/c",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/a/%2f/c",
             ),
             UrlCase(
@@ -1612,6 +1725,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar",
                 search = "",
                 hash = "#%CE%B2",
+                origin = "http://example.org",
                 href = "http://example.org/foo/bar#%CE%B2",
             ),
             UrlCase(
@@ -1626,6 +1740,7 @@ private object UrlConformanceCaseData {
                 pathname = "text/html,test",
                 search = "",
                 hash = "#test",
+                origin = "null",
                 href = "data:text/html,test#test",
             ),
             UrlCase(
@@ -1640,6 +1755,7 @@ private object UrlConformanceCaseData {
                 pathname = "1234567890",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "tel:1234567890",
             ),
             UrlCase(
@@ -1654,6 +1770,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar.git",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "ssh://example.com/foo/bar.git",
             ),
             UrlCase(
@@ -1668,6 +1785,7 @@ private object UrlConformanceCaseData {
                 pathname = "/c:/foo/bar.html",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///c:/foo/bar.html",
             ),
             UrlCase(
@@ -1682,6 +1800,7 @@ private object UrlConformanceCaseData {
                 pathname = "/c:////foo/bar.html",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///c:////foo/bar.html",
             ),
             UrlCase(
@@ -1696,6 +1815,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/foo/bar",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C:/foo/bar",
             ),
             UrlCase(
@@ -1710,6 +1830,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/foo/bar",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C:/foo/bar",
             ),
             UrlCase(
@@ -1724,6 +1845,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/foo/bar",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C:/foo/bar",
             ),
             UrlCase(
@@ -1738,6 +1860,7 @@ private object UrlConformanceCaseData {
                 pathname = "/file",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://server/file",
             ),
         )
@@ -1756,6 +1879,7 @@ private object UrlConformanceCaseData {
                 pathname = "/file",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://server/file",
             ),
             UrlCase(
@@ -1770,6 +1894,7 @@ private object UrlConformanceCaseData {
                 pathname = "/file",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://server/file",
             ),
             UrlCase(
@@ -1784,6 +1909,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar.txt",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///foo/bar.txt",
             ),
             UrlCase(
@@ -1798,6 +1924,7 @@ private object UrlConformanceCaseData {
                 pathname = "/home/me",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///home/me",
             ),
             UrlCase(
@@ -1812,6 +1939,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///",
             ),
             UrlCase(
@@ -1826,6 +1954,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///",
             ),
             UrlCase(
@@ -1840,6 +1969,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///test",
             ),
             UrlCase(
@@ -1854,6 +1984,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://test/",
             ),
             UrlCase(
@@ -1868,6 +1999,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///",
             ),
             UrlCase(
@@ -1882,6 +2014,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///",
             ),
             UrlCase(
@@ -1896,6 +2029,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///test",
             ),
             UrlCase(
@@ -1910,6 +2044,7 @@ private object UrlConformanceCaseData {
                 pathname = "/tmp/mock/test",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///tmp/mock/test",
             ),
             UrlCase(
@@ -1924,6 +2059,7 @@ private object UrlConformanceCaseData {
                 pathname = "/tmp/mock/test",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///tmp/mock/test",
             ),
             UrlCase(
@@ -1938,6 +2074,7 @@ private object UrlConformanceCaseData {
                 pathname = "/w|m",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///w|m",
             ),
             UrlCase(
@@ -1952,6 +2089,7 @@ private object UrlConformanceCaseData {
                 pathname = "/w||m",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///w||m",
             ),
             UrlCase(
@@ -1966,6 +2104,7 @@ private object UrlConformanceCaseData {
                 pathname = "/w:/m",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///w:/m",
             ),
             UrlCase(
@@ -1980,6 +2119,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/m/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C:/m/",
             ),
             UrlCase(
@@ -1994,6 +2134,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C||/m/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C||/m/",
             ),
             UrlCase(
@@ -2008,6 +2149,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo",
             ),
             UrlCase(
@@ -2022,6 +2164,7 @@ private object UrlConformanceCaseData {
                 pathname = "/.foo",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/.foo",
             ),
             UrlCase(
@@ -2036,6 +2179,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo/",
             ),
             UrlCase(
@@ -2050,6 +2194,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo/",
             ),
             UrlCase(
@@ -2064,6 +2209,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo/",
             ),
             UrlCase(
@@ -2078,6 +2224,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo/",
             ),
             UrlCase(
@@ -2092,6 +2239,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/..bar",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo/..bar",
             ),
             UrlCase(
@@ -2106,6 +2254,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/ton",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo/ton",
             ),
             UrlCase(
@@ -2120,6 +2269,7 @@ private object UrlConformanceCaseData {
                 pathname = "/a",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/a",
             ),
             UrlCase(
@@ -2134,6 +2284,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/",
             ),
             UrlCase(
@@ -2148,6 +2299,7 @@ private object UrlConformanceCaseData {
                 pathname = "/ton",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/ton",
             ),
             UrlCase(
@@ -2162,6 +2314,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo/",
             ),
             UrlCase(
@@ -2176,6 +2329,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/%2e%2",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo/%2e%2",
             ),
             UrlCase(
@@ -2190,6 +2344,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%2e.bar",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/%2e.bar",
             ),
             UrlCase(
@@ -2204,6 +2359,7 @@ private object UrlConformanceCaseData {
                 pathname = "//",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com//",
             ),
             UrlCase(
@@ -2218,6 +2374,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo/",
             ),
             UrlCase(
@@ -2232,6 +2389,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar/",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo/bar/",
             ),
             UrlCase(
@@ -2246,6 +2404,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo",
             ),
             UrlCase(
@@ -2260,6 +2419,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%20foo",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/%20foo",
             ),
             UrlCase(
@@ -2274,6 +2434,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo%",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo%",
             ),
             UrlCase(
@@ -2288,6 +2449,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo%2",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo%2",
             ),
             UrlCase(
@@ -2302,6 +2464,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo%2zbar",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo%2zbar",
             ),
             UrlCase(
@@ -2316,6 +2479,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo%2%C3%82%C2%A9zbar",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo%2%C3%82%C2%A9zbar",
             ),
             UrlCase(
@@ -2330,6 +2494,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo%41%7a",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo%41%7a",
             ),
             UrlCase(
@@ -2344,6 +2509,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo%C2%91%91",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo%C2%91%91",
             ),
             UrlCase(
@@ -2358,6 +2524,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo%00%51",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foo%00%51",
             ),
             UrlCase(
@@ -2372,6 +2539,7 @@ private object UrlConformanceCaseData {
                 pathname = "/(%28:%3A%29)",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/(%28:%3A%29)",
             ),
             UrlCase(
@@ -2386,6 +2554,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%3A%3a%3C%3c",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/%3A%3a%3C%3c",
             ),
             UrlCase(
@@ -2400,6 +2569,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foobar",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/foobar",
             ),
             UrlCase(
@@ -2414,6 +2584,7 @@ private object UrlConformanceCaseData {
                 pathname = "//foo//bar",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com//foo//bar",
             ),
             UrlCase(
@@ -2428,6 +2599,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%7Ffp3%3Eju%3Dduvgw%3Dd",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/%7Ffp3%3Eju%3Dduvgw%3Dd",
             ),
             UrlCase(
@@ -2442,6 +2614,7 @@ private object UrlConformanceCaseData {
                 pathname = "/@asdf%40",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/@asdf%40",
             ),
             UrlCase(
@@ -2456,6 +2629,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%E4%BD%A0%E5%A5%BD%E4%BD%A0%E5%A5%BD",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/%E4%BD%A0%E5%A5%BD%E4%BD%A0%E5%A5%BD",
             ),
             UrlCase(
@@ -2470,6 +2644,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%E2%80%A5/foo",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/%E2%80%A5/foo",
             ),
             UrlCase(
@@ -2484,6 +2659,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%EF%BB%BF/foo",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/%EF%BB%BF/foo",
             ),
             UrlCase(
@@ -2498,6 +2674,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%E2%80%AE/foo/%E2%80%AD/bar",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/%E2%80%AE/foo/%E2%80%AD/bar",
             ),
             UrlCase(
@@ -2512,6 +2689,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo",
                 search = "?bar=baz",
                 hash = "",
+                origin = "http://www.google.com",
                 href = "http://www.google.com/foo?bar=baz#",
             ),
             UrlCase(
@@ -2526,6 +2704,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo",
                 search = "?bar=baz",
                 hash = "#%20%C2%BB",
+                origin = "http://www.google.com",
                 href = "http://www.google.com/foo?bar=baz#%20%C2%BB",
             ),
             UrlCase(
@@ -2540,6 +2719,7 @@ private object UrlConformanceCaseData {
                 pathname = "test",
                 search = "",
                 hash = "#%20%C2%BB",
+                origin = "null",
                 href = "data:test#%20%C2%BB",
             ),
             UrlCase(
@@ -2554,6 +2734,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.google.com",
                 href = "http://www.google.com/",
             ),
             UrlCase(
@@ -2568,6 +2749,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://192.168.0.1",
                 href = "http://192.168.0.1/",
             ),
             UrlCase(
@@ -2582,6 +2764,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo%2Ehtml",
                 search = "",
                 hash = "",
+                origin = "http://www",
                 href = "http://www/foo%2Ehtml",
             ),
         )
@@ -2600,6 +2783,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/html",
                 search = "",
                 hash = "",
+                origin = "http://www",
                 href = "http://www/foo/html",
             ),
             UrlCase(
@@ -2614,6 +2798,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -2628,6 +2813,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://foodomain.com",
                 href = "http://%25DOMAIN:foobar@foodomain.com/",
             ),
             UrlCase(
@@ -2642,6 +2828,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo",
                 search = "",
                 hash = "",
+                origin = "http://www.google.com",
                 href = "http://www.google.com/foo",
             ),
             UrlCase(
@@ -2656,6 +2843,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://foo",
                 href = "http://foo/",
             ),
             UrlCase(
@@ -2670,6 +2858,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://foo:81",
                 href = "http://foo:81/",
             ),
             UrlCase(
@@ -2684,6 +2873,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "httpa://foo:80/",
             ),
             UrlCase(
@@ -2698,6 +2888,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -2712,6 +2903,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://foo",
                 href = "https://foo/",
             ),
             UrlCase(
@@ -2726,6 +2918,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://foo:80",
                 href = "https://foo:80/",
             ),
             UrlCase(
@@ -2740,6 +2933,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ftp://foo",
                 href = "ftp://foo/",
             ),
             UrlCase(
@@ -2754,6 +2948,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ftp://foo:80",
                 href = "ftp://foo:80/",
             ),
             UrlCase(
@@ -2768,6 +2963,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "gopher://foo:70/",
             ),
             UrlCase(
@@ -2782,6 +2978,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "gopher://foo:443/",
             ),
             UrlCase(
@@ -2796,6 +2993,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ws://foo",
                 href = "ws://foo/",
             ),
             UrlCase(
@@ -2810,6 +3008,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ws://foo:81",
                 href = "ws://foo:81/",
             ),
             UrlCase(
@@ -2824,6 +3023,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ws://foo:443",
                 href = "ws://foo:443/",
             ),
             UrlCase(
@@ -2838,6 +3038,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ws://foo:815",
                 href = "ws://foo:815/",
             ),
             UrlCase(
@@ -2852,6 +3053,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "wss://foo:80",
                 href = "wss://foo:80/",
             ),
             UrlCase(
@@ -2866,6 +3068,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "wss://foo:81",
                 href = "wss://foo:81/",
             ),
             UrlCase(
@@ -2880,6 +3083,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "wss://foo",
                 href = "wss://foo/",
             ),
             UrlCase(
@@ -2894,6 +3098,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "wss://foo:815",
                 href = "wss://foo:815/",
             ),
             UrlCase(
@@ -2908,6 +3113,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/",
             ),
             UrlCase(
@@ -2922,6 +3128,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ftp://example.com",
                 href = "ftp://example.com/",
             ),
             UrlCase(
@@ -2936,6 +3143,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://example.com",
                 href = "https://example.com/",
             ),
             UrlCase(
@@ -2950,6 +3158,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "madeupscheme:/example.com/",
             ),
             UrlCase(
@@ -2964,6 +3173,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///example.com/",
             ),
             UrlCase(
@@ -2978,6 +3188,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "ftps:/example.com/",
             ),
             UrlCase(
@@ -2992,6 +3203,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "gopher:/example.com/",
             ),
             UrlCase(
@@ -3006,6 +3218,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ws://example.com",
                 href = "ws://example.com/",
             ),
             UrlCase(
@@ -3020,6 +3233,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "wss://example.com",
                 href = "wss://example.com/",
             ),
             UrlCase(
@@ -3034,6 +3248,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "data:/example.com/",
             ),
             UrlCase(
@@ -3048,6 +3263,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "javascript:/example.com/",
             ),
             UrlCase(
@@ -3062,6 +3278,7 @@ private object UrlConformanceCaseData {
                 pathname = "/example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "mailto:/example.com/",
             ),
             UrlCase(
@@ -3076,6 +3293,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/",
             ),
             UrlCase(
@@ -3090,6 +3308,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ftp://example.com",
                 href = "ftp://example.com/",
             ),
             UrlCase(
@@ -3104,6 +3323,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://example.com",
                 href = "https://example.com/",
             ),
             UrlCase(
@@ -3118,6 +3338,7 @@ private object UrlConformanceCaseData {
                 pathname = "example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "madeupscheme:example.com/",
             ),
             UrlCase(
@@ -3132,6 +3353,7 @@ private object UrlConformanceCaseData {
                 pathname = "example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "ftps:example.com/",
             ),
             UrlCase(
@@ -3146,6 +3368,7 @@ private object UrlConformanceCaseData {
                 pathname = "example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "gopher:example.com/",
             ),
             UrlCase(
@@ -3160,6 +3383,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ws://example.com",
                 href = "ws://example.com/",
             ),
             UrlCase(
@@ -3174,6 +3398,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "wss://example.com",
                 href = "wss://example.com/",
             ),
             UrlCase(
@@ -3188,6 +3413,7 @@ private object UrlConformanceCaseData {
                 pathname = "example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "data:example.com/",
             ),
             UrlCase(
@@ -3202,6 +3428,7 @@ private object UrlConformanceCaseData {
                 pathname = "example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "javascript:example.com/",
             ),
             UrlCase(
@@ -3216,6 +3443,7 @@ private object UrlConformanceCaseData {
                 pathname = "example.com/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "mailto:example.com/",
             ),
             UrlCase(
@@ -3230,6 +3458,7 @@ private object UrlConformanceCaseData {
                 pathname = "/aaa/",
                 search = "?query",
                 hash = "",
+                origin = "https://example.com",
                 href = "https://example.com/aaa/?query",
             ),
             UrlCase(
@@ -3244,6 +3473,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://www.example.com/",
             ),
             UrlCase(
@@ -3258,6 +3488,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://www.example.com/",
             ),
             UrlCase(
@@ -3272,6 +3503,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://www.example.com/",
             ),
             UrlCase(
@@ -3286,6 +3518,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://a:b@www.example.com/",
             ),
             UrlCase(
@@ -3300,6 +3533,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://a:b@www.example.com/",
             ),
             UrlCase(
@@ -3314,6 +3548,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://a:b@www.example.com/",
             ),
             UrlCase(
@@ -3328,6 +3563,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://pple.com",
                 href = "http://pple.com/",
             ),
             UrlCase(
@@ -3342,6 +3578,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://:b@www.example.com/",
             ),
             UrlCase(
@@ -3356,6 +3593,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://:b@www.example.com/",
             ),
             UrlCase(
@@ -3370,6 +3608,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://:b@www.example.com/",
             ),
             UrlCase(
@@ -3384,6 +3623,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3398,6 +3638,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3412,6 +3653,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3426,6 +3668,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
         )
@@ -3444,6 +3687,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3458,6 +3702,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3472,6 +3717,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3486,6 +3732,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3500,6 +3747,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3514,6 +3762,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3528,6 +3777,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://a@www.example.com/",
             ),
             UrlCase(
@@ -3542,6 +3792,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://a@www.example.com/",
             ),
             UrlCase(
@@ -3556,6 +3807,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://a@www.example.com/",
             ),
             UrlCase(
@@ -3570,6 +3822,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://pple.com",
                 href = "http://www.@pple.com/",
             ),
             UrlCase(
@@ -3584,6 +3837,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3598,6 +3852,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3612,6 +3867,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3626,6 +3882,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://www.example.com/",
             ),
             UrlCase(
@@ -3640,6 +3897,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://www.example.com/",
             ),
             UrlCase(
@@ -3654,6 +3912,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test.txt",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://www.example.com/test.txt",
             ),
             UrlCase(
@@ -3668,6 +3927,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://www.example.com/",
             ),
             UrlCase(
@@ -3682,6 +3942,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://www.example.com/",
             ),
             UrlCase(
@@ -3696,6 +3957,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test.txt",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://www.example.com/test.txt",
             ),
             UrlCase(
@@ -3710,6 +3972,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test.txt",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://www.example.com/test.txt",
             ),
             UrlCase(
@@ -3724,6 +3987,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test.txt",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://www.example.com/test.txt",
             ),
             UrlCase(
@@ -3738,6 +4002,7 @@ private object UrlConformanceCaseData {
                 pathname = "/aaa/test.txt",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://www.example.com/aaa/test.txt",
             ),
             UrlCase(
@@ -3752,6 +4017,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test.txt",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://www.example.com/test.txt",
             ),
             UrlCase(
@@ -3766,6 +4032,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%E4%B8%AD/test.txt",
                 search = "",
                 hash = "",
+                origin = "http://www.example.com",
                 href = "http://www.example.com/%E4%B8%AD/test.txt",
             ),
             UrlCase(
@@ -3780,6 +4047,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example2.com",
                 href = "http://www.example2.com/",
             ),
             UrlCase(
@@ -3794,6 +4062,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.example2.com",
                 href = "http://www.example2.com/",
             ),
             UrlCase(
@@ -3808,6 +4077,7 @@ private object UrlConformanceCaseData {
                 pathname = "/...",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///...",
             ),
             UrlCase(
@@ -3822,6 +4092,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///",
             ),
             UrlCase(
@@ -3836,6 +4107,7 @@ private object UrlConformanceCaseData {
                 pathname = "/a",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///a",
             ),
             UrlCase(
@@ -3850,6 +4122,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///",
             ),
             UrlCase(
@@ -3864,6 +4137,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///",
             ),
             UrlCase(
@@ -3878,6 +4152,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/",
             ),
             UrlCase(
@@ -3892,6 +4167,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3906,6 +4182,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3920,6 +4197,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3934,6 +4212,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3948,6 +4227,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -3962,6 +4242,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://googoo.com",
                 href = "http://googoo.com/",
             ),
             UrlCase(
@@ -3976,6 +4257,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://example.com/",
             ),
             UrlCase(
@@ -3990,6 +4272,7 @@ private object UrlConformanceCaseData {
                 pathname = "opaque",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "non-special:opaque",
             ),
             UrlCase(
@@ -4004,6 +4287,7 @@ private object UrlConformanceCaseData {
                 pathname = "opaque %20",
                 search = "?hi",
                 hash = "",
+                origin = "null",
                 href = "non-special:opaque %20?hi",
             ),
             UrlCase(
@@ -4018,6 +4302,7 @@ private object UrlConformanceCaseData {
                 pathname = "opaque %20",
                 search = "",
                 hash = "#hi",
+                origin = "null",
                 href = "non-special:opaque %20#hi",
             ),
             UrlCase(
@@ -4032,6 +4317,7 @@ private object UrlConformanceCaseData {
                 pathname = "opaque  x",
                 search = "?hi",
                 hash = "",
+                origin = "null",
                 href = "non-special:opaque  x?hi",
             ),
             UrlCase(
@@ -4046,6 +4332,7 @@ private object UrlConformanceCaseData {
                 pathname = "opaque  x",
                 search = "",
                 hash = "#hi",
+                origin = "null",
                 href = "non-special:opaque  x#hi",
             ),
             UrlCase(
@@ -4060,6 +4347,7 @@ private object UrlConformanceCaseData {
                 pathname = "opaque  %20",
                 search = "",
                 hash = "#hi",
+                origin = "null",
                 href = "non-special:opaque  %20#hi",
             ),
             UrlCase(
@@ -4074,6 +4362,7 @@ private object UrlConformanceCaseData {
                 pathname = "opaque  %20",
                 search = "",
                 hash = "#hi",
+                origin = "null",
                 href = "non-special:opaque  %20#hi",
             ),
             UrlCase(
@@ -4088,6 +4377,7 @@ private object UrlConformanceCaseData {
                 pathname = "opaque  %20",
                 search = "",
                 hash = "#hi",
+                origin = "null",
                 href = "non-special:opaque  %20#hi",
             ),
             UrlCase(
@@ -4102,6 +4392,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://www.foo.bar.com",
                 href = "http://www.foo.bar.com/",
             ),
             UrlCase(
@@ -4116,6 +4407,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4130,6 +4422,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4144,6 +4437,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4158,6 +4452,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4172,6 +4467,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%EF%BF%BD",
                 search = "?%EF%BF%BD",
                 hash = "#%EF%BF%BD",
+                origin = "https://x",
                 href = "https://x/%EF%BF%BD?%EF%BF%BD#%EF%BF%BD",
             ),
             UrlCase(
@@ -4186,6 +4482,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://a.b.c.xn--pokxncvks",
                 href = "http://a.b.c.xn--pokxncvks/",
             ),
             UrlCase(
@@ -4200,6 +4497,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://10.0.0.xn--pokxncvks",
                 href = "http://10.0.0.xn--pokxncvks/",
             ),
             UrlCase(
@@ -4214,6 +4512,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://a.b.c.xn--pokxncvks",
                 href = "http://a.b.c.xn--pokxncvks/",
             ),
             UrlCase(
@@ -4228,6 +4527,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://a.b.c.xn--pokxncvks",
                 href = "http://a.b.c.xn--pokxncvks/",
             ),
             UrlCase(
@@ -4242,6 +4542,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://10.0.0.xn--pokxncvks",
                 href = "http://10.0.0.xn--pokxncvks/",
             ),
             UrlCase(
@@ -4256,6 +4557,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://10.0.0.xn--pokxncvks",
                 href = "http://10.0.0.xn--pokxncvks/",
             ),
             UrlCase(
@@ -4270,6 +4572,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://go.com",
                 href = "http://go.com/",
             ),
         )
@@ -4288,6 +4591,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4302,6 +4606,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4316,6 +4621,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4330,6 +4636,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4344,6 +4651,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://xn--6qqa088eba",
                 href = "http://xn--6qqa088eba/",
             ),
             UrlCase(
@@ -4358,6 +4666,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://xn--fa-hia.example",
                 href = "https://xn--fa-hia.example/",
             ),
             UrlCase(
@@ -4372,6 +4681,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc://fa%C3%9F.ExAmPlE/",
             ),
             UrlCase(
@@ -4386,6 +4696,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4400,6 +4711,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4414,6 +4726,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4428,6 +4741,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://192.168.0.1",
                 href = "http://192.168.0.1/",
             ),
             UrlCase(
@@ -4442,6 +4756,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://192.168.0.1",
                 href = "http://192.168.0.1/",
             ),
             UrlCase(
@@ -4456,6 +4771,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4470,6 +4786,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4484,6 +4801,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4498,6 +4816,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4512,6 +4831,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://192.168.0.1",
                 href = "http://192.168.0.1/",
             ),
             UrlCase(
@@ -4526,6 +4846,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://.",
                 href = "http://./",
             ),
             UrlCase(
@@ -4540,6 +4861,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://..",
                 href = "http://../",
             ),
             UrlCase(
@@ -4554,6 +4876,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "h://.",
             ),
             UrlCase(
@@ -4568,6 +4891,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4582,6 +4906,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4596,6 +4921,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4610,6 +4936,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4624,6 +4951,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4638,6 +4966,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4652,6 +4981,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4666,6 +4996,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4680,6 +5011,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4694,6 +5026,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4708,6 +5041,7 @@ private object UrlConformanceCaseData {
                 pathname = "/bar",
                 search = "",
                 hash = "",
+                origin = "http://example.com",
                 href = "http://foo:%F0%9F%92%A9@example.com/bar",
             ),
             UrlCase(
@@ -4722,6 +5056,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "?q=%F0%9F%94%A5",
                 hash = "",
+                origin = "https://localhost",
                 href = "https://localhost/?q=%F0%9F%94%A5",
             ),
             UrlCase(
@@ -4736,6 +5071,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "#%F0%9F%94%A5",
+                origin = "https://localhost",
                 href = "https://localhost/#%F0%9F%94%A5",
             ),
             UrlCase(
@@ -4750,6 +5086,7 @@ private object UrlConformanceCaseData {
                 pathname = "test",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "test:test#",
             ),
             UrlCase(
@@ -4764,6 +5101,7 @@ private object UrlConformanceCaseData {
                 pathname = "x@x.com",
                 search = "",
                 hash = "#x",
+                origin = "null",
                 href = "mailto:x@x.com#x",
             ),
             UrlCase(
@@ -4778,6 +5116,7 @@ private object UrlConformanceCaseData {
                 pathname = ",",
                 search = "",
                 hash = "#x",
+                origin = "null",
                 href = "data:,#x",
             ),
             UrlCase(
@@ -4792,6 +5131,7 @@ private object UrlConformanceCaseData {
                 pathname = "blank",
                 search = "",
                 hash = "#x",
+                origin = "null",
                 href = "about:blank#x",
             ),
             UrlCase(
@@ -4806,6 +5146,7 @@ private object UrlConformanceCaseData {
                 pathname = "blank",
                 search = "",
                 hash = "#x:y",
+                origin = "null",
                 href = "about:blank#x:y",
             ),
             UrlCase(
@@ -4820,6 +5161,7 @@ private object UrlConformanceCaseData {
                 pathname = "test",
                 search = "?test",
                 hash = "",
+                origin = "null",
                 href = "test:test?test#",
             ),
             UrlCase(
@@ -4834,6 +5176,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://example:800",
                 href = "https://%40test%40test@example:800/",
             ),
             UrlCase(
@@ -4848,6 +5191,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://example",
                 href = "https://%40%40@example/",
             ),
             UrlCase(
@@ -4862,6 +5206,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%60%7B%7D",
                 search = "?`{}",
                 hash = "",
+                origin = "http://h",
                 href = "http://%60%7B%7D:%60%7B%7D@h/%60%7B%7D?`{}",
             ),
             UrlCase(
@@ -4876,6 +5221,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "?%27",
                 hash = "",
+                origin = "http://host",
                 href = "http://host/?%27",
             ),
             UrlCase(
@@ -4890,6 +5236,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "?'",
                 hash = "",
+                origin = "null",
                 href = "notspecial://host/?'",
             ),
             UrlCase(
@@ -4904,6 +5251,7 @@ private object UrlConformanceCaseData {
                 pathname = "/some/path",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://user@example.org/some/path",
             ),
             UrlCase(
@@ -4918,6 +5266,7 @@ private object UrlConformanceCaseData {
                 pathname = "/smth",
                 search = "",
                 hash = "",
+                origin = "http://example.org:21",
                 href = "http://user:pass@example.org:21/smth",
             ),
             UrlCase(
@@ -4932,6 +5281,7 @@ private object UrlConformanceCaseData {
                 pathname = "/some/path",
                 search = "",
                 hash = "",
+                origin = "http://example.org:21",
                 href = "http://user:pass@example.org:21/some/path",
             ),
             UrlCase(
@@ -4946,6 +5296,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4960,6 +5311,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -4974,6 +5326,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pa/i",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc:/pa/i",
             ),
             UrlCase(
@@ -4988,6 +5341,7 @@ private object UrlConformanceCaseData {
                 pathname = "/i",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc://ho/i",
             ),
             UrlCase(
@@ -5002,6 +5356,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pa/i",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc:///pa/i",
             ),
             UrlCase(
@@ -5016,6 +5371,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5030,6 +5386,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5044,6 +5401,7 @@ private object UrlConformanceCaseData {
                 pathname = "/i",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc:/i",
             ),
             UrlCase(
@@ -5058,6 +5416,7 @@ private object UrlConformanceCaseData {
                 pathname = "/i",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc://ho/i",
             ),
             UrlCase(
@@ -5072,6 +5431,7 @@ private object UrlConformanceCaseData {
                 pathname = "/i",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc:///i",
             ),
             UrlCase(
@@ -5086,6 +5446,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5100,6 +5461,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5114,6 +5476,7 @@ private object UrlConformanceCaseData {
                 pathname = "/i",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc:/i",
             ),
         )
@@ -5132,6 +5495,7 @@ private object UrlConformanceCaseData {
                 pathname = "/i",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc://ho/i",
             ),
             UrlCase(
@@ -5146,6 +5510,7 @@ private object UrlConformanceCaseData {
                 pathname = "/i",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc:///i",
             ),
             UrlCase(
@@ -5160,6 +5525,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5174,6 +5540,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5188,6 +5555,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pa/pa",
                 search = "?i",
                 hash = "",
+                origin = "null",
                 href = "sc:/pa/pa?i",
             ),
             UrlCase(
@@ -5202,6 +5570,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pa",
                 search = "?i",
                 hash = "",
+                origin = "null",
                 href = "sc://ho/pa?i",
             ),
             UrlCase(
@@ -5216,6 +5585,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pa/pa",
                 search = "?i",
                 hash = "",
+                origin = "null",
                 href = "sc:///pa/pa?i",
             ),
             UrlCase(
@@ -5230,6 +5600,7 @@ private object UrlConformanceCaseData {
                 pathname = "sd",
                 search = "",
                 hash = "#i",
+                origin = "null",
                 href = "sc:sd#i",
             ),
             UrlCase(
@@ -5244,6 +5615,7 @@ private object UrlConformanceCaseData {
                 pathname = "sd/sd",
                 search = "",
                 hash = "#i",
+                origin = "null",
                 href = "sc:sd/sd#i",
             ),
             UrlCase(
@@ -5258,6 +5630,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pa/pa",
                 search = "",
                 hash = "#i",
+                origin = "null",
                 href = "sc:/pa/pa#i",
             ),
             UrlCase(
@@ -5272,6 +5645,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pa",
                 search = "",
                 hash = "#i",
+                origin = "null",
                 href = "sc://ho/pa#i",
             ),
             UrlCase(
@@ -5286,6 +5660,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pa/pa",
                 search = "",
                 hash = "#i",
+                origin = "null",
                 href = "sc:///pa/pa#i",
             ),
             UrlCase(
@@ -5300,6 +5675,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "about:/",
             ),
             UrlCase(
@@ -5314,6 +5690,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "data:/",
             ),
             UrlCase(
@@ -5328,6 +5705,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "javascript:/",
             ),
             UrlCase(
@@ -5342,6 +5720,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "mailto:/",
             ),
             UrlCase(
@@ -5356,6 +5735,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc://%C3%B1.test/",
             ),
             UrlCase(
@@ -5370,6 +5750,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "sc://%/",
             ),
             UrlCase(
@@ -5384,6 +5765,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5398,6 +5780,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5412,6 +5795,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5426,6 +5810,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5440,6 +5825,7 @@ private object UrlConformanceCaseData {
                 pathname = "/x",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc://%C3%B1/x",
             ),
             UrlCase(
@@ -5454,6 +5840,7 @@ private object UrlConformanceCaseData {
                 pathname = "\\../",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc:\\../",
             ),
             UrlCase(
@@ -5468,6 +5855,7 @@ private object UrlConformanceCaseData {
                 pathname = ":a@example.net",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc::a@example.net",
             ),
             UrlCase(
@@ -5482,6 +5870,7 @@ private object UrlConformanceCaseData {
                 pathname = "%NBD",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "wow:%NBD",
             ),
             UrlCase(
@@ -5496,6 +5885,7 @@ private object UrlConformanceCaseData {
                 pathname = "%1G",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "wow:%1G",
             ),
             UrlCase(
@@ -5510,6 +5900,7 @@ private object UrlConformanceCaseData {
                 pathname = "%EF%BF%BF",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "wow:%EF%BF%BF",
             ),
             UrlCase(
@@ -5524,6 +5915,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5538,6 +5930,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5552,6 +5945,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5566,6 +5960,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5580,6 +5975,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5594,6 +5990,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5608,6 +6005,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5622,6 +6020,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5636,6 +6035,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5650,6 +6050,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "foo://host/",
             ),
             UrlCase(
@@ -5664,6 +6065,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "foo://host/",
             ),
             UrlCase(
@@ -5678,6 +6080,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "foo://host/",
             ),
             UrlCase(
@@ -5692,6 +6095,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5706,6 +6110,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5720,6 +6125,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5734,6 +6140,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5748,6 +6155,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5762,6 +6170,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5776,6 +6185,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5790,6 +6200,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5804,6 +6215,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5818,6 +6230,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5832,6 +6245,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5846,6 +6260,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5860,6 +6275,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5874,6 +6290,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5888,6 +6305,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5902,6 +6320,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5916,6 +6335,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5930,6 +6350,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5944,6 +6365,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5958,6 +6380,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
         )
@@ -5976,6 +6399,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -5990,6 +6414,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6004,6 +6429,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6018,6 +6444,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6032,6 +6459,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6046,6 +6474,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6060,6 +6489,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6074,6 +6504,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6088,6 +6519,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6102,6 +6534,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6116,6 +6549,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6130,6 +6564,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6144,6 +6579,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6158,6 +6594,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6172,6 +6609,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6186,6 +6624,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6200,6 +6639,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6214,6 +6654,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6228,6 +6669,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://host/",
             ),
             UrlCase(
@@ -6242,6 +6684,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://host/",
             ),
             UrlCase(
@@ -6256,6 +6699,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://host/",
             ),
             UrlCase(
@@ -6270,6 +6714,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6284,6 +6729,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6298,6 +6744,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6312,6 +6759,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6326,6 +6774,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6340,6 +6789,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6354,6 +6804,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6368,6 +6819,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6382,6 +6834,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6396,6 +6849,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6410,6 +6864,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6424,6 +6879,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6438,6 +6894,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6452,6 +6909,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6466,6 +6924,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6480,6 +6939,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6494,6 +6954,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6508,6 +6969,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6522,6 +6984,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6536,6 +6999,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6550,6 +7014,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6564,6 +7029,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6578,6 +7044,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6592,6 +7059,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6606,6 +7074,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6620,6 +7089,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6634,6 +7104,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6648,6 +7119,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6662,6 +7134,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6676,6 +7149,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6690,6 +7164,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6704,6 +7179,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6718,6 +7194,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6732,6 +7209,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6746,6 +7224,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6760,6 +7239,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6774,6 +7254,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6788,6 +7269,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6802,6 +7284,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
         )
@@ -6820,6 +7303,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6834,6 +7318,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6848,6 +7333,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6862,6 +7348,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6876,6 +7363,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6890,6 +7378,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6904,6 +7393,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6918,6 +7408,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://!\"\$&'()*+,-.;=_`{}~",
                 href = "http://!\"\$&'()*+,-.;=_`{}~/",
             ),
             UrlCase(
@@ -6937,6 +7428,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href =
                     "sc://%01%02%03%04%05%06%07%08%0B%0C%0E%0F%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F%7F" +
                         "!\"\$%&'()*+,-.;=_`{}~/",
@@ -6953,6 +7445,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6967,6 +7460,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6981,6 +7475,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -6995,6 +7490,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7009,6 +7505,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "ftp://xn--n3h",
                 href = "ftp://xn--n3h/",
             ),
             UrlCase(
@@ -7023,6 +7520,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://xn--n3h",
                 href = "https://xn--n3h/",
             ),
             UrlCase(
@@ -7037,6 +7535,7 @@ private object UrlConformanceCaseData {
                 pathname = "/relative_import.html",
                 search = "",
                 hash = "",
+                origin = "http://127.0.0.1:10100",
                 href = "http://127.0.0.1:10100/relative_import.html",
             ),
             UrlCase(
@@ -7051,6 +7550,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "?foo=%7B%22abc%22",
                 hash = "",
+                origin = "http://facebook.com",
                 href = "http://facebook.com/?foo=%7B%22abc%22",
             ),
             UrlCase(
@@ -7065,6 +7565,7 @@ private object UrlConformanceCaseData {
                 pathname = "/jqueryui@1.2.3",
                 search = "",
                 hash = "",
+                origin = "https://localhost:3000",
                 href = "https://localhost:3000/jqueryui@1.2.3",
             ),
             UrlCase(
@@ -7081,6 +7582,7 @@ private object UrlConformanceCaseData {
                 pathname = "/path",
                 search = "?query",
                 hash = "#frag",
+                origin = "http://host:9000",
                 href = "http://host:9000/path?query#frag",
             ),
             UrlCase(
@@ -7095,6 +7597,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar",
                 search = "?a=b&c=d",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/bar?a=b&c=d",
             ),
             UrlCase(
@@ -7109,6 +7612,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar",
                 search = "??a=b&c=d",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/bar??a=b&c=d",
             ),
             UrlCase(
@@ -7123,6 +7627,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar",
                 search = "",
                 hash = "",
+                origin = "http://example.org",
                 href = "http://example.org/foo/bar",
             ),
             UrlCase(
@@ -7137,6 +7642,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7151,6 +7657,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc:",
             ),
             UrlCase(
@@ -7165,6 +7672,7 @@ private object UrlConformanceCaseData {
                 pathname = "/baz",
                 search = "?qux",
                 hash = "#foo%08bar",
+                origin = "http://foo.bar",
                 href = "http://foo.bar/baz?qux#foo%08bar",
             ),
             UrlCase(
@@ -7179,6 +7687,7 @@ private object UrlConformanceCaseData {
                 pathname = "/baz",
                 search = "?qux",
                 hash = "#foo%22bar",
+                origin = "http://foo.bar",
                 href = "http://foo.bar/baz?qux#foo%22bar",
             ),
             UrlCase(
@@ -7193,6 +7702,7 @@ private object UrlConformanceCaseData {
                 pathname = "/baz",
                 search = "?qux",
                 hash = "#foo%3Cbar",
+                origin = "http://foo.bar",
                 href = "http://foo.bar/baz?qux#foo%3Cbar",
             ),
             UrlCase(
@@ -7207,6 +7717,7 @@ private object UrlConformanceCaseData {
                 pathname = "/baz",
                 search = "?qux",
                 hash = "#foo%3Ebar",
+                origin = "http://foo.bar",
                 href = "http://foo.bar/baz?qux#foo%3Ebar",
             ),
             UrlCase(
@@ -7221,6 +7732,7 @@ private object UrlConformanceCaseData {
                 pathname = "/baz",
                 search = "?qux",
                 hash = "#foo%60bar",
+                origin = "http://foo.bar",
                 href = "http://foo.bar/baz?qux#foo%60bar",
             ),
             UrlCase(
@@ -7235,6 +7747,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://1.2.3.4",
                 href = "http://1.2.3.4/",
             ),
             UrlCase(
@@ -7249,6 +7762,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://1.2.3.4",
                 href = "http://1.2.3.4/",
             ),
             UrlCase(
@@ -7263,6 +7777,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://192.168.1.1",
                 href = "http://192.168.1.1/",
             ),
             UrlCase(
@@ -7277,6 +7792,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://192.168.1.1",
                 href = "http://192.168.1.1/",
             ),
             UrlCase(
@@ -7291,6 +7807,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://192.168.257.com",
                 href = "http://192.168.257.com/",
             ),
             UrlCase(
@@ -7305,6 +7822,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://0.0.1.0",
                 href = "http://0.0.1.0/",
             ),
             UrlCase(
@@ -7319,6 +7837,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://256.com",
                 href = "http://256.com/",
             ),
             UrlCase(
@@ -7333,6 +7852,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://59.154.201.255",
                 href = "http://59.154.201.255/",
             ),
             UrlCase(
@@ -7347,6 +7867,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://59.154.201.255",
                 href = "http://59.154.201.255/",
             ),
             UrlCase(
@@ -7361,6 +7882,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://999999999.com",
                 href = "http://999999999.com/",
             ),
             UrlCase(
@@ -7375,6 +7897,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7389,6 +7912,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://10000000000.com",
                 href = "http://10000000000.com/",
             ),
             UrlCase(
@@ -7403,6 +7927,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://255.255.255.255",
                 href = "http://255.255.255.255/",
             ),
             UrlCase(
@@ -7417,6 +7942,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7431,6 +7957,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7445,6 +7972,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7459,6 +7987,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://255.255.255.255",
                 href = "http://255.255.255.255/",
             ),
             UrlCase(
@@ -7473,6 +8002,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7487,6 +8017,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7501,6 +8032,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://0.0.0.0",
                 href = "https://0.0.0.0/",
             ),
             UrlCase(
@@ -7515,6 +8047,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://0.0.0.0",
                 href = "https://0.0.0.0/",
             ),
             UrlCase(
@@ -7529,6 +8062,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://0.0.0.0",
                 href = "https://0.0.0.0/",
             ),
             UrlCase(
@@ -7543,6 +8077,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://127.0.0.1",
                 href = "https://127.0.0.1/",
             ),
             UrlCase(
@@ -7557,6 +8092,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7571,6 +8107,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7585,6 +8122,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C%3A/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C%3A/",
             ),
             UrlCase(
@@ -7599,6 +8137,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C%7C/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C%7C/",
             ),
             UrlCase(
@@ -7613,6 +8152,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7627,6 +8167,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7641,6 +8182,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7655,6 +8197,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
         )
@@ -7673,6 +8216,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7687,6 +8231,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7701,6 +8246,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -7715,6 +8261,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "asdf://%43%7C/",
             ),
             UrlCase(
@@ -7729,6 +8276,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/Users/Domenic/Dropbox/GitHub/tmpvar/jsdom/test/level2/html/files/pix/submit.gif",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C:/Users/Domenic/Dropbox/GitHub/tmpvar/jsdom/test/level2/html/files/pix/submit.gif",
             ),
             UrlCase(
@@ -7743,6 +8291,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C:/",
             ),
             UrlCase(
@@ -7757,6 +8306,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///",
             ),
             UrlCase(
@@ -7771,6 +8321,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C:/",
             ),
             UrlCase(
@@ -7785,6 +8336,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://h/C:/",
             ),
             UrlCase(
@@ -7799,6 +8351,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://h/",
             ),
             UrlCase(
@@ -7813,6 +8366,7 @@ private object UrlConformanceCaseData {
                 pathname = "/d:",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///d:",
             ),
             UrlCase(
@@ -7827,6 +8381,7 @@ private object UrlConformanceCaseData {
                 pathname = "/d:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///d:/",
             ),
             UrlCase(
@@ -7841,6 +8396,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///",
             ),
             UrlCase(
@@ -7855,6 +8411,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///",
             ),
             UrlCase(
@@ -7869,6 +8426,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?test",
                 hash = "",
+                origin = "",
                 href = "file:///test?test",
             ),
             UrlCase(
@@ -7883,6 +8441,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?test",
                 hash = "",
+                origin = "",
                 href = "file:///test?test",
             ),
             UrlCase(
@@ -7897,6 +8456,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?x",
                 hash = "",
+                origin = "",
                 href = "file:///test?x",
             ),
             UrlCase(
@@ -7911,6 +8471,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?x",
                 hash = "",
+                origin = "",
                 href = "file:///test?x",
             ),
             UrlCase(
@@ -7925,6 +8486,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?test",
                 hash = "#x",
+                origin = "",
                 href = "file:///test?test#x",
             ),
             UrlCase(
@@ -7939,6 +8501,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?test",
                 hash = "#x",
+                origin = "",
                 href = "file:///test?test#x",
             ),
             UrlCase(
@@ -7953,6 +8516,7 @@ private object UrlConformanceCaseData {
                 pathname = "//",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:////",
             ),
             UrlCase(
@@ -7967,6 +8531,7 @@ private object UrlConformanceCaseData {
                 pathname = "//",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:////",
             ),
             UrlCase(
@@ -7981,6 +8546,7 @@ private object UrlConformanceCaseData {
                 pathname = "//",
                 search = "?fox",
                 hash = "",
+                origin = "",
                 href = "file:////?fox",
             ),
             UrlCase(
@@ -7995,6 +8561,7 @@ private object UrlConformanceCaseData {
                 pathname = "//",
                 search = "",
                 hash = "#guppy",
+                origin = "",
                 href = "file:////#guppy",
             ),
             UrlCase(
@@ -8009,6 +8576,7 @@ private object UrlConformanceCaseData {
                 pathname = "///",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://spider///",
             ),
             UrlCase(
@@ -8023,6 +8591,7 @@ private object UrlConformanceCaseData {
                 pathname = "//",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:////",
             ),
             UrlCase(
@@ -8037,6 +8606,7 @@ private object UrlConformanceCaseData {
                 pathname = "/localhost//cat",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///localhost//cat",
             ),
             UrlCase(
@@ -8051,6 +8621,7 @@ private object UrlConformanceCaseData {
                 pathname = "//localhost//cat",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:////localhost//cat",
             ),
             UrlCase(
@@ -8065,6 +8636,7 @@ private object UrlConformanceCaseData {
                 pathname = "///",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://///",
             ),
             UrlCase(
@@ -8079,6 +8651,7 @@ private object UrlConformanceCaseData {
                 pathname = "///mouse",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://///mouse",
             ),
             UrlCase(
@@ -8093,6 +8666,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pig",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///pig",
             ),
             UrlCase(
@@ -8107,6 +8681,7 @@ private object UrlConformanceCaseData {
                 pathname = "//pig",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:////pig",
             ),
             UrlCase(
@@ -8121,6 +8696,7 @@ private object UrlConformanceCaseData {
                 pathname = "//pig",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:////pig",
             ),
             UrlCase(
@@ -8135,6 +8711,7 @@ private object UrlConformanceCaseData {
                 pathname = "//localhost//pig",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://lion//localhost//pig",
             ),
             UrlCase(
@@ -8149,6 +8726,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///",
             ),
             UrlCase(
@@ -8163,6 +8741,7 @@ private object UrlConformanceCaseData {
                 pathname = "/rooibos",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://tea/rooibos",
             ),
             UrlCase(
@@ -8177,6 +8756,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "?chai",
                 hash = "",
+                origin = "",
                 href = "file://tea/?chai",
             ),
             UrlCase(
@@ -8191,6 +8771,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://host/C:",
             ),
             UrlCase(
@@ -8205,6 +8786,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://host/C:",
             ),
             UrlCase(
@@ -8219,6 +8801,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://host/C:#",
             ),
             UrlCase(
@@ -8233,6 +8816,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://host/C:?",
             ),
             UrlCase(
@@ -8247,6 +8831,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://host/C:/",
             ),
             UrlCase(
@@ -8261,6 +8846,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://host/C:/",
             ),
             UrlCase(
@@ -8275,6 +8861,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://host/C:/",
             ),
             UrlCase(
@@ -8289,6 +8876,7 @@ private object UrlConformanceCaseData {
                 pathname = "/dir/C",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://host/dir/C",
             ),
             UrlCase(
@@ -8303,6 +8891,7 @@ private object UrlConformanceCaseData {
                 pathname = "/dir/C|a",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://host/dir/C|a",
             ),
             UrlCase(
@@ -8317,6 +8906,7 @@ private object UrlConformanceCaseData {
                 pathname = "/c:/foo/bar",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///c:/foo/bar",
             ),
             UrlCase(
@@ -8331,6 +8921,7 @@ private object UrlConformanceCaseData {
                 pathname = "/c:/foo/bar",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///c:/foo/bar",
             ),
             UrlCase(
@@ -8345,6 +8936,7 @@ private object UrlConformanceCaseData {
                 pathname = "/c:/foo/bar",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///c:/foo/bar",
             ),
             UrlCase(
@@ -8359,6 +8951,7 @@ private object UrlConformanceCaseData {
                 pathname = "/c:/foo/bar",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://host/c:/foo/bar",
             ),
             UrlCase(
@@ -8373,6 +8966,7 @@ private object UrlConformanceCaseData {
                 pathname = "/y/z/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "abc://x/y/z/",
             ),
             UrlCase(
@@ -8387,6 +8981,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://x/C:/",
             ),
             UrlCase(
@@ -8401,6 +8996,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://example.net/C:/",
             ),
             UrlCase(
@@ -8415,6 +9011,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://1.2.3.4/C:/",
             ),
             UrlCase(
@@ -8429,6 +9026,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://[1::8]/C:/",
             ),
             UrlCase(
@@ -8443,6 +9041,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://host/C:/",
             ),
             UrlCase(
@@ -8457,6 +9056,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://host/C:/",
             ),
             UrlCase(
@@ -8471,6 +9071,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://host/C:/",
             ),
             UrlCase(
@@ -8485,6 +9086,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://host/C:/",
             ),
             UrlCase(
@@ -8499,6 +9101,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C:/",
             ),
         )
@@ -8517,6 +9120,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C:/",
             ),
             UrlCase(
@@ -8531,6 +9135,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C:/",
             ),
             UrlCase(
@@ -8545,6 +9150,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C:/",
             ),
             UrlCase(
@@ -8559,6 +9165,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C:/",
             ),
             UrlCase(
@@ -8573,6 +9180,7 @@ private object UrlConformanceCaseData {
                 pathname = "/C:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///C:/",
             ),
             UrlCase(
@@ -8587,6 +9195,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///",
             ),
             UrlCase(
@@ -8601,6 +9210,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "?q=v",
                 hash = "",
+                origin = "",
                 href = "file:///?q=v",
             ),
             UrlCase(
@@ -8615,6 +9225,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "#frag",
+                origin = "",
                 href = "file:///#frag",
             ),
             UrlCase(
@@ -8629,6 +9240,7 @@ private object UrlConformanceCaseData {
                 pathname = "/Y:",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///Y:",
             ),
             UrlCase(
@@ -8643,6 +9255,7 @@ private object UrlConformanceCaseData {
                 pathname = "/Y:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///Y:/",
             ),
             UrlCase(
@@ -8657,6 +9270,7 @@ private object UrlConformanceCaseData {
                 pathname = "/Y",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///Y",
             ),
             UrlCase(
@@ -8671,6 +9285,7 @@ private object UrlConformanceCaseData {
                 pathname = "/Y:",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///Y:",
             ),
             UrlCase(
@@ -8685,6 +9300,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -8699,6 +9315,7 @@ private object UrlConformanceCaseData {
                 pathname = "/y:",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///y:",
             ),
             UrlCase(
@@ -8713,6 +9330,7 @@ private object UrlConformanceCaseData {
                 pathname = "/y:/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///y:/",
             ),
             UrlCase(
@@ -8727,6 +9345,7 @@ private object UrlConformanceCaseData {
                 pathname = "/y",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///y",
             ),
             UrlCase(
@@ -8741,6 +9360,7 @@ private object UrlConformanceCaseData {
                 pathname = "/y:",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///y:",
             ),
             UrlCase(
@@ -8755,6 +9375,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -8769,6 +9390,7 @@ private object UrlConformanceCaseData {
                 pathname = "///foo",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://///foo",
             ),
             UrlCase(
@@ -8783,6 +9405,7 @@ private object UrlConformanceCaseData {
                 pathname = "////foo",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://////foo",
             ),
             UrlCase(
@@ -8797,6 +9420,7 @@ private object UrlConformanceCaseData {
                 pathname = "//foo",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:////foo",
             ),
             UrlCase(
@@ -8811,6 +9435,7 @@ private object UrlConformanceCaseData {
                 pathname = "/one/two",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///one/two",
             ),
             UrlCase(
@@ -8825,6 +9450,7 @@ private object UrlConformanceCaseData {
                 pathname = "//one/two",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:////one/two",
             ),
             UrlCase(
@@ -8839,6 +9465,7 @@ private object UrlConformanceCaseData {
                 pathname = "/two",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://one/two",
             ),
             UrlCase(
@@ -8853,6 +9480,7 @@ private object UrlConformanceCaseData {
                 pathname = "/one/two",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///one/two",
             ),
             UrlCase(
@@ -8867,6 +9495,7 @@ private object UrlConformanceCaseData {
                 pathname = "//one/two",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:////one/two",
             ),
             UrlCase(
@@ -8881,6 +9510,7 @@ private object UrlConformanceCaseData {
                 pathname = "//",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:////",
             ),
             UrlCase(
@@ -8895,6 +9525,7 @@ private object UrlConformanceCaseData {
                 pathname = "//p",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:////p",
             ),
             UrlCase(
@@ -8909,6 +9540,7 @@ private object UrlConformanceCaseData {
                 pathname = "//p",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:////p",
             ),
             UrlCase(
@@ -8923,6 +9555,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "http://[1::]",
                 href = "http://[1::]/",
             ),
             UrlCase(
@@ -8937,6 +9570,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -8951,6 +9585,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -8965,6 +9600,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -8979,6 +9615,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -8993,6 +9630,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -9007,6 +9645,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -9021,6 +9660,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -9035,6 +9675,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -9049,6 +9690,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -9063,6 +9705,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -9077,6 +9720,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -9091,6 +9735,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -9105,6 +9750,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -9119,6 +9765,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "sc://%C3%B1",
             ),
             UrlCase(
@@ -9133,6 +9780,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "?x",
                 hash = "",
+                origin = "null",
                 href = "sc://%C3%B1?x",
             ),
             UrlCase(
@@ -9147,6 +9795,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "#x",
+                origin = "null",
                 href = "sc://%C3%B1#x",
             ),
             UrlCase(
@@ -9161,6 +9810,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "#x",
+                origin = "null",
                 href = "sc://%C3%B1#x",
             ),
             UrlCase(
@@ -9175,6 +9825,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "?x",
                 hash = "",
+                origin = "null",
                 href = "sc://%C3%B1?x",
             ),
             UrlCase(
@@ -9189,6 +9840,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "sc://?",
             ),
             UrlCase(
@@ -9203,6 +9855,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "sc://#",
             ),
             UrlCase(
@@ -9217,6 +9870,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "sc:///",
             ),
             UrlCase(
@@ -9231,6 +9885,7 @@ private object UrlConformanceCaseData {
                 pathname = "//",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "sc:////",
             ),
             UrlCase(
@@ -9245,6 +9900,7 @@ private object UrlConformanceCaseData {
                 pathname = "//x/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "sc:////x/",
             ),
             UrlCase(
@@ -9259,6 +9915,7 @@ private object UrlConformanceCaseData {
                 pathname = "/someconfig;mode=netascii",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "tftp://foobar.com/someconfig;mode=netascii",
             ),
             UrlCase(
@@ -9273,6 +9930,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "telnet://user:pass@foobar.com:23/",
             ),
             UrlCase(
@@ -9287,6 +9945,7 @@ private object UrlConformanceCaseData {
                 pathname = "/Index.ut2",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "ut2004://10.10.10.10:7777/Index.ut2",
             ),
             UrlCase(
@@ -9301,6 +9960,7 @@ private object UrlConformanceCaseData {
                 pathname = "/0",
                 search = "?baz=bam&qux=baz",
                 hash = "",
+                origin = "null",
                 href = "redis://foo:bar@somehost:6379/0?baz=bam&qux=baz",
             ),
             UrlCase(
@@ -9315,6 +9975,7 @@ private object UrlConformanceCaseData {
                 pathname = "/sup",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "rsync://foo@host:911/sup",
             ),
             UrlCase(
@@ -9329,6 +9990,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar.git",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "git://github.com/foo/bar.git",
             ),
             UrlCase(
@@ -9343,6 +10005,7 @@ private object UrlConformanceCaseData {
                 pathname = "/channel",
                 search = "?passwd",
                 hash = "",
+                origin = "null",
                 href = "irc://myserver.com:6999/channel?passwd",
             ),
         )
@@ -9361,6 +10024,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo.bar.org",
                 search = "?type=TXT",
                 hash = "",
+                origin = "null",
                 href = "dns://fw.example.org:9999/foo.bar.org?type=TXT",
             ),
             UrlCase(
@@ -9375,6 +10039,7 @@ private object UrlConformanceCaseData {
                 pathname = "/ou=People,o=JNDITutorial",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "ldap://localhost:389/ou=People,o=JNDITutorial",
             ),
             UrlCase(
@@ -9389,6 +10054,7 @@ private object UrlConformanceCaseData {
                 pathname = "/foo/bar",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "git+https://github.com/foo/bar",
             ),
             UrlCase(
@@ -9403,6 +10069,7 @@ private object UrlConformanceCaseData {
                 pathname = "ietf:rfc:2648",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "urn:ietf:rfc:2648",
             ),
             UrlCase(
@@ -9417,6 +10084,7 @@ private object UrlConformanceCaseData {
                 pathname = "joe@example.org,2001:foo/bar",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "tag:joe@example.org,2001:foo/bar",
             ),
             UrlCase(
@@ -9431,6 +10099,7 @@ private object UrlConformanceCaseData {
                 pathname = "//",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-spec:/.//",
             ),
             UrlCase(
@@ -9445,6 +10114,7 @@ private object UrlConformanceCaseData {
                 pathname = "//",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-spec:/.//",
             ),
             UrlCase(
@@ -9459,6 +10129,7 @@ private object UrlConformanceCaseData {
                 pathname = "//",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-spec:/.//",
             ),
             UrlCase(
@@ -9473,6 +10144,7 @@ private object UrlConformanceCaseData {
                 pathname = "//path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-spec:/.//path",
             ),
             UrlCase(
@@ -9487,6 +10159,7 @@ private object UrlConformanceCaseData {
                 pathname = "//path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-spec:/.//path",
             ),
             UrlCase(
@@ -9501,6 +10174,7 @@ private object UrlConformanceCaseData {
                 pathname = "//path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-spec:/.//path",
             ),
             UrlCase(
@@ -9515,6 +10189,7 @@ private object UrlConformanceCaseData {
                 pathname = "//path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-spec:/.//path",
             ),
             UrlCase(
@@ -9529,6 +10204,7 @@ private object UrlConformanceCaseData {
                 pathname = "//path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-spec:/.//path",
             ),
             UrlCase(
@@ -9543,6 +10219,7 @@ private object UrlConformanceCaseData {
                 pathname = "//path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-spec:/.//path",
             ),
             UrlCase(
@@ -9557,6 +10234,7 @@ private object UrlConformanceCaseData {
                 pathname = "//path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-spec:/.//path",
             ),
             UrlCase(
@@ -9571,6 +10249,7 @@ private object UrlConformanceCaseData {
                 pathname = "//p",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-spec:/.//p",
             ),
             UrlCase(
@@ -9585,6 +10264,7 @@ private object UrlConformanceCaseData {
                 pathname = "//path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-spec:/.//path",
             ),
             UrlCase(
@@ -9599,6 +10279,7 @@ private object UrlConformanceCaseData {
                 pathname = "/path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-spec:/path",
             ),
             UrlCase(
@@ -9613,6 +10294,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-special://%E2%80%A0/",
             ),
             UrlCase(
@@ -9627,6 +10309,7 @@ private object UrlConformanceCaseData {
                 pathname = "/path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-special://H%4fSt/path",
             ),
             UrlCase(
@@ -9641,6 +10324,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-special://[1:2:0:0:5::]/",
             ),
             UrlCase(
@@ -9655,6 +10339,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-special://[1:2::3]/",
             ),
             UrlCase(
@@ -9669,6 +10354,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-special://[1:2::3]:80/",
             ),
             UrlCase(
@@ -9683,6 +10369,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -9697,6 +10384,7 @@ private object UrlConformanceCaseData {
                 pathname = "https://example.com:443/",
                 search = "",
                 hash = "",
+                origin = "https://example.com",
                 href = "blob:https://example.com:443/",
             ),
             UrlCase(
@@ -9711,6 +10399,7 @@ private object UrlConformanceCaseData {
                 pathname = "http://example.org:88/",
                 search = "",
                 hash = "",
+                origin = "http://example.org:88",
                 href = "blob:http://example.org:88/",
             ),
             UrlCase(
@@ -9725,6 +10414,7 @@ private object UrlConformanceCaseData {
                 pathname = "d3958f5c-0777-0845-9dcf-2cb28783acaf",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "blob:d3958f5c-0777-0845-9dcf-2cb28783acaf",
             ),
             UrlCase(
@@ -9739,6 +10429,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "blob:",
             ),
             UrlCase(
@@ -9753,6 +10444,7 @@ private object UrlConformanceCaseData {
                 pathname = "blob:",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "blob:blob:",
             ),
             UrlCase(
@@ -9767,6 +10459,7 @@ private object UrlConformanceCaseData {
                 pathname = "blob:https://example.org/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "blob:blob:https://example.org/",
             ),
             UrlCase(
@@ -9781,6 +10474,7 @@ private object UrlConformanceCaseData {
                 pathname = "about:blank",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "blob:about:blank",
             ),
             UrlCase(
@@ -9795,6 +10489,7 @@ private object UrlConformanceCaseData {
                 pathname = "file://host/path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "blob:file://host/path",
             ),
             UrlCase(
@@ -9809,6 +10504,7 @@ private object UrlConformanceCaseData {
                 pathname = "ftp://host/path",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "blob:ftp://host/path",
             ),
             UrlCase(
@@ -9823,6 +10519,7 @@ private object UrlConformanceCaseData {
                 pathname = "ws://example.org/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "blob:ws://example.org/",
             ),
             UrlCase(
@@ -9837,6 +10534,7 @@ private object UrlConformanceCaseData {
                 pathname = "wss://example.org/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "blob:wss://example.org/",
             ),
             UrlCase(
@@ -9851,6 +10549,7 @@ private object UrlConformanceCaseData {
                 pathname = "http%3a//example.org/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "blob:http%3a//example.org/",
             ),
             UrlCase(
@@ -9865,6 +10564,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://0x7f.0.0.0x7g/",
             ),
             UrlCase(
@@ -9879,6 +10579,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://0x7f.0.0.0x7g/",
             ),
             UrlCase(
@@ -9893,6 +10594,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -9907,6 +10609,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://[0:1:0:1:0:1:0:1]/",
             ),
             UrlCase(
@@ -9921,6 +10624,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://[1:0:1:0:1:0:1:0]/",
             ),
             UrlCase(
@@ -9935,6 +10639,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?%22",
                 hash = "",
+                origin = "",
                 href = "http://example.org/test?%22",
             ),
             UrlCase(
@@ -9949,6 +10654,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://example.org/test?#",
             ),
             UrlCase(
@@ -9963,6 +10669,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?%3C",
                 hash = "",
+                origin = "",
                 href = "http://example.org/test?%3C",
             ),
             UrlCase(
@@ -9977,6 +10684,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?%3E",
                 hash = "",
+                origin = "",
                 href = "http://example.org/test?%3E",
             ),
             UrlCase(
@@ -9991,6 +10699,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?%E2%8C%A3",
                 hash = "",
+                origin = "",
                 href = "http://example.org/test?%E2%8C%A3",
             ),
             UrlCase(
@@ -10005,6 +10714,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?%23%23",
                 hash = "",
+                origin = "",
                 href = "http://example.org/test?%23%23",
             ),
             UrlCase(
@@ -10019,6 +10729,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?%GH",
                 hash = "",
+                origin = "",
                 href = "http://example.org/test?%GH",
             ),
             UrlCase(
@@ -10033,6 +10744,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?a",
                 hash = "#%EF",
+                origin = "",
                 href = "http://example.org/test?a#%EF",
             ),
             UrlCase(
@@ -10047,6 +10759,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?a",
                 hash = "#%GH",
+                origin = "",
                 href = "http://example.org/test?a#%GH",
             ),
             UrlCase(
@@ -10061,6 +10774,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10075,6 +10789,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10089,6 +10804,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10103,6 +10819,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10117,6 +10834,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10131,6 +10849,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test-a-colon-slash.html",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "a:/test-a-colon-slash.html",
             ),
             UrlCase(
@@ -10145,6 +10864,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test-a-colon-slash-slash.html",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "a:///test-a-colon-slash-slash.html",
             ),
             UrlCase(
@@ -10159,6 +10879,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test-a-colon-slash-b.html",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "a:/test-a-colon-slash-b.html",
             ),
             UrlCase(
@@ -10173,6 +10894,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test-a-colon-slash-slash-b.html",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "a://b/test-a-colon-slash-slash-b.html",
             ),
             UrlCase(
@@ -10187,6 +10909,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?a",
                 hash = "#b%00c",
+                origin = "",
                 href = "http://example.org/test?a#b%00c",
             ),
         )
@@ -10205,6 +10928,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?a",
                 hash = "#b%00c",
+                origin = "",
                 href = "non-spec://example.org/test?a#b%00c",
             ),
             UrlCase(
@@ -10219,6 +10943,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "?a",
                 hash = "#b%00c",
+                origin = "",
                 href = "non-spec:/test?a#b%00c",
             ),
             UrlCase(
@@ -10233,6 +10958,7 @@ private object UrlConformanceCaseData {
                 pathname = "/some/dir/10.0.0.7:8080/foo.html",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///some/dir/10.0.0.7:8080/foo.html",
             ),
             UrlCase(
@@ -10247,6 +10973,7 @@ private object UrlConformanceCaseData {
                 pathname = "/some/dir/a!@\$*=/foo.html",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///some/dir/a!@\$*=/foo.html",
             ),
             UrlCase(
@@ -10261,6 +10988,7 @@ private object UrlConformanceCaseData {
                 pathname = "foo/bar",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "a1234567890-+.:foo/bar",
             ),
             UrlCase(
@@ -10275,6 +11003,7 @@ private object UrlConformanceCaseData {
                 pathname = "/p",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://ab/p",
             ),
             UrlCase(
@@ -10289,6 +11018,7 @@ private object UrlConformanceCaseData {
                 pathname = "/p",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://ab/p",
             ),
             UrlCase(
@@ -10303,6 +11033,7 @@ private object UrlConformanceCaseData {
                 pathname = "/usr/bin",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///usr/bin",
             ),
             UrlCase(
@@ -10317,6 +11048,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10331,6 +11063,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10345,6 +11078,7 @@ private object UrlConformanceCaseData {
                 pathname = "/p",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://xn--/p",
             ),
             UrlCase(
@@ -10359,6 +11093,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "#link",
+                origin = "",
                 href = "https://example.org/#link",
             ),
             UrlCase(
@@ -10373,6 +11108,7 @@ private object UrlConformanceCaseData {
                 pathname = "cannot-be-a-base-url-%00%01%1F%1E~%7F%C2%80",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "non-special:cannot-be-a-base-url-%00%01%1F%1E~%7F%C2%80",
             ),
             UrlCase(
@@ -10387,6 +11123,7 @@ private object UrlConformanceCaseData {
                 pathname = "cannot-be-a-base-url-!\"\$%&'()*+,-.;<=>@[\\]^_`{|}~@/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "non-special:cannot-be-a-base-url-!\"\$%&'()*+,-.;<=>@[\\]^_`{|}~@/",
             ),
             UrlCase(
@@ -10401,6 +11138,7 @@ private object UrlConformanceCaseData {
                 pathname = "/path%7B%7Fpath.html",
                 search = "?query%27%7F=query",
                 hash = "#fragment%3C%7Ffragment",
+                origin = "https://www.example.com",
                 href = "https://www.example.com/path%7B%7Fpath.html?query%27%7F=query#fragment%3C%7Ffragment",
             ),
             UrlCase(
@@ -10415,6 +11153,7 @@ private object UrlConformanceCaseData {
                 pathname = "/bar",
                 search = "",
                 hash = "",
+                origin = "https://foo",
                 href = "https://user:pass%5B%7F@foo/bar",
             ),
             UrlCase(
@@ -10429,6 +11168,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "foo://%20!%22\$%&'()*+,-.%3B%3C%3D%3E%40%5B%5C%5D%5E_%60%7B%7C%7D~@host/",
             ),
             UrlCase(
@@ -10443,6 +11183,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "wss://host",
                 href = "wss://%20!%22\$%&'()*+,-.%3B%3C%3D%3E%40%5B%5D%5E_%60%7B%7C%7D~@host/",
             ),
             UrlCase(
@@ -10457,6 +11198,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "foo://joe:%20!%22\$%&'()*+,-.%3A%3B%3C%3D%3E%40%5B%5C%5D%5E_%60%7B%7C%7D~@host/",
             ),
             UrlCase(
@@ -10471,6 +11213,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "wss://host",
                 href = "wss://joe:%20!%22\$%&'()*+,-.%3A%3B%3C%3D%3E%40%5B%5D%5E_%60%7B%7C%7D~@host/",
             ),
             UrlCase(
@@ -10485,6 +11228,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "foo://!\"\$%&'()*+,-.;=_`{}~/",
             ),
             UrlCase(
@@ -10499,6 +11243,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "wss://!\"\$&'()*+,-.;=_`{}~",
                 href = "wss://!\"\$&'()*+,-.;=_`{}~/",
             ),
             UrlCase(
@@ -10513,6 +11258,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%20!%22\$%&'()*+,-./:;%3C=%3E@[\\]%5E_%60%7B|%7D~",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "foo://host/%20!%22\$%&'()*+,-./:;%3C=%3E@[\\]%5E_%60%7B|%7D~",
             ),
             UrlCase(
@@ -10527,6 +11273,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%20!%22\$%&'()*+,-./:;%3C=%3E@[/]%5E_%60%7B|%7D~",
                 search = "",
                 hash = "",
+                origin = "wss://host",
                 href = "wss://host/%20!%22\$%&'()*+,-./:;%3C=%3E@[/]%5E_%60%7B|%7D~",
             ),
             UrlCase(
@@ -10541,6 +11288,7 @@ private object UrlConformanceCaseData {
                 pathname = "/dir/",
                 search = "?%20!%22\$%&'()*+,-./:;%3C=%3E?@[\\]^_`{|}~",
                 hash = "",
+                origin = "null",
                 href = "foo://host/dir/?%20!%22\$%&'()*+,-./:;%3C=%3E?@[\\]^_`{|}~",
             ),
             UrlCase(
@@ -10555,6 +11303,7 @@ private object UrlConformanceCaseData {
                 pathname = "/dir/",
                 search = "?%20!%22\$%&%27()*+,-./:;%3C=%3E?@[\\]^_`{|}~",
                 hash = "",
+                origin = "wss://host",
                 href = "wss://host/dir/?%20!%22\$%&%27()*+,-./:;%3C=%3E?@[\\]^_`{|}~",
             ),
             UrlCase(
@@ -10569,6 +11318,7 @@ private object UrlConformanceCaseData {
                 pathname = "/dir/",
                 search = "",
                 hash = "#%20!%22#\$%&'()*+,-./:;%3C=%3E?@[\\]^_%60{|}~",
+                origin = "null",
                 href = "foo://host/dir/#%20!%22#\$%&'()*+,-./:;%3C=%3E?@[\\]^_%60{|}~",
             ),
             UrlCase(
@@ -10583,6 +11333,7 @@ private object UrlConformanceCaseData {
                 pathname = "/dir/",
                 search = "",
                 hash = "#%20!%22#\$%&'()*+,-./:;%3C=%3E?@[\\]^_%60{|}~",
+                origin = "wss://host",
                 href = "wss://host/dir/#%20!%22#\$%&'()*+,-./:;%3C=%3E?@[\\]^_%60{|}~",
             ),
             UrlCase(
@@ -10597,6 +11348,7 @@ private object UrlConformanceCaseData {
                 pathname = "rootless",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "abc:rootless",
             ),
             UrlCase(
@@ -10611,6 +11363,7 @@ private object UrlConformanceCaseData {
                 pathname = "rootless",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "abc:rootless",
             ),
             UrlCase(
@@ -10625,6 +11378,7 @@ private object UrlConformanceCaseData {
                 pathname = "rootless",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "abc:rootless",
             ),
             UrlCase(
@@ -10639,6 +11393,7 @@ private object UrlConformanceCaseData {
                 pathname = "/rooted",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "abc:/rooted",
             ),
             UrlCase(
@@ -10653,6 +11408,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10667,6 +11423,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10681,6 +11438,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10695,6 +11453,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10709,6 +11468,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10723,6 +11483,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10737,6 +11498,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10751,6 +11513,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10765,6 +11528,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10779,6 +11543,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10793,6 +11558,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10807,6 +11573,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10821,6 +11588,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10835,6 +11603,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10849,6 +11618,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10863,6 +11633,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10877,6 +11648,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10891,6 +11663,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10905,6 +11678,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10919,6 +11693,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10933,6 +11708,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10947,6 +11723,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10961,6 +11738,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10975,6 +11753,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -10989,6 +11768,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11003,6 +11783,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11017,6 +11798,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11031,6 +11813,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://foo.09../",
             ),
         )
@@ -11049,6 +11832,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11063,6 +11847,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11077,6 +11862,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11091,6 +11877,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11105,6 +11892,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11119,6 +11907,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%00y",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "https://x/%00y",
             ),
             UrlCase(
@@ -11133,6 +11922,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "?%00y",
                 hash = "",
+                origin = "",
                 href = "https://x/?%00y",
             ),
             UrlCase(
@@ -11147,6 +11937,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "#%00y",
+                origin = "",
                 href = "https://x/?#%00y",
             ),
             UrlCase(
@@ -11161,6 +11952,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11175,6 +11967,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%EF%BF%BFy",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "https://x/%EF%BF%BFy",
             ),
             UrlCase(
@@ -11189,6 +11982,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "?%EF%BF%BFy",
                 hash = "",
+                origin = "",
                 href = "https://x/?%EF%BF%BFy",
             ),
             UrlCase(
@@ -11203,6 +11997,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "#%EF%BF%BFy",
+                origin = "",
                 href = "https://x/?#%EF%BF%BFy",
             ),
             UrlCase(
@@ -11217,6 +12012,7 @@ private object UrlConformanceCaseData {
                 pathname = "%00y",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-special:%00y",
             ),
             UrlCase(
@@ -11231,6 +12027,7 @@ private object UrlConformanceCaseData {
                 pathname = "x/%00y",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-special:x/%00y",
             ),
             UrlCase(
@@ -11245,6 +12042,7 @@ private object UrlConformanceCaseData {
                 pathname = "x/",
                 search = "?%00y",
                 hash = "",
+                origin = "",
                 href = "non-special:x/?%00y",
             ),
             UrlCase(
@@ -11259,6 +12057,7 @@ private object UrlConformanceCaseData {
                 pathname = "x/",
                 search = "",
                 hash = "#%00y",
+                origin = "",
                 href = "non-special:x/?#%00y",
             ),
             UrlCase(
@@ -11273,6 +12072,7 @@ private object UrlConformanceCaseData {
                 pathname = "%EF%BF%BFy",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-special:%EF%BF%BFy",
             ),
             UrlCase(
@@ -11287,6 +12087,7 @@ private object UrlConformanceCaseData {
                 pathname = "x/%EF%BF%BFy",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "non-special:x/%EF%BF%BFy",
             ),
             UrlCase(
@@ -11301,6 +12102,7 @@ private object UrlConformanceCaseData {
                 pathname = "x/",
                 search = "?%EF%BF%BFy",
                 hash = "",
+                origin = "",
                 href = "non-special:x/?%EF%BF%BFy",
             ),
             UrlCase(
@@ -11315,6 +12117,7 @@ private object UrlConformanceCaseData {
                 pathname = "x/",
                 search = "",
                 hash = "#%EF%BF%BFy",
+                origin = "",
                 href = "non-special:x/?#%EF%BF%BFy",
             ),
             UrlCase(
@@ -11329,6 +12132,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11343,6 +12147,7 @@ private object UrlConformanceCaseData {
                 pathname = "/%22quoted%22",
                 search = "",
                 hash = "",
+                origin = "https://example.com",
                 href = "https://example.com/%22quoted%22",
             ),
             UrlCase(
@@ -11357,6 +12162,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://ab",
                 href = "https://ab/",
             ),
             UrlCase(
@@ -11371,6 +12177,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11385,6 +12192,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11399,6 +12207,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "https://xn--",
                 href = "https://xn--/",
             ),
             UrlCase(
@@ -11413,6 +12222,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pathname",
                 search = "?search",
                 hash = "#hash",
+                origin = "null",
                 href = "data://example.com:8080/pathname?search#hash",
             ),
             UrlCase(
@@ -11427,6 +12237,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "data:///test",
             ),
             UrlCase(
@@ -11441,6 +12252,7 @@ private object UrlConformanceCaseData {
                 pathname = "/b",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "data://test/b",
             ),
             UrlCase(
@@ -11455,6 +12267,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11469,6 +12282,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11483,6 +12297,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11497,6 +12312,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pathname",
                 search = "?search",
                 hash = "#hash",
+                origin = "null",
                 href = "javascript://example.com:8080/pathname?search#hash",
             ),
             UrlCase(
@@ -11511,6 +12327,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "javascript:///test",
             ),
             UrlCase(
@@ -11525,6 +12342,7 @@ private object UrlConformanceCaseData {
                 pathname = "/b",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "javascript://test/b",
             ),
             UrlCase(
@@ -11539,6 +12357,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11553,6 +12372,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11567,6 +12387,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11581,6 +12402,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pathname",
                 search = "?search",
                 hash = "#hash",
+                origin = "null",
                 href = "mailto://example.com:8080/pathname?search#hash",
             ),
             UrlCase(
@@ -11595,6 +12417,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "mailto:///test",
             ),
             UrlCase(
@@ -11609,6 +12432,7 @@ private object UrlConformanceCaseData {
                 pathname = "/b",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "mailto://test/b",
             ),
             UrlCase(
@@ -11623,6 +12447,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11637,6 +12462,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11651,6 +12477,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11665,6 +12492,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pathname",
                 search = "?search",
                 hash = "#hash",
+                origin = "null",
                 href = "intent://example.com:8080/pathname?search#hash",
             ),
             UrlCase(
@@ -11679,6 +12507,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "intent:///test",
             ),
             UrlCase(
@@ -11693,6 +12522,7 @@ private object UrlConformanceCaseData {
                 pathname = "/b",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "intent://test/b",
             ),
             UrlCase(
@@ -11707,6 +12537,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11721,6 +12552,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11735,6 +12567,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11749,6 +12582,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pathname",
                 search = "?search",
                 hash = "#hash",
+                origin = "null",
                 href = "urn://example.com:8080/pathname?search#hash",
             ),
             UrlCase(
@@ -11763,6 +12597,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "urn:///test",
             ),
             UrlCase(
@@ -11777,6 +12612,7 @@ private object UrlConformanceCaseData {
                 pathname = "/b",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "urn://test/b",
             ),
             UrlCase(
@@ -11791,6 +12627,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11805,6 +12642,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11819,6 +12657,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11833,6 +12672,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pathname",
                 search = "?search",
                 hash = "#hash",
+                origin = "null",
                 href = "turn://example.com:8080/pathname?search#hash",
             ),
             UrlCase(
@@ -11847,6 +12687,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "turn:///test",
             ),
             UrlCase(
@@ -11861,6 +12702,7 @@ private object UrlConformanceCaseData {
                 pathname = "/b",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "turn://test/b",
             ),
             UrlCase(
@@ -11875,6 +12717,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
         )
@@ -11893,6 +12736,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11907,6 +12751,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11921,6 +12766,7 @@ private object UrlConformanceCaseData {
                 pathname = "/pathname",
                 search = "?search",
                 hash = "#hash",
+                origin = "null",
                 href = "stun://example.com:8080/pathname?search#hash",
             ),
             UrlCase(
@@ -11935,6 +12781,7 @@ private object UrlConformanceCaseData {
                 pathname = "/test",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "stun:///test",
             ),
             UrlCase(
@@ -11949,6 +12796,7 @@ private object UrlConformanceCaseData {
                 pathname = "/b",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "stun://test/b",
             ),
             UrlCase(
@@ -11963,6 +12811,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11977,6 +12826,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -11991,6 +12841,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -12005,6 +12856,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "w://x:0",
             ),
             UrlCase(
@@ -12019,6 +12871,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "west://x:0",
             ),
             UrlCase(
@@ -12033,6 +12886,7 @@ private object UrlConformanceCaseData {
                 pathname = "/a",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "android://x:0/a",
             ),
             UrlCase(
@@ -12047,6 +12901,7 @@ private object UrlConformanceCaseData {
                 pathname = "/a",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "drivefs://x:0/a",
             ),
             UrlCase(
@@ -12061,6 +12916,7 @@ private object UrlConformanceCaseData {
                 pathname = "/a",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "chromeos-steam://x:0/a",
             ),
             UrlCase(
@@ -12075,6 +12931,7 @@ private object UrlConformanceCaseData {
                 pathname = "/a",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "steam://x:0/a",
             ),
             UrlCase(
@@ -12089,6 +12946,7 @@ private object UrlConformanceCaseData {
                 pathname = "/a",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "materialized-view://x:0/a",
             ),
             UrlCase(
@@ -12103,6 +12961,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "android-app://x:0",
             ),
             UrlCase(
@@ -12117,6 +12976,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "chrome-distiller://x:0",
             ),
             UrlCase(
@@ -12131,6 +12991,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "chrome-extension://x:0",
             ),
             UrlCase(
@@ -12145,6 +13006,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "chrome-native://x:0",
             ),
             UrlCase(
@@ -12159,6 +13021,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "chrome-resource://x:0",
             ),
             UrlCase(
@@ -12173,6 +13036,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "chrome-search://x:0",
             ),
             UrlCase(
@@ -12187,6 +13051,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "fuchsia-dir://x:0",
             ),
             UrlCase(
@@ -12201,6 +13066,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "isolated-app://x:0",
             ),
             UrlCase(
@@ -12215,6 +13081,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://test/",
             ),
             UrlCase(
@@ -12229,6 +13096,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://test/",
             ),
             UrlCase(
@@ -12243,6 +13111,7 @@ private object UrlConformanceCaseData {
                 pathname = "/path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://example.org/path",
             ),
             UrlCase(
@@ -12257,6 +13126,7 @@ private object UrlConformanceCaseData {
                 pathname = "/path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://example.org/path",
             ),
             UrlCase(
@@ -12271,6 +13141,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://example.org/",
             ),
             UrlCase(
@@ -12285,6 +13156,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://example.org/",
             ),
             UrlCase(
@@ -12299,6 +13171,7 @@ private object UrlConformanceCaseData {
                 pathname = "/path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://example.org/path",
             ),
             UrlCase(
@@ -12313,6 +13186,7 @@ private object UrlConformanceCaseData {
                 pathname = "/path",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "http://example.org/path",
             ),
             UrlCase(
@@ -12327,6 +13201,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file:///",
             ),
             UrlCase(
@@ -12341,6 +13216,7 @@ private object UrlConformanceCaseData {
                 pathname = "////",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://////",
             ),
             UrlCase(
@@ -12355,6 +13231,7 @@ private object UrlConformanceCaseData {
                 pathname = "/",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "file://a/",
             ),
             UrlCase(
@@ -12369,6 +13246,7 @@ private object UrlConformanceCaseData {
                 pathname = "\\\\opaque",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "non-special:\\\\opaque",
             ),
             UrlCase(
@@ -12383,6 +13261,7 @@ private object UrlConformanceCaseData {
                 pathname = "\\\\opaque/path",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "non-special:\\\\opaque/path",
             ),
             UrlCase(
@@ -12397,6 +13276,7 @@ private object UrlConformanceCaseData {
                 pathname = "\\\\opaque\\path",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "non-special:\\\\opaque\\path",
             ),
             UrlCase(
@@ -12411,6 +13291,7 @@ private object UrlConformanceCaseData {
                 pathname = "\\/opaque",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "non-special:\\/opaque",
             ),
             UrlCase(
@@ -12425,6 +13306,7 @@ private object UrlConformanceCaseData {
                 pathname = "/\\path",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "non-special:/\\path",
             ),
             UrlCase(
@@ -12439,6 +13321,7 @@ private object UrlConformanceCaseData {
                 pathname = "",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "",
             ),
             UrlCase(
@@ -12453,6 +13336,7 @@ private object UrlConformanceCaseData {
                 pathname = "/a\\b",
                 search = "",
                 hash = "",
+                origin = "null",
                 href = "non-special://host/a\\b",
             ),
             UrlCase(
@@ -12467,6 +13351,7 @@ private object UrlConformanceCaseData {
                 pathname = "/\\a",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "foo://foo/\\a",
             ),
             UrlCase(
@@ -12481,6 +13366,7 @@ private object UrlConformanceCaseData {
                 pathname = "/\\/a",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "foo://foo/\\/a",
             ),
             UrlCase(
@@ -12495,6 +13381,7 @@ private object UrlConformanceCaseData {
                 pathname = "/\\\\a",
                 search = "",
                 hash = "",
+                origin = "",
                 href = "foo://foo/\\\\a",
             ),
             UrlCase(
@@ -12509,6 +13396,7 @@ private object UrlConformanceCaseData {
                 pathname = "text/plain,test",
                 search = "",
                 hash = "#%3Cfoo%3E%20%3Cbar%3E",
+                origin = "",
                 href = "data:text/plain,test#%3Cfoo%3E%20%3Cbar%3E",
             ),
             UrlCase(
@@ -12523,6 +13411,7 @@ private object UrlConformanceCaseData {
                 pathname = "blank",
                 search = "",
                 hash = "#%3Cfoo%3E%20%3Cbar%3E",
+                origin = "",
                 href = "about:blank#%3Cfoo%3E%20%3Cbar%3E",
             ),
             UrlCase(
@@ -12539,6 +13428,7 @@ private object UrlConformanceCaseData {
                 pathname = "text/plain,test",
                 search = "",
                 hash = "#%00%01%1F%20!%22#\$%&'()*+,-./09:;%3C=%3E?@AZ[\\]^_%60az{|}~%7F%C2%80%C2%81%C3%89%C3%A9",
+                origin = "",
                 href =
                     "data:text/plain,test#%00%01%1F%20!%22#\$%&'()*+,-./09:;%3C=%3E?@AZ[\\]^_%60az{|}~%7F%C2%80%C" +
                         "2%81%C3%89%C3%A9",
@@ -12557,6 +13447,7 @@ private object UrlConformanceCaseData {
                 pathname = "blank",
                 search = "",
                 hash = "#%00%01%1F%20!%22#\$%&'()*+,-./09:;%3C=%3E?@AZ[\\]^_%60az{|}~%7F%C2%80%C2%81%C3%89%C3%A9",
+                origin = "",
                 href =
                     "about:blank#%00%01%1F%20!%22#\$%&'()*+,-./09:;%3C=%3E?@AZ[\\]^_%60az{|}~%7F%C2%80%C2%81%C3%8" +
                         "9%C3%A9",

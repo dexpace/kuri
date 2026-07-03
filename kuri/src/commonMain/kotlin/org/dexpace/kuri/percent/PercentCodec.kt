@@ -20,6 +20,9 @@ private const val TRIPLET_LENGTH: Int = 3
 /** U+FFFD, substituted for a lone surrogate that cannot be UTF-8 encoded ([PCT-21]). */
 private const val REPLACEMENT_CHARACTER: String = "\uFFFD"
 
+/** First non-ASCII octet value; a triplet run decodes to display text only when every octet is `>=` this. */
+private const val NON_ASCII_MIN: Int = 0x80
+
 /**
  * Percent-encoding ([encode], SPEC §5.2) and percent-decoding ([decode], SPEC §5.3).
  *
@@ -28,6 +31,8 @@ private const val REPLACEMENT_CHARACTER: String = "\uFFFD"
  * literal, [PCT-23]). UTF-8 is the only charset; multi-octet code points become consecutive
  * triplets ([PCT-18]) and triplet runs are gathered before being interpreted as text ([PCT-25]).
  */
+@Suppress("TooManyFunctions") // Encode, lenient decode, and the RFC 3987 §3.2 display decode form one
+// cohesive codec; each helper stays small to honour the 60-line cap. Precedent: Idna, UriParser.
 internal object PercentCodec {
     /**
      * Percent-encodes [input] under [set], emitting uppercase triplets ([PCT-17], [PCT-19]).
@@ -100,6 +105,86 @@ internal object PercentCodec {
         }
         return out.toString()
     }
+
+    /**
+     * Decodes only the *non-ASCII* percent-encoded runs of [input], for the RFC 3987 §3.2 display
+     * transform; every other run and code unit is preserved literally.
+     *
+     * A decode run is a maximal run of *consecutive* non-ASCII triplets (octet `>= 0x80`), decoded to
+     * text ONLY when those octets form valid UTF-8 (re-encoding the decoded text reproduces the
+     * original octets, so a genuinely-encoded U+FFFD survives); an invalid-UTF-8 run stays literal.
+     * An ASCII triplet (`%2F`, `%20`, `%41`)
+     * delimits runs and is preserved literally on its own, so reserved delimiters and structure
+     * survive intact — `%20%C3%BC` yields `%20` followed by the decoded character, not a wholly
+     * literal run. Total: it never throws and the result is never longer than [input].
+     *
+     * @param input text that may contain percent-encoded triplets.
+     * @return [input] with its non-ASCII UTF-8 triplet runs decoded to text; other runs kept literal.
+     */
+    internal fun decodeNonAscii(input: String): String {
+        val out = StringBuilder(input.length)
+        var i = 0
+        while (i < input.length) {
+            val c = input[i]
+            i =
+                when {
+                    c == '%' && hasHexPairAt(input, i) -> appendNonAsciiRun(out, input, i)
+                    else -> appendLiteral(out, c, i)
+                }
+        }
+        check(out.length <= input.length) { "display decode never grows the input" }
+        return out.toString()
+    }
+
+    /**
+     * Decodes the maximal run of *consecutive non-ASCII* triplets starting at [start] to text when
+     * that run is valid UTF-8; otherwise appends the run's literal triplets `input[start, end)`
+     * verbatim. An ASCII triplet at [start] ends no run: it is emitted literally on its own so it
+     * delimits adjacent non-ASCII runs ([PCT-25] gathering, applied display-only). Returns the index
+     * just past what was emitted.
+     */
+    private fun appendNonAsciiRun(
+        out: StringBuilder,
+        input: String,
+        start: Int,
+    ): Int {
+        require(input[start] == '%') { "run must start at a percent sign" }
+        var end = start
+        while (end < input.length && isNonAsciiTripletAt(input, end)) {
+            end += TRIPLET_LENGTH
+        }
+        if (end == start) {
+            // The triplet at start is an ASCII octet; it delimits runs and is preserved on its own.
+            out.appendRange(input, start, start + TRIPLET_LENGTH)
+            return start + TRIPLET_LENGTH
+        }
+        val count = (end - start) / TRIPLET_LENGTH
+        check(count >= 1) { "a decode run must contain at least one non-ASCII triplet" }
+        val bytes = ByteArray(count)
+        var source = start
+        var target = 0
+        while (target < count) {
+            bytes[target] = tripletByte(input, source).toByte()
+            source += TRIPLET_LENGTH
+            target++
+        }
+        val decoded = bytes.decodeToString()
+        // A run decodes only when it is well-formed UTF-8: re-encoding the decoded text must
+        // reproduce the exact octets. This preserves a genuinely-encoded U+FFFD (which round-trips)
+        // instead of misreading it as the replacement char that decodeToString emits for bad input.
+        if (decoded.encodeToByteArray().contentEquals(bytes)) {
+            out.append(decoded)
+        } else {
+            out.appendRange(input, start, end)
+        }
+        return end
+    }
+
+    /** True when a non-ASCII triplet (`%HH` with octet `>= 0x80`) begins at [i]; [i] must be in bounds. */
+    private fun isNonAsciiTripletAt(
+        input: String,
+        i: Int,
+    ): Boolean = input[i] == '%' && hasHexPairAt(input, i) && tripletByte(input, i) >= NON_ASCII_MIN
 
     /**
      * Returns the index of the first code unit that requires encoding under [set], or `-1` when

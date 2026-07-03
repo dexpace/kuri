@@ -4,9 +4,13 @@
  */
 package org.dexpace.kuri.host
 
+import org.dexpace.kuri.error.HostError
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.UriParseError
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -98,10 +102,101 @@ class Ipv6Test {
                 "::1:1.2.3.4.5",
                 "::1:1.2..3",
                 "1::g",
-                "fe80::1%eth0",
             )
         invalid.forEach { text ->
             assertTrue(Ipv6.parse(text) is ParseResult.Err, "expected Err for [$text]")
         }
+    }
+
+    // --- RFC 6874 zone identifiers ([HOST-17]/[HOST-18]) -----------------------------
+
+    private fun zoneRejected(input: String) {
+        val err = assertIs<ParseResult.Err>(Ipv6.parse(input), "expected Err for [$input]")
+        val cause = assertIs<UriParseError.InvalidHost>(err.error)
+        assertEquals(HostError.ZoneIdRejected, cause.reason, "default parse must reject a zone id")
+    }
+
+    private fun zoneMalformed(input: String) {
+        val err = assertIs<ParseResult.Err>(Ipv6.parse(input, allowZoneId = true), "expected Err for [$input]")
+        val cause = assertIs<UriParseError.InvalidHost>(err.error)
+        assertEquals(HostError.Ipv6Malformed, cause.reason, "an opted-in bad zone must be Ipv6Malformed")
+    }
+
+    @Test
+    fun `parse without a zone id leaves zoneId null`() {
+        val result = assertIs<ParseResult.Ok<Host.Ipv6>>(Ipv6.parse("fe80::1", allowZoneId = true))
+        assertNull(result.value.zoneId, "an address with no % carries no zone id")
+    }
+
+    @Test
+    fun `opted-in parse accepts a named zone id and stores it raw`() {
+        val result = assertIs<ParseResult.Ok<Host.Ipv6>>(Ipv6.parse("fe80::1%25eth0", allowZoneId = true))
+        assertEquals("eth0", result.value.zoneId)
+        assertEquals(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), result.value.pieces)
+    }
+
+    @Test
+    fun `opted-in parse accepts a numeric zone id`() {
+        val result = assertIs<ParseResult.Ok<Host.Ipv6>>(Ipv6.parse("::1%2544", allowZoneId = true))
+        assertEquals("44", result.value.zoneId)
+        assertEquals(listOf(0, 0, 0, 0, 0, 0, 0, 1), result.value.pieces)
+    }
+
+    @Test
+    fun `opted-in parse keeps a pct-encoded zone octet raw`() {
+        val result = assertIs<ParseResult.Ok<Host.Ipv6>>(Ipv6.parse("fe80::1%25a%2Fb", allowZoneId = true))
+        assertEquals("a%2Fb", result.value.zoneId, "the pct-encoded zone is stored verbatim, not decoded")
+    }
+
+    @Test
+    fun `default parse rejects a numeric zone id as ZoneIdRejected`() {
+        zoneRejected("::1%2544")
+    }
+
+    @Test
+    fun `default parse rejects a named zone id as ZoneIdRejected`() {
+        zoneRejected("fe80::1%25eth0")
+    }
+
+    @Test
+    fun `default parse rejects a bare-percent zone as ZoneIdRejected`() {
+        zoneRejected("fe80::1%eth0")
+    }
+
+    @Test
+    fun `opted-in parse rejects a non-25 introducer as malformed`() {
+        zoneMalformed("fe80::1%eth0")
+    }
+
+    @Test
+    fun `opted-in parse rejects an empty zone id as malformed`() {
+        zoneMalformed("fe80::1%25")
+    }
+
+    @Test
+    fun `opted-in parse rejects an illegal zone code point as malformed`() {
+        zoneMalformed("fe80::1%25e/f")
+    }
+
+    @Test
+    fun `opted-in parse rejects an incomplete pct triplet in the zone as malformed`() {
+        zoneMalformed("fe80::1%25e%f")
+    }
+
+    @Test
+    fun `opted-in parse rejects a malformed address before the zone`() {
+        zoneMalformed("1:2:3:4:5:6:7:8:9%25eth0")
+    }
+
+    @Test
+    fun `a zoned host serializes with the raw zone after the introducer`() {
+        val host = Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0")
+        assertEquals("[fe80::1%25eth0]", host.serialize())
+    }
+
+    @Test
+    fun `an unzoned host serializes with no zone suffix`() {
+        val host = Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1))
+        assertEquals("[fe80::1]", host.serialize())
     }
 }
