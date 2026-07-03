@@ -31,10 +31,11 @@ private const val SLASH: String = "/"
 
 /**
  * The encode set applied to a decoded segment added via [Uri.Builder.addPathSegment]
- * (`encodeURIComponent`, RFC 3986 §3.3). It encodes every code point outside the RFC 3986
- * `unreserved` set — including `/`, `%`, and every reserved delimiter — so an added segment can
- * never merge into a neighbouring segment nor produce a bare `%` that the strict `Uri` parser
- * rejects.
+ * (`encodeURIComponent`, RFC 3986 §3.3). It percent-encodes the reserved delimiters that could
+ * break a segment — including `/` (the segment separator) and `%` (the escape introducer) — so an
+ * added segment can never merge into a neighbouring segment nor produce a bare `%` that the strict
+ * `Uri` parser rejects. Matching `encodeURIComponent`, the always-safe sub-delims (`!`, `'`, `(`,
+ * `)`, `*`) and the RFC 3986 `unreserved` set are left literal.
  */
 private val PATH_SEGMENT_ENCODE_SET: PercentEncodeSet = PercentEncodeSets.COMPONENT
 
@@ -500,7 +501,7 @@ public class Uri internal constructor(
         private fun pushSegment(encodedSegment: String): Builder {
             if (!encodedPath.endsWith(SLASH)) encodedPath += SLASH
             encodedPath += encodedSegment
-            check(encodedPath.endsWith(encodedSegment)) { "segment was not appended: $encodedSegment" }
+            check(encodedPath.endsWith("$SLASH$encodedSegment")) { "segment lost its separator: $encodedSegment" }
             return this
         }
 
