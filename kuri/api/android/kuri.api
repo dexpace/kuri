@@ -63,6 +63,7 @@ public final class org/dexpace/kuri/Uri {
 
 public final class org/dexpace/kuri/Uri$Builder {
 	public fun <init> ()V
+	public final fun allowIpv6ZoneId (Z)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun build ()Lorg/dexpace/kuri/Uri;
 	public final fun encodedPath (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun fragment (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;

@@ -4,6 +4,7 @@
  */
 package org.dexpace.kuri
 
+import org.dexpace.kuri.error.UriSyntaxException
 import org.dexpace.kuri.error.getOrNull
 import org.dexpace.kuri.error.getOrThrow
 import org.dexpace.kuri.host.Host
@@ -288,5 +289,30 @@ class UriBuilderTest {
         assertEquals(original, rebuilt)
         assertEquals("foo://[fe80::1%25eth0]/a", rebuilt.uriString)
         assertEquals(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0"), rebuilt.host)
+    }
+
+    @Test
+    fun `builds a zoned ipv6 host from scratch when the zone-id opt-in is set`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("foo")
+                .allowIpv6ZoneId(true)
+                .host("[fe80::1%25eth0]")
+                .build()
+
+        assertEquals("foo://[fe80::1%25eth0]", uri.uriString)
+        assertEquals(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0"), uri.host)
+    }
+
+    @Test
+    fun `rejects a from-scratch zoned host without the opt-in`() {
+        assertFailsWith<UriSyntaxException> {
+            Uri
+                .Builder()
+                .scheme("foo")
+                .host("[fe80::1%25eth0]")
+                .build()
+        }
     }
 }

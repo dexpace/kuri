@@ -339,6 +339,22 @@ public class Uri internal constructor(
         }
 
         /**
+         * Enables RFC 6874 IPv6 zone-id acceptance when [build] re-parses the assembled URI (default
+         * off); the builder counterpart of [ParseOptions.allowIpv6ZoneId] ([HOST-18]).
+         *
+         * Set this `true` to assemble a `[` IPv6 `%25` ZoneID `]` host from scratch; with it off,
+         * [build] rejects a zone id exactly as [parse] does. A builder from [newBuilder] already
+         * carries forward the source value's setting, so a parsed zoned value round-trips without it.
+         *
+         * @param allow `true` to accept a `%25`-introduced zone id at [build], `false` (default) to reject it.
+         * @return this builder, for chaining.
+         */
+        public fun allowIpv6ZoneId(allow: Boolean): Builder {
+            options = options.newBuilder().allowIpv6ZoneId(allow).build()
+            return this
+        }
+
+        /**
          * Sets or clears the explicit port ([MODEL-23]); the `Uri` profile applies no `0..65535` cap.
          *
          * @param port a non-negative port, or `null` to elide it.
