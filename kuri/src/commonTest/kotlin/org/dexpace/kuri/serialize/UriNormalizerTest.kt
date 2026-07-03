@@ -5,7 +5,6 @@
 package org.dexpace.kuri.serialize
 
 import org.dexpace.kuri.ParseProfile
-import org.dexpace.kuri.error.getOrNull
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.UriParser
 import kotlin.test.Test

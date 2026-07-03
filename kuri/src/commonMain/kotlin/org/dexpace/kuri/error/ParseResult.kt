@@ -8,9 +8,9 @@ package org.dexpace.kuri.error
  * The outcome of a parse, reference resolution, or profile conversion (SPEC §12.1).
  *
  * Recoverable parse failures are *values, not control flow*: every fallible
- * entry point returns a [ParseResult] rather than throwing ([ERR-1]). The type
+ * entry point returns a [ParseResult] rather than throwing. The type
  * has exactly two cases — [Ok] and [Err] — and is `sealed` so a `when` over it
- * is exhaustive without an `else` branch ([ERR-4]).
+ * is exhaustive without an `else` branch.
  *
  * `T` is covariant (`out`) so that an [Err] (a `ParseResult<Nothing>`) is
  * usable wherever any `ParseResult<T>` is expected, letting [map] thread a
@@ -20,13 +20,9 @@ package org.dexpace.kuri.error
  */
 public sealed interface ParseResult<out T> {
     /**
-     * A successful outcome carrying the produced [value] ([ERR-2]).
+     * A successful outcome carrying the produced [value].
      *
-     * Non-fatal validation errors observed during a successful parse will be
-     * carried alongside the value once the parser lands ([ERR-3]); this starter
-     * shape holds only the value.
-     *
-     * @property value the produced result; never absent on success.
+     * @property value the value produced on success; present exactly when the parse succeeded.
      */
     public data class Ok<out T>(
         public val value: T,
@@ -34,35 +30,51 @@ public sealed interface ParseResult<out T> {
 
     /**
      * A failed outcome carrying the single fatal [error] describing the first
-     * fatal condition encountered, in input order ([ERR-2]).
+     * fatal condition encountered, in input order.
      *
      * @property error the fatal cause of the failure.
      */
     public data class Err(
         public val error: UriParseError,
     ) : ParseResult<Nothing>
+
+    /**
+     * Reports whether this is an [Ok] (i.e. the parse succeeded).
+     *
+     * @return `true` iff this result is an [Ok].
+     */
+    public fun isOk(): Boolean = this is Ok
+
+    /**
+     * Returns the success value, or `null` when this is an [Err].
+     *
+     * A failure is punned to absence; prefer an explicit `when` when the error itself is
+     * needed.
+     *
+     * @return the value of an [Ok], or `null` for an [Err].
+     */
+    public fun getOrNull(): T? =
+        when (this) {
+            is Ok -> value
+            is Err -> null
+        }
+
+    /**
+     * Returns the success value, or throws [UriSyntaxException] carrying the [Err] error.
+     *
+     * Use this at a boundary where a parse failure is genuinely exceptional and the caller prefers an
+     * exception to a [ParseResult] branch; the thrown exception's [UriSyntaxException.error] is the
+     * same structured [UriParseError] held by the [Err].
+     *
+     * @return the value of an [Ok].
+     * @throws UriSyntaxException when this is an [Err], carrying that error.
+     */
+    public fun getOrThrow(): T =
+        when (this) {
+            is Ok -> value
+            is Err -> throw UriSyntaxException(error)
+        }
 }
-
-/**
- * Returns the success value, or `null` when this is an [ParseResult.Err].
- *
- * Mirrors the `parseOrNull` convenience contract of [ERR-5]: a failure punned to
- * absence. Prefer an explicit `when` when the error itself is needed.
- *
- * @return the value of an [ParseResult.Ok], or `null` for an [ParseResult.Err].
- */
-public fun <T> ParseResult<T>.getOrNull(): T? =
-    when (this) {
-        is ParseResult.Ok -> value
-        is ParseResult.Err -> null
-    }
-
-/**
- * Reports whether this is an [ParseResult.Ok] (i.e. the parse succeeded).
- *
- * @return `true` iff this result is an [ParseResult.Ok].
- */
-public fun <T> ParseResult<T>.isOk(): Boolean = this is ParseResult.Ok
 
 /**
  * Maps the success value through [transform], threading an [ParseResult.Err]
@@ -79,22 +91,6 @@ public fun <T, R> ParseResult<T>.map(transform: (T) -> R): ParseResult<R> =
     when (this) {
         is ParseResult.Ok -> ParseResult.Ok(transform(value))
         is ParseResult.Err -> this
-    }
-
-/**
- * Returns the success value, or throws [UriSyntaxException] carrying the [ParseResult.Err] error.
- *
- * Use this at a boundary where a parse failure is genuinely exceptional and the caller prefers an
- * exception to a [ParseResult] branch; the thrown exception's [UriSyntaxException.error] is the same
- * structured [UriParseError] held by the [ParseResult.Err].
- *
- * @return the value of an [ParseResult.Ok].
- * @throws UriSyntaxException when this is an [ParseResult.Err], carrying that error.
- */
-public fun <T> ParseResult<T>.getOrThrow(): T =
-    when (this) {
-        is ParseResult.Ok -> value
-        is ParseResult.Err -> throw UriSyntaxException(error)
     }
 
 /**

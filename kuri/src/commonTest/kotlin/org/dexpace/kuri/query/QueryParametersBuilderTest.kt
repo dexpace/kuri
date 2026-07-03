@@ -103,4 +103,14 @@ class QueryParametersBuilderTest {
         source.newBuilder().add("b", "2").build()
         assertEquals(listOf("a" to "1"), source.entries)
     }
+
+    @Test
+    fun `addAll appends every map entry in iteration order and keeps the null sentinel per QUERY-15`() {
+        val params =
+            QueryParametersBuilder()
+                .add("a", "1")
+                .addAll(linkedMapOf("b" to "2", "c" to null))
+                .build()
+        assertEquals(listOf("a" to "1", "b" to "2", "c" to null), params.entries)
+    }
 }

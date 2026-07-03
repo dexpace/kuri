@@ -8,21 +8,41 @@ package org.dexpace.kuri.error
  * The catalog of *fatal* parse failures (SPEC §12.2).
  *
  * A fatal error aborts production of a value: it is reported as the single
- * [ParseResult.Err] error and no [ParseResult.Ok] is produced ([ERR-2]). Each
+ * [ParseResult.Err] error and no [ParseResult.Ok] is produced. Each
  * variant carries enough context to locate and explain the failure — at minimum
  * an `at` offset into the original input (in UTF-16 code units, before any
- * stripping/trimming, [ERR-8]) or an explanatory sub-value.
+ * stripping/trimming) or an explanatory sub-value.
  *
  * The parser produces a fixed slice of this catalog: structural failures
  * ([InvalidScheme], [MissingScheme], [InvalidPercentEncoding], [InvalidPort]),
  * host failures ([EmptyHost], [InvalidHost] carrying a [HostError], and
  * [ForbiddenHostCodePoint]), and the size failure [InputTooLong]. The hierarchy
- * is `sealed` so a `when` over it is exhaustive without an `else` ([ERR-18]);
+ * is `sealed` so a `when` over it is exhaustive without an `else`;
  * adding a variant is an intentional, API-visible change.
  */
 public sealed interface UriParseError {
     /**
-     * A scheme component is present but ill-formed ([ERR-9]): the first
+     * A human-readable, non-blank description of this failure, suitable for logging or for a thrown
+     * exception message.
+     *
+     * The rendering is stable per variant and includes the case's structured data (offsets, host
+     * text, bounds); the variant's own properties remain the source of truth for programmatic use.
+     */
+    public val message: String
+        get() =
+            when (this) {
+                is InvalidScheme -> "invalid scheme at offset $at: $detail"
+                is MissingScheme -> "missing required scheme"
+                is InvalidPercentEncoding -> "invalid percent-encoding at offset $at"
+                is InvalidPort -> "invalid port: \"$text\""
+                is EmptyHost -> "empty host is not permitted for this scheme"
+                is InvalidHost -> "invalid host \"$host\": $reason"
+                is ForbiddenHostCodePoint -> "forbidden host code point $codePoint at offset $at"
+                is InputTooLong -> "input length $length exceeds maximum $max"
+            }
+
+    /**
+     * A scheme component is present but ill-formed: the first
      * character is not ALPHA, or a later character is outside
      * `ALPHA / DIGIT / "+" / "-" / "."`.
      *
@@ -35,7 +55,7 @@ public sealed interface UriParseError {
     ) : UriParseError
 
     /**
-     * No scheme was found where one is required ([ERR-9]): in the `Uri` profile
+     * No scheme was found where one is required: in the `Uri` profile
      * on input that is not a valid relative reference, or in the `Url` profile
      * when parsing with no scheme and no usable base.
      */
@@ -43,7 +63,7 @@ public sealed interface UriParseError {
 
     /**
      * A percent sequence is malformed (`%` not followed by two ASCII hex digits)
-     * in a context where that is *fatal* ([ERR-15]) — e.g. `Uri` strict mode. In
+     * in a context where that is *fatal* — e.g. `Uri` strict mode. In
      * lenient parsing the same condition is non-fatal and surfaces as a
      * [ValidationError] instead.
      *
@@ -55,7 +75,7 @@ public sealed interface UriParseError {
 
     /**
      * A port is present but is not a run of ASCII digits, or its numeric value
-     * exceeds the permitted maximum ([ERR-14]).
+     * exceeds the permitted maximum.
      *
      * @property text the port substring exactly as seen in the input.
      */
@@ -64,14 +84,14 @@ public sealed interface UriParseError {
     ) : UriParseError
 
     /**
-     * A host is empty in a context that forbids an empty host ([ERR-13]): in the
+     * A host is empty in a context that forbids an empty host: in the
      * `Url` profile, a special scheme other than `file`. The `Uri` profile
      * permits an empty authority and never produces this.
      */
     public data object EmptyHost : UriParseError
 
     /**
-     * A host is present but the §7 host pipeline rejected it ([ERR-11]). Carries
+     * A host is present but the §7 host pipeline rejected it. Carries
      * the host substring exactly as seen (post-strip, pre-IDNA) and a [HostError]
      * discriminating the cause (e.g. IPv4 width overflow, an invalid numeric part,
      * a malformed IPv6 literal). Forbidden-code-point failures are reported by the
@@ -88,7 +108,7 @@ public sealed interface UriParseError {
 
     /**
      * A forbidden host code point (or, for a domain host, a forbidden-domain
-     * code point) was encountered in a host substring ([ERR-12]). Kept distinct
+     * code point) was encountered in a host substring. Kept distinct
      * from a generic host failure so a caller can report the exact offending
      * code point and its location.
      *
@@ -101,7 +121,7 @@ public sealed interface UriParseError {
     ) : UriParseError
 
     /**
-     * The input length exceeds the configured maximum ([ERR-16]). Also produced
+     * The input length exceeds the configured maximum. Also produced
      * when percent-decoding/IDNA expansion pushes the serialized length past the
      * same bound, carrying the post-expansion [length].
      *

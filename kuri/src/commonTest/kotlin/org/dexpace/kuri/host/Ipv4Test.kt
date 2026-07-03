@@ -9,6 +9,7 @@ import org.dexpace.kuri.error.HostError
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -142,5 +143,32 @@ class Ipv4Test {
         listOf("example.com", "1.2.3.foo", "", "host", ".", "1a", "1.2.foo", "0xg").forEach {
             assertFalse(Ipv4.endsInANumber(it), "expected not ends-in-number: '$it'")
         }
+    }
+
+    @Test
+    fun `asText renders an Ipv4 host as canonical dotted-decimal`() {
+        // 1.2.3.4 packs to 0x01020304; -1 is the all-ones 255.255.255.255 that exercises the high bit.
+        assertEquals("1.2.3.4", Host.Ipv4(0x01020304).asText())
+        assertEquals("255.255.255.255", Host.Ipv4(-1).asText())
+    }
+
+    @Test
+    fun `octets unpacks the packed value high-order octet first`() {
+        assertContentEquals(intArrayOf(1, 2, 3, 4), Host.Ipv4(0x01020304).octets())
+        assertContentEquals(intArrayOf(255, 255, 255, 255), Host.Ipv4(-1).octets())
+    }
+
+    @Test
+    fun `octets and asText expose the same packed layout`() {
+        // 0 and -1 are the all-zeroes/all-ones extremes; 0x7F000001 exercises the high octet.
+        listOf(0, -1, 0x7F000001, 0x01020304).forEach { value ->
+            val host = Host.Ipv4(value)
+            assertEquals(host.asText(), host.octets().joinToString("."), "value ${value.toUInt()}")
+        }
+    }
+
+    @Test
+    fun `RegName asText returns the stored value verbatim`() {
+        assertEquals("example.com", Host.RegName("example.com").asText())
     }
 }

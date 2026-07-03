@@ -35,19 +35,48 @@
 ## Installation
 
 > [!NOTE]
-> **Not yet published.** kuri is not on Maven Central or any other repository, so it cannot be resolved as a dependency
-> yet. Until the first release ships, [build from source](#building-from-source).
+> **Not yet published to a public repository.** kuri is not on Maven Central yet, so it cannot be resolved from a
+> remote repository. You can still consume it today by publishing to your local Maven repository or by wiring a
+> composite build — see below.
 
-The coordinates reserved for the first release:
+The coordinates:
 
-| Coordinate | Value                          |
-|------------|--------------------------------|
-| Group      | `org.dexpace`                  |
-| Artifact   | `kuri`                         |
-| Version    | `0.1.0-SNAPSHOT` (pre-release) |
+| Coordinate | Value                                                                   |
+|------------|-------------------------------------------------------------------------|
+| Group      | `org.dexpace`                                                           |
+| Artifact   | `kuri`                                                                  |
+| Version    | `0.1.0-SNAPSHOT` (current dev build; `0.1.0` will be the first release) |
 
 The artifact id is identical across Kotlin Multiplatform targets; the Gradle plugin selects the right variant for your
-platform automatically. A copy-paste dependency snippet will be added here once the initial release is available.
+platform automatically.
+
+**Try it today via your local Maven repository.** Publish the current snapshot to `~/.m2`:
+
+```
+./gradlew publishToMavenLocal
+```
+
+Then add `mavenLocal()` and the dependency to the consuming project:
+
+```kotlin
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    implementation("org.dexpace:kuri:0.1.0-SNAPSHOT")
+}
+```
+
+Gradle module metadata resolves the correct per-platform variant automatically.
+
+**Or wire a composite build** — point the consumer's `settings.gradle.kts` at a local kuri checkout, with no publish
+step:
+
+```kotlin
+includeBuild("../kuri")
+```
 
 **Requirements**
 
@@ -61,7 +90,6 @@ platform automatically. A copy-paste dependency snippet will be added here once 
 
 ```kotlin
 import org.dexpace.kuri.Url
-import org.dexpace.kuri.error.getOrThrow
 
 val url = Url.parse("https://Example.com:443/a/../b?q=1#frag").getOrThrow()
 
@@ -78,11 +106,21 @@ From Java:
 
 ```java
 import org.dexpace.kuri.Url;
+import org.dexpace.kuri.error.ParseResult;
 
+// Happy path: unwrap the value, or throw UriSyntaxException on a bad input.
 Url url = Url.parse("https://example.com/a?b=1").getOrThrow();
-
 url.scheme();    // "https"
 url.hostName();  // "example.com"
+
+// Null-returning form, ergonomic from Java — no exception, no ParseResult branch.
+Url maybe = Url.parseOrNull("https://example.com/");   // a Url, or null on failure
+
+// Inspect the failure without throwing: read the human-readable message off the error.
+ParseResult<Url> result = Url.parse("://no-scheme");
+if (result instanceof ParseResult.Err) {
+    String reason = ((ParseResult.Err) result).getError().getMessage();
+}
 ```
 
 ## Two models, one engine
@@ -109,19 +147,31 @@ val uri = Uri.parse("http://[fe80::1%25eth0]/", options).getOrThrow()
 through the `Iri` facility — `Iri.toUri(iri)` maps an IRI to its ASCII `Uri` and `Iri.toUnicode(uri)`
 renders the Unicode form; the `Url` profile applies host IDNA (UTS #46) by default.
 
+```kotlin
+import org.dexpace.kuri.Iri
+
+// toUri returns a ParseResult<Uri>; the mapped Uri is fully ASCII.
+val uri = Iri.toUri("http://bücher.example/qué").getOrThrow()
+uri.toString()          // host becomes Punycode (xn--…), non-ASCII path bytes percent-encoded
+Iri.toUnicode(uri)      // "http://bücher.example/qué" — best-effort Unicode display form
+```
+
 ## Parsing and errors
 
 Parsing returns a `ParseResult<T>` — errors are values, not exceptions — and you choose how to consume it:
 
 ```kotlin
 Url.parse(input)                 // ParseResult<Url>  (Ok / Err)
+Url.parseOrThrow(input)          // Url, or throws UriSyntaxException
 Url.parse(input).getOrNull()     // Url?
 Url.parse(input).getOrThrow()    // Url, or throws UriSyntaxException
 Url.canParse(input)              // Boolean
 Url.parse(input).fold(onOk = { it.host }, onErr = { it })
 ```
 
-`Err` carries a structured `UriParseError` with the offending offset and reason.
+`Err` carries a structured `UriParseError` with the offending offset and reason. Read
+`error.message` (Java `error.getMessage()`) for a human-readable rendering of the failure without
+throwing.
 
 ## Building and resolving
 
@@ -145,6 +195,24 @@ The generic `Uri` preserves what you parsed and normalizes only when asked:
 val uri = Uri.parse("HTTP://Example.com/a/../b").getOrThrow()
 uri.toString()                 // "HTTP://Example.com/a/../b"  — verbatim
 uri.normalized().toString()    // "http://example.com/b"       — RFC 3986 §6.2
+```
+
+Query strings have their own immutable, duplicate-preserving model. `QueryParameters` reads decoded
+pairs; iterate them, look them up, or project to a map — and build a new query from a map or straight
+into a `Url`.
+
+```kotlin
+import org.dexpace.kuri.query.QueryParameters
+
+val params = QueryParameters.parse("q=kotlin&page=2&q=jvm")
+params["q"]                     // "kotlin"          — first value wins
+params.has("page")              // true
+params.toMap()                  // {q=kotlin, page=2}  — first value per name
+for ((name, value) in params) { /* q→kotlin, page→2, q→jvm — duplicates preserved */ }
+
+// Build a query from a map, or set it straight onto a Url.
+QueryParameters.of(linkedMapOf("q" to "kotlin", "page" to "2")).toQueryString()  // "q=kotlin&page=2"
+Url.Builder().scheme("https").host("example.com").setQueryParameter("q", "kotlin").build()
 ```
 
 ## Standards
@@ -287,6 +355,10 @@ After an intentional public-API change, regenerate and commit the API snapshot i
   percent-encoding matrix, the host pipeline, the parsing algorithm, reference resolution, the query model,
   normalization and equivalence semantics, and the error model that a conforming implementation must exhibit for each
   profile.
+- **API reference** — generated by [Dokka](https://kotlinlang.org/docs/dokka-introduction.html). Build the HTML site
+  with `./gradlew :kuri:dokkaGeneratePublicationHtml`; the output is written under `kuri/build/dokka/`.
+- [`CHANGELOG.md`](CHANGELOG.md) — notable changes per release, in Keep a Changelog format.
+- [`SECURITY.md`](SECURITY.md) — supported versions and how to report a vulnerability privately.
 
 ## Contributing
 
@@ -298,8 +370,9 @@ pull-request titles use the `feat:` / `fix:` / `test:` / `docs:` / `chore:` pref
 
 ## Security
 
-There is no formal security policy yet. Please report suspected vulnerabilities privately to the maintainers rather than
-opening a public issue, so a fix can be prepared before disclosure.
+kuri parses and canonicalizes untrusted URLs, so security reports are taken seriously. See
+[`SECURITY.md`](SECURITY.md) for the supported versions and how to report a vulnerability privately through GitHub's
+Security tab — please don't open a public issue for a security problem.
 
 ## License
 

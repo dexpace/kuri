@@ -18,17 +18,23 @@ private const val SURROGATE_SHIFT: Int = 10
 
 /**
  * Mutable, ordered, duplicate-preserving accumulator that produces an immutable [QueryParameters]
- * via [build] (SPEC §10.3.2). Name matching is byte-exact and case-sensitive throughout
- * ([QUERY-5]); a `null` value is the no-`=` sentinel, an empty string the `=`-with-empty sentinel.
+ * via [build] (SPEC §10.3.2). Name matching is byte-exact and case-sensitive throughout;
+ * a `null` value is the no-`=` sentinel, an empty string the `=`-with-empty sentinel.
  */
 public class QueryParametersBuilder internal constructor(
-    initial: List<Pair<String, String?>> = emptyList(),
+    initial: List<Pair<String, String?>>,
 ) {
+    /**
+     * Creates an empty builder. Append pairs with [add]/[addAll], then materialize with [build]; to
+     * start from an existing snapshot use [QueryParameters.newBuilder] instead.
+     */
+    public constructor() : this(emptyList())
+
     /** The working pair list; copied from [initial] so the source snapshot is never mutated. */
     private val pairs: MutableList<Pair<String, String?>> = initial.toMutableList()
 
     /**
-     * Appends `(name, value)` to the end without deduplicating (SPEC §10.3.2, [QUERY-15]). A `null`
+     * Appends `(name, value)` to the end without deduplicating (SPEC §10.3.2). A `null`
      * value is retained as the no-`=` sentinel; an empty string as the `=`-with-empty sentinel.
      *
      * @param name the decoded name to append.
@@ -44,7 +50,23 @@ public class QueryParametersBuilder internal constructor(
     }
 
     /**
-     * Replace-first / remove-rest / keep-position (SPEC §10.3.2, [QUERY-16]): replaces the value of
+     * Appends every entry of [pairs] in the map's iteration order without deduplicating, the bulk
+     * form of [add] (SPEC §10.3.2). A `null` value is retained as the no-`=` sentinel.
+     *
+     * @param pairs the decoded name-to-value entries to append, in the map's iteration order.
+     * @return this builder, for chaining.
+     */
+    public fun addAll(pairs: Map<String, String?>): QueryParametersBuilder {
+        val expected = this.pairs.size + pairs.size
+        for ((name, value) in pairs) {
+            add(name, value)
+        }
+        check(this.pairs.size == expected) { "addAll must append exactly one pair per entry" }
+        return this
+    }
+
+    /**
+     * Replace-first / remove-rest / keep-position (SPEC §10.3.2): replaces the value of
      * the **first** pair named [name] in place, removes every later pair named [name], and appends
      * `(name, value)` when no pair has the name.
      *
@@ -67,7 +89,7 @@ public class QueryParametersBuilder internal constructor(
     }
 
     /**
-     * Removes every pair named [name], preserving the order of the rest (SPEC §10.3.2, [QUERY-17]).
+     * Removes every pair named [name], preserving the order of the rest (SPEC §10.3.2).
      * A no-op when no pair matches.
      *
      * @param name the decoded name whose pairs are removed, matched case-sensitively.
@@ -79,7 +101,7 @@ public class QueryParametersBuilder internal constructor(
     }
 
     /**
-     * Stable sort by **name only**, comparing Unicode code points (SPEC §10.3.2, [QUERY-18]).
+     * Stable sort by **name only**, comparing Unicode code points (SPEC §10.3.2).
      *
      * The comparison is surrogate-aware: supplementary code points (`> U+FFFF`) sort after every
      * BMP character rather than by raw UTF-16 unit. Equal names keep their pre-sort order, so the
@@ -99,7 +121,7 @@ public class QueryParametersBuilder internal constructor(
      */
     public fun build(): QueryParameters = QueryParameters(pairs.toList())
 
-    /** Removes pairs named [name] strictly after [firstIndex], scanning back to front ([QUERY-16]). */
+    /** Removes pairs named [name] strictly after [firstIndex], scanning back to front. */
     private fun removeAfter(
         firstIndex: Int,
         name: String,
@@ -114,14 +136,7 @@ public class QueryParametersBuilder internal constructor(
 }
 
 /**
- * A pre-filled [QueryParametersBuilder] over this snapshot's pairs (SPEC §10.3.2, [QUERY-19]).
- *
- * @return a builder seeded with this snapshot's pairs, so an unmodified `build()` reproduces it.
- */
-public fun QueryParameters.newBuilder(): QueryParametersBuilder = QueryParametersBuilder(entries)
-
-/**
- * Compares [left] and [right] by Unicode code point sequence, surrogate-aware ([QUERY-18]).
+ * Compares [left] and [right] by Unicode code point sequence, surrogate-aware.
  *
  * Returns a negative, zero, or positive result as [left] orders before, equal to, or after [right];
  * when one is a prefix of the other the shorter sorts first.
@@ -144,7 +159,7 @@ private fun compareByCodePoint(
     return if (result != 0) result else (left.length - i) - (right.length - j)
 }
 
-/** The code point at [index], recomposing a high+low surrogate pair into one value ([QUERY-18]). */
+/** The code point at [index], recomposing a high+low surrogate pair into one value. */
 private fun codePointAt(
     text: String,
     index: Int,
@@ -160,5 +175,5 @@ private fun codePointAt(
     }
 }
 
-/** UTF-16 unit width of [codePoint]: `2` for supplementary, `1` otherwise ([QUERY-18]). */
+/** UTF-16 unit width of [codePoint]: `2` for supplementary, `1` otherwise. */
 private fun charCount(codePoint: Int): Int = if (codePoint >= SUPPLEMENTARY_MIN) 2 else 1

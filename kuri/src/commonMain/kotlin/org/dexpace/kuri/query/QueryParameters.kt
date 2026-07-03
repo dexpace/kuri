@@ -7,9 +7,8 @@ package org.dexpace.kuri.query
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSet
 import org.dexpace.kuri.percent.PercentEncodeSets
-
-/** The query-pair resource bound: at most this many pairs are materialized ([QUERY-24], §10.5). */
-internal const val MAX_PAIRS: Int = 1000
+import kotlin.jvm.JvmName
+import kotlin.jvm.JvmStatic
 
 /** The `&` that joins pairs and splits the raw query (SPEC §10.2.1, §10.3.3). */
 private const val PAIR_SEPARATOR: String = "&"
@@ -21,45 +20,67 @@ private const val VALUE_SEPARATOR: String = "="
 private const val QUERY_PREFIX: String = "?"
 
 /**
- * `encodeName` set ([QUERY-19]): the query set plus `&` and `=`, since a name terminates at the
+ * `encodeName` set: the query set plus `&` and `=`, since a name terminates at the
  * first `=` or `&` and both must survive a round-trip.
  */
 private val QUERY_NAME_ENCODE_SET: PercentEncodeSet = PercentEncodeSets.QUERY.including('&', '=')
 
 /**
- * `encodeValue` set ([QUERY-19]): the query set plus `&` only. `=` is left literal so that only the
+ * `encodeValue` set: the query set plus `&` only. `=` is left literal so that only the
  * first `=` of a pair splits and `?===3===` round-trips exactly.
  */
 private val QUERY_VALUE_ENCODE_SET: PercentEncodeSet = PercentEncodeSets.QUERY.including('&')
 
-/** Percent-encodes a decoded name with [QUERY_NAME_ENCODE_SET] ([QUERY-19]). */
+/** Percent-encodes a decoded name with [QUERY_NAME_ENCODE_SET]. */
 private fun encodeName(name: String): String = PercentCodec.encode(name, QUERY_NAME_ENCODE_SET)
 
-/** Percent-encodes a decoded value with [QUERY_VALUE_ENCODE_SET] ([QUERY-19]). */
+/** Percent-encodes a decoded value with [QUERY_VALUE_ENCODE_SET]. */
 private fun encodeValue(value: String): String = PercentCodec.encode(value, QUERY_VALUE_ENCODE_SET)
 
 /**
- * An immutable, ordered, duplicate-preserving, case-sensitive snapshot of decoded query
- * `(name, value?)` pairs (SPEC §10.2, [QUERY-5]). A `null` value denotes a pair that had no `=`;
- * an empty-string value denotes `=` with nothing after it, and the two MUST stay distinguishable
- * ([QUERY-8]). The snapshot is never a live view of any `Uri`/`Url` ([QUERY-14]); mutation goes
- * through [QueryParametersBuilder].
+ * A single decoded query pair: a [name] with an optional [value] (SPEC §10.2).
+ *
+ * A `null` [value] denotes a pair that had no `=`; an empty-string [value] denotes `=` with nothing
+ * after it, and the two stay distinguishable. This is the element type yielded when a
+ * [QueryParameters] snapshot is iterated.
+ *
+ * @property name the decoded pair name, matched case-sensitively.
+ * @property value the decoded pair value, or `null` when the pair had no `=`.
  */
+public data class QueryParameter(
+    public val name: String,
+    public val value: String?,
+)
+
+/**
+ * An immutable, ordered, duplicate-preserving, case-sensitive snapshot of decoded query
+ * `(name, value?)` pairs (SPEC §10.2). A `null` value denotes a pair that had no `=`;
+ * an empty-string value denotes `=` with nothing after it, and the two MUST stay distinguishable.
+ * The snapshot is never a live view of any `Uri`/`Url`; mutation goes
+ * through [QueryParametersBuilder], obtained from [newBuilder].
+ *
+ * The type has value semantics: [equals]/[hashCode] compare the full ordered pair sequence, so two
+ * snapshots are equal only when they hold the same pairs in the same order. It is [Iterable], and
+ * [toMap] projects it to a first-value-wins map. Its accessors, iteration, and factories form one
+ * cohesive value-type surface, so the method count is intentional.
+ */
+@Suppress("TooManyFunctions")
 public class QueryParameters internal constructor(
     pairs: List<Pair<String, String?>>,
-) {
-    /** Defensive immutable copy of the decoded pairs in appearance order ([QUERY-5]). */
+) : Iterable<QueryParameter> {
+    /** Defensive immutable copy of the decoded pairs in appearance order. */
     internal val entries: List<Pair<String, String?>> = pairs.toList()
 
     /**
-     * Total pair count, counting duplicates (SPEC §10.3, [QUERY-9]).
+     * Total pair count, counting duplicates (SPEC §10.3).
      *
-     * @return the number of pairs, including repeats of the same name.
+     * Exposed to Kotlin as the read-only property `size` and, via [JvmName], to Java as `size()`.
      */
-    public fun size(): Int = entries.size
+    @get:JvmName("size")
+    public val size: Int get() = entries.size
 
     /**
-     * True when no pairs are present; equivalent to `size() == 0` (SPEC §10.3).
+     * True when no pairs are present; equivalent to `size == 0` (SPEC §10.3).
      *
      * @return `true` iff this snapshot holds no pairs.
      */
@@ -67,19 +88,21 @@ public class QueryParameters internal constructor(
 
     /**
      * The decoded value of the **first** pair named [name], or `null` when absent or when that
-     * first pair had no `=` (SPEC §10.3, [QUERY-11]). `get` cannot distinguish "absent" from
+     * first pair had no `=` (SPEC §10.3). `get` cannot distinguish "absent" from
      * "present with no `=`"; use [names]/[nameAt]/[valueAt] for that distinction.
+     *
+     * The `operator` modifier enables index syntax from Kotlin: `params["name"]`.
      *
      * @param name the decoded name to look up, matched case-sensitively.
      * @return the first matching decoded value, or `null` when absent or when that pair had no `=`.
      */
-    public fun get(name: String): String? = entries.firstOrNull { it.first == name }?.second
+    public operator fun get(name: String): String? = entries.firstOrNull { it.first == name }?.second
 
     /**
-     * The decoded values of **all** pairs named [name], in appearance order (SPEC §10.3,
-     * [QUERY-12]). The list is read-only and preserves `null` (no `=`) distinctly from `""`.
+     * The decoded values of **all** pairs named [name], in appearance order (SPEC §10.3).
+     * The list is read-only and preserves `null` (no `=`) distinctly from `""`.
      *
-     * Per [QUERY-12] the element type is `String?`: `null` entries are retained rather than mapped
+     * The element type is `String?`: `null` entries are retained rather than mapped
      * to `""` or dropped, so the no-`=` sentinel survives a `getAll` round-trip. Empty when none.
      *
      * @param name the decoded name to look up, matched case-sensitively.
@@ -103,8 +126,17 @@ public class QueryParameters internal constructor(
     public fun has(name: String): Boolean = entries.any { it.first == name }
 
     /**
+     * True when at least one pair is named [name]; the `operator` counterpart of [has] that enables
+     * membership syntax from Kotlin: `"name" in params` (SPEC §10.3).
+     *
+     * @param name the decoded name to test, matched case-sensitively.
+     * @return `true` iff at least one pair carries [name].
+     */
+    public operator fun contains(name: String): Boolean = has(name)
+
+    /**
      * The distinct decoded names in first-appearance order, backed by a [LinkedHashSet]
-     * (SPEC §10.3, [QUERY-13]). Each name appears exactly once even when duplicated in the pairs.
+     * (SPEC §10.3). Each name appears exactly once even when duplicated in the pairs.
      *
      * @return a read-only set of the distinct names in first-appearance order.
      */
@@ -118,11 +150,11 @@ public class QueryParameters internal constructor(
     }
 
     /**
-     * The decoded name of the pair at [index] (SPEC §10.3, [QUERY-10]).
+     * The decoded name of the pair at [index] (SPEC §10.3).
      *
-     * @param index the zero-based position in `0 until size()`.
+     * @param index the zero-based position in `0 until size`.
      * @return the decoded name at [index].
-     * @throws IndexOutOfBoundsException when [index] is negative or `>= size()`.
+     * @throws IndexOutOfBoundsException when [index] is negative or `>= size`.
      */
     public fun nameAt(index: Int): String {
         checkIndex(index)
@@ -131,11 +163,11 @@ public class QueryParameters internal constructor(
 
     /**
      * The decoded value of the pair at [index], or `null` for a pair that had no `=`
-     * (SPEC §10.3, [QUERY-10]).
+     * (SPEC §10.3).
      *
-     * @param index the zero-based position in `0 until size()`.
+     * @param index the zero-based position in `0 until size`.
      * @return the decoded value at [index], or `null` when that pair had no `=`.
-     * @throws IndexOutOfBoundsException when [index] is negative or `>= size()`.
+     * @throws IndexOutOfBoundsException when [index] is negative or `>= size`.
      */
     public fun valueAt(index: Int): String? {
         checkIndex(index)
@@ -143,56 +175,135 @@ public class QueryParameters internal constructor(
     }
 
     /**
-     * Re-serializes the pairs to a generic raw query string (SPEC §10.3.3, [QUERY-19]).
+     * Re-serializes the pairs to a generic raw query string (SPEC §10.3.3).
      *
      * Pairs join with `&`; each emits `encodeName(name)` followed by `= encodeValue(value)` only
      * when `value` is non-`null`. `+` is never specially encoded, and the null-vs-empty distinction
      * is preserved, so a query needing no escaping round-trips exactly (e.g. `===3===`).
+     * Serialization is total: a snapshot of any size serializes, so [toString] never fails.
      *
      * @return the raw query string (without a leading `?`); `""` when [isEmpty].
      */
-    public fun toQueryString(): String {
-        check(entries.size <= MAX_PAIRS) { "pair count exceeds the parse bound" }
-        return entries.joinToString(PAIR_SEPARATOR) { (name, value) ->
+    public fun toQueryString(): String =
+        entries.joinToString(PAIR_SEPARATOR) { (name, value) ->
             encodeName(name) + (value?.let { VALUE_SEPARATOR + encodeValue(it) } ?: "")
         }
+
+    /**
+     * Iterates the decoded pairs in appearance order, duplicates included (SPEC §10.3).
+     *
+     * @return an iterator over each `(name, value?)` pair as a [QueryParameter], in order.
+     */
+    public override operator fun iterator(): Iterator<QueryParameter> =
+        entries.asSequence().map { (name, value) -> QueryParameter(name, value) }.iterator()
+
+    /**
+     * A first-value-wins, insertion-ordered [Map] of the distinct names to their first value
+     * (SPEC §10.3).
+     *
+     * Duplicates collapse: only the first pair per name is kept, so the ordering of duplicates and
+     * any later values are lost, though a `null` first value is retained. Use [getAll] to recover
+     * every value for a name.
+     *
+     * @return a read-only, insertion-ordered map of each distinct name to its first decoded value.
+     */
+    public fun toMap(): Map<String, String?> {
+        val result = LinkedHashMap<String, String?>(entries.size)
+        for ((name, value) in entries) {
+            if (name !in result) result[name] = value
+        }
+        check(result.size <= entries.size) { "distinct names cannot exceed the pair count" }
+        return result
     }
 
-    /** Throws [IndexOutOfBoundsException] when [index] is outside `0 until size()` ([QUERY-10]). */
+    /**
+     * A pre-filled [QueryParametersBuilder] over this snapshot's pairs (SPEC §10.3.2).
+     *
+     * @return a builder seeded with this snapshot's pairs, so an unmodified
+     *   [build][QueryParametersBuilder.build] reproduces an equal snapshot.
+     */
+    public fun newBuilder(): QueryParametersBuilder = QueryParametersBuilder(entries)
+
+    /**
+     * Structural equality over the ordered [entries] list.
+     *
+     * Two snapshots are equal only when they hold the same pairs in the same order; order,
+     * duplicates, and the `null`-vs-`""` value distinction are all significant. Consistent with
+     * [hashCode].
+     *
+     * @param other the value to compare against.
+     * @return `true` iff [other] is a [QueryParameters] with an identical ordered pair sequence.
+     */
+    override fun equals(other: Any?): Boolean = other is QueryParameters && other.entries == entries
+
+    /**
+     * The hash of the ordered [entries] list, consistent with [equals].
+     *
+     * @return a hash derived from the ordered pair sequence.
+     */
+    override fun hashCode(): Int = entries.hashCode()
+
+    /**
+     * A readable rendering of the snapshot as its raw query string.
+     *
+     * @return `"QueryParameters(<query>)"`, where `<query>` is [toQueryString].
+     */
+    override fun toString(): String = "QueryParameters(${toQueryString()})"
+
+    /** Throws [IndexOutOfBoundsException] when [index] is outside `0 until size`. */
     private fun checkIndex(index: Int) {
         if (index < 0 || index >= entries.size) {
             throw IndexOutOfBoundsException("index $index out of bounds for size ${entries.size}")
         }
     }
 
-    internal companion object {
+    public companion object {
         /**
-         * Derives a [QueryParameters] from the raw query [query] (SPEC §10.2.1, [QUERY-6]).
+         * Derives a [QueryParameters] from the raw query [query] (SPEC §10.2.1).
          *
          * A single leading `?` is dropped, then the body is split on `&`; each segment splits on its
          * **first** `=` into `(name, value)` or `(name, null)` when no `=` is present, and both sides
-         * are percent-decoded with no plus-as-space ([QUERY-7]). Order and duplicates are preserved,
-         * and the sentinels of [QUERY-8] hold (`""` -> one empty pair, `&` -> two empty pairs).
+         * are percent-decoded with no plus-as-space. Order and duplicates are preserved,
+         * and the sentinels hold (`""` -> one empty pair, `&` -> two empty pairs).
          *
-         * The pair count is bounded by [MAX_PAIRS] ([QUERY-24]): once the cap is reached, parsing
-         * stops and no further pairs are recorded (these internal classes return a value, not a
-         * `ParseResult`; the surfaced `LimitExceeded` failure of §10.5 is the caller's concern).
+         * Every pair in [query] is materialized: like the WHATWG `URLSearchParams` parser, this
+         * factory applies no pair-count cap and never truncates. Work and memory are linear in the
+         * query length — each pair consumes at least one input character — so hostile input is
+         * bounded by the string the caller already holds, not by any cap here.
+         *
+         * @param query the raw query string, with or without a single leading `?`.
+         * @return the decoded, ordered, duplicate-preserving snapshot of every pair in [query].
          */
-        internal fun parse(query: String): QueryParameters {
+        @JvmStatic
+        public fun parse(query: String): QueryParameters {
             val body = if (query.startsWith(QUERY_PREFIX)) query.substring(1) else query
             val pairs = ArrayList<Pair<String, String?>>()
             var pos = 0
-            while (pos <= body.length && pairs.size < MAX_PAIRS) {
+            while (pos <= body.length) {
                 val amp = nextSeparator(body, pos)
                 val eq = firstEquals(body, pos, amp)
                 pairs.add(splitPair(body, pos, amp, eq))
                 pos = amp + 1
             }
-            check(pairs.size <= MAX_PAIRS) { "parse exceeded the pair bound" }
+            check(pairs.size <= body.length + 1) { "pair count must stay linear in the query length" }
             return QueryParameters(pairs)
         }
 
-        /** Index of the next `&` at or after [pos], or `length` when none remains ([QUERY-6]). */
+        /**
+         * Builds a [QueryParameters] from [pairs] in the map's iteration order (SPEC §10.3.2).
+         *
+         * One pair is appended per map entry, so the snapshot has no duplicate names and its order
+         * follows the map's iteration order (use a [LinkedHashMap] for a predictable order). A `null`
+         * value is retained as the no-`=` sentinel. To preserve duplicates, use [parse] or the
+         * [QueryParametersBuilder] directly.
+         *
+         * @param pairs the decoded name-to-value entries; a `null` value is the no-`=` sentinel.
+         * @return a snapshot holding one pair per map entry, in the map's iteration order.
+         */
+        @JvmStatic
+        public fun of(pairs: Map<String, String?>): QueryParameters = QueryParametersBuilder().addAll(pairs).build()
+
+        /** Index of the next `&` at or after [pos], or `length` when none remains. */
         private fun nextSeparator(
             body: String,
             pos: Int,
@@ -201,7 +312,7 @@ public class QueryParameters internal constructor(
             return if (amp < 0) body.length else amp
         }
 
-        /** Index of the first `=` within `[pos, amp)`, or `-1` when none ([QUERY-6]). */
+        /** Index of the first `=` within `[pos, amp)`, or `-1` when none. */
         private fun firstEquals(
             body: String,
             pos: Int,
@@ -211,7 +322,7 @@ public class QueryParameters internal constructor(
             return if (eq in pos until amp) eq else -1
         }
 
-        /** Decodes one segment into a `(name, value?)` pair using the first-`=` split ([QUERY-8]). */
+        /** Decodes one segment into a `(name, value?)` pair using the first-`=` split. */
         private fun splitPair(
             body: String,
             pos: Int,
@@ -227,7 +338,7 @@ public class QueryParameters internal constructor(
             }
         }
 
-        /** Percent-decodes a raw name or value with `+` kept literal ([QUERY-7]). */
+        /** Percent-decodes a raw name or value with `+` kept literal. */
         private fun decode(raw: String): String = PercentCodec.decode(raw)
     }
 }

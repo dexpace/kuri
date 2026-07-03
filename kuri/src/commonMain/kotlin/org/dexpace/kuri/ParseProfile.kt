@@ -5,13 +5,13 @@
 package org.dexpace.kuri
 
 /**
- * Selects which parsing posture the shared engine applies (SPEC §1.2, [INTRO-4]).
+ * Selects which parsing posture the shared engine applies (SPEC §1.2).
  *
  * `kuri` runs one parsing engine, one host module, and one percent-encoding module,
  * parameterized by this profile, so that `Uri` and `Url` are produced by the same code
- * paths configured differently rather than by two independent parsers ([INTRO-1]). The
+ * paths configured differently rather than by two independent parsers. The
  * two members are exhaustive and mutually exclusive; a single parse never mixes
- * behaviours from both ([INTRO-4]).
+ * behaviours from both.
  *
  * - [URI] models the RFC 3986/3987 generic-URI syntax: scheme-agnostic, no special
  *   schemes or default ports, no backslash rewriting, and **preserve-by-default** with

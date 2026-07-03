@@ -7,8 +7,6 @@ package org.dexpace.kuri
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriSyntaxException
 import org.dexpace.kuri.error.fold
-import org.dexpace.kuri.error.getOrNull
-import org.dexpace.kuri.error.isOk
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.host.serialize
@@ -18,6 +16,8 @@ import org.dexpace.kuri.parser.UriParser
 import org.dexpace.kuri.parser.UrlPath
 import org.dexpace.kuri.parser.toUriPathString
 import org.dexpace.kuri.percent.PercentCodec
+import org.dexpace.kuri.percent.PercentEncodeSet
+import org.dexpace.kuri.percent.PercentEncodeSets
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.serialize.Serializer
 import org.dexpace.kuri.serialize.UriNormalizer
@@ -29,19 +29,33 @@ import kotlin.jvm.JvmStatic
 /** The path-segment separator shared by the encoded-path projection (RFC 3986 §3.3). */
 private const val SLASH: String = "/"
 
+/** The raw code points a single encoded path segment must not carry; each would re-split it. */
+private const val SEGMENT_DELIMITERS: String = "/\\?#"
+
+/**
+ * The encode set applied to a decoded segment added via [Uri.Builder.addPathSegment]
+ * (`encodeURIComponent`, RFC 3986 §3.3). It percent-encodes the reserved delimiters that could
+ * break a segment — including `/` and `\` (segment separators), `?` and `#` (which would open a
+ * query or fragment), and `%` (the escape introducer) — so an added segment can never merge into a
+ * neighbouring component nor produce a bare `%` that the strict `Uri` parser rejects. Matching
+ * `encodeURIComponent`, the always-safe sub-delims (`!`, `'`, `(`, `)`, `*`) and the RFC 3986
+ * `unreserved` set are left literal.
+ */
+private val URI_PATH_SEGMENT_ENCODE_SET: PercentEncodeSet = PercentEncodeSets.COMPONENT
+
 /**
  * An immutable, preserve-by-default RFC 3986 generic-URI value (SPEC §3, §11; RFC 3986).
  *
  * A `Uri` wraps the output of the `Uri`-profile §8 engine, so every accessor is a pure projection of
  * the stored components and never re-parses or performs I/O. Unlike [Url], the `Uri` profile is
- * *preserve-by-default* ([PARSE-52]): the scheme and reg-name (domain) hosts keep their original
+ * *preserve-by-default*: the scheme and reg-name (domain) hosts keep their original
  * case, the path keeps its dot-segments, and an explicit port is never elided. An IP-literal host is
  * the exception — it is canonicalized on output, so an IPv6 literal is re-serialized to its RFC 5952
  * form (§7). A `Uri` may be a relative reference, so its [scheme] (and authority) can be absent —
  * `null` — which a parsed [Url] never is. Construct one with
  * the [parse] factories or, for programmatic assembly, with [Builder].
  *
- * Equality and hashing are *structural* over the canonical-but-unnormalized [uriString] ([NORM-21]):
+ * Equality and hashing are *structural* over the canonical-but-unnormalized [uriString]:
  * two `Uri` values are equal only when their preserved serializations match exactly, so
  * `HTTP://H/` and `http://h/` are distinct. Apply [normalized] (RFC 3986 §6.2) or [normalizedEquals]
  * to fold the §6.2 equivalences explicitly. A `Uri` is I/O-free and so a safe `Map`/`Set` key.
@@ -67,7 +81,7 @@ public class Uri internal constructor(
     public val userInfo: String?
         get() = reconstructUserInfo()
 
-    /** The structured host, or `null` when the URI has no authority ([MODEL-14], [MODEL-15]). */
+    /** The structured host, or `null` when the URI has no authority. */
     @get:JvmName("host")
     public val host: Host?
         get() = components.host
@@ -81,14 +95,14 @@ public class Uri internal constructor(
      * The explicit port, preserved exactly as parsed, or `null` when no port was present.
      *
      * Unlike [Url], the `Uri` profile applies no default-port elision and no `0..65535` range cap; a
-     * port equal to the scheme default is retained ([PARSE-34]).
+     * port equal to the scheme default is retained.
      */
     @get:JvmName("port")
     public val port: Int?
         get() = components.port
 
     /**
-     * The encoded path, preserved verbatim ([NORM-15]).
+     * The encoded path, preserved verbatim.
      *
      * Dot-segments are NOT removed in the `Uri` profile, so `http://h/a/../b` keeps the path
      * `/a/../b`; use [normalized] to apply RFC 3986 §6.2.2.3 dot-segment removal.
@@ -106,28 +120,39 @@ public class Uri internal constructor(
                 is UrlPath.Segments -> storedPath.segments.map { PercentCodec.decode(it) }
             }
 
-    /** The raw encoded query without its leading `?`, or `null` when no `?` was present ([MODEL-30]). */
+    /** The raw encoded query without its leading `?`, or `null` when no `?` was present. */
     @get:JvmName("query")
     public val query: String?
         get() = components.query
 
-    /** The raw encoded fragment without its leading `#`, or `null` when no `#` was present ([MODEL-33]). */
+    /** The raw encoded fragment without its leading `#`, or `null` when no `#` was present. */
     @get:JvmName("fragment")
     public val fragment: String?
         get() = components.fragment
 
-    /** The `[userinfo@]host[:port]` authority, or `null` when the URI has no authority ([MODEL-34]). */
+    /** The `[userinfo@]host[:port]` authority, or `null` when the URI has no authority. */
     @get:JvmName("authority")
     public val authority: String?
         get() = reconstructAuthority()
 
-    /** Cached canonical-but-unnormalized serialization, computed once ([NORM-23] permits caching). */
+    /** Cached canonical-but-unnormalized serialization, computed once. */
     private val canonicalUri: String by lazy { Serializer.serialize(components, ParseProfile.URI) }
 
-    /** The canonical-but-UNNORMALIZED RFC 3986 §5.3 serialization ([NORM-21]); the basis of equality. */
+    /**
+     * The canonical-but-UNNORMALIZED RFC 3986 §5.3 serialization; the basis of equality.
+     *
+     * Equal to [toString].
+     */
     @get:JvmName("uriString")
     public val uriString: String
         get() = canonicalUri
+
+    /**
+     * Alias of [path]; the percent-encoded path. Portable name shared with `Url.encodedPath()`.
+     */
+    @get:JvmName("encodedPath")
+    public val encodedPath: String
+        get() = path
 
     /**
      * Returns a [Builder] pre-filled with this URI's components, for producing a modified copy.
@@ -148,7 +173,7 @@ public class Uri internal constructor(
      * @param reference the (possibly relative) reference to resolve.
      * @param options the opt-in parsing configuration applied to the resolved reference; defaults to
      *   the options this base's own components imply, so a zoned base resolves without the caller
-     *   re-supplying options ([HOST-18]).
+     *   re-supplying options.
      * @return [ParseResult.Ok] with the resolved [Uri], or [ParseResult.Err] when resolution fails.
      */
     @JvmOverloads
@@ -162,7 +187,7 @@ public class Uri internal constructor(
         }
 
     /**
-     * Returns a copy with the full RFC 3986 §6.2 normalization applied (SPEC §11.1, [NORM-3]).
+     * Returns a copy with the full RFC 3986 §6.2 normalization applied (SPEC §11.1).
      *
      * Lowercases the scheme and reg-name host, uppercases percent triplets, decodes `unreserved`
      * triplets, removes dot-segments, and elides a default port. The receiver is left untouched.
@@ -196,10 +221,10 @@ public class Uri internal constructor(
     /** The canonical [uriString]; a parsed `Uri` round-trips through `toString` then [parse]. */
     override fun toString(): String = uriString
 
-    /** Structural canonical-string equality ([NORM-21]); pure and I/O-free, with a consistent [hashCode]. */
+    /** Structural canonical-string equality; pure and I/O-free, with a consistent [hashCode]. */
     override fun equals(other: Any?): Boolean = other is Uri && other.uriString == uriString
 
-    /** The hash of the canonical [uriString], consistent with [equals] ([NORM-23]). */
+    /** The hash of the canonical [uriString], consistent with [equals]. */
     override fun hashCode(): Int = uriString.hashCode()
 
     /** Reconstructs the raw `userinfo` from the decoded credentials, or `null` when none is present. */
@@ -219,16 +244,16 @@ public class Uri internal constructor(
         return "$credentials${authorityHost.serialize()}$portPart"
     }
 
-    /** Parse factories for [Uri] (SPEC §7.5); each returns a value rather than throwing ([ERR-1]). */
+    /** Parse factories for [Uri] (SPEC §7.5); each returns a value rather than throwing. */
     public companion object {
         /**
-         * Parses [input] as an RFC 3986 URI-reference, preserve-by-default ([ERR-1], [ERR-2]).
+         * Parses [input] as an RFC 3986 URI-reference, preserve-by-default.
          *
-         * A relative reference (no scheme) is accepted, deferring base merging to [resolve] ([PARSE-19]).
+         * A relative reference (no scheme) is accepted, deferring base merging to [resolve].
          *
          * @param input the URI-reference text to parse, used exactly as supplied.
          * @param options the opt-in parsing configuration ([ParseOptions.DEFAULT] applies the
-         *   standards baseline); enables features such as RFC 6874 zone ids ([HOST-18]).
+         *   standards baseline); enables features such as RFC 6874 zone ids.
          * @return [ParseResult.Ok] with the [Uri], or [ParseResult.Err] on the first fatal error.
          */
         @JvmStatic
@@ -239,7 +264,7 @@ public class Uri internal constructor(
         ): ParseResult<Uri> = UriParser.parse(input, options).map { Uri(it) }
 
         /**
-         * Parses [input], punning a failure to `null` ([ERR-5]).
+         * Parses [input], punning a failure to `null`.
          *
          * @param input the URI-reference text to parse.
          * @param options the opt-in parsing configuration ([ParseOptions.DEFAULT] applies the
@@ -254,7 +279,27 @@ public class Uri internal constructor(
         ): Uri? = parse(input, options).getOrNull()
 
         /**
-         * Reports whether [input] parses as a URI-reference without retaining the value ([ERR-5]).
+         * Parses [input], throwing when it is not a valid URI-reference.
+         *
+         * The throwing counterpart of [parse]/[parseOrNull], for a call site that prefers an
+         * exception to a [ParseResult] branch; the thrown [UriSyntaxException.error] is the same
+         * structured error [parse] would report.
+         *
+         * @param input the URI-reference text to parse.
+         * @param options the opt-in parsing configuration ([ParseOptions.DEFAULT] applies the
+         *   standards baseline).
+         * @return the parsed [Uri].
+         * @throws UriSyntaxException when [input] is not a valid URI-reference.
+         */
+        @JvmStatic
+        @JvmOverloads
+        public fun parseOrThrow(
+            input: String,
+            options: ParseOptions = ParseOptions.DEFAULT,
+        ): Uri = parse(input, options).getOrThrow()
+
+        /**
+         * Reports whether [input] parses as a URI-reference without retaining the value.
          *
          * @param input the URI-reference text to test.
          * @param options the opt-in parsing configuration ([ParseOptions.DEFAULT] applies the
@@ -287,6 +332,9 @@ public class Uri internal constructor(
         private var host: String? = null
         private var port: Int? = null
         private var encodedPath: String = ""
+
+        /** True while [encodedPath] was assembled from empty by segment appends; its rooting is decided at [build]. */
+        private var isSegmentBuiltPath: Boolean = false
         private var query: String? = null
         private var fragment: String? = null
         private var options: ParseOptions = ParseOptions.DEFAULT
@@ -309,8 +357,8 @@ public class Uri internal constructor(
         /**
          * Sets or clears the scheme (without its `:`); the original case is preserved at [build].
          *
-         * @param scheme a syntactically valid scheme ([SCH-7]), or `null` to make this a relative reference.
-         * @throws IllegalArgumentException when a non-null [scheme] is not a valid scheme ([ERR-6]).
+         * @param scheme a syntactically valid scheme, or `null` to make this a relative reference.
+         * @throws IllegalArgumentException when a non-null [scheme] is not a valid scheme.
          */
         public fun scheme(scheme: String?): Builder {
             require(scheme == null || Scheme.isValidScheme(scheme)) { "invalid scheme: $scheme" }
@@ -340,7 +388,7 @@ public class Uri internal constructor(
 
         /**
          * Enables RFC 6874 IPv6 zone-id acceptance when [build] re-parses the assembled URI (default
-         * off); the builder counterpart of [ParseOptions.allowIpv6ZoneId] ([HOST-18]).
+         * off); the builder counterpart of [ParseOptions.allowIpv6ZoneId].
          *
          * Set this `true` to assemble a `[` IPv6 `%25` ZoneID `]` host from scratch; with it off,
          * [build] rejects a zone id exactly as [parse] does. A builder from [newBuilder] already
@@ -355,10 +403,10 @@ public class Uri internal constructor(
         }
 
         /**
-         * Sets or clears the explicit port ([MODEL-23]); the `Uri` profile applies no `0..65535` cap.
+         * Sets or clears the explicit port; the `Uri` profile applies no `0..65535` cap.
          *
          * @param port a non-negative port, or `null` to elide it.
-         * @throws IllegalArgumentException when [port] is negative ([ERR-6]).
+         * @throws IllegalArgumentException when [port] is negative.
          */
         public fun port(port: Int?): Builder {
             require(port == null || port >= 0) { "port must be non-negative: $port" }
@@ -367,12 +415,13 @@ public class Uri internal constructor(
         }
 
         /**
-         * Replaces the entire encoded path verbatim ([MODEL-39]).
+         * Replaces the entire encoded path verbatim.
          *
          * @param encodedPath the already-encoded path (e.g. `/a/b`); validated at [build].
          */
         public fun encodedPath(encodedPath: String): Builder {
             this.encodedPath = encodedPath
+            isSegmentBuiltPath = false // a verbatim path owns its own (root or rootless) shape.
             return this
         }
 
@@ -384,7 +433,47 @@ public class Uri internal constructor(
         public fun path(path: String): Builder = encodedPath(path)
 
         /**
-         * Sets or clears the raw encoded query (without its leading `?`) ([MODEL-30]).
+         * Appends one decoded path segment, percent-encoding it (including any `/`, `\`, `%`, `?`, or
+         * `#`) so it always stays a single RFC 3986 segment and [Uri.pathSegments] decodes it back to
+         * exactly [segment] (SPEC [PATH-6]).
+         *
+         * Segments join at the path's segment boundary: a path that is empty or already ends in `/`
+         * has an open final slot the segment fills directly, and any other path first gains a
+         * separating `/` — so `newBuilder()` of `http://h/` plus `"x"` builds `http://h/x`, matching
+         * OkHttp's replace-trailing-empty rule (SPEC [PATH-3]). Pushing `""` leaves the final slot
+         * open: on a path that already has content it is a real trailing empty segment (`/a/`, so
+         * [Uri.pathSegments] is `["a", ""]`); on a still-empty path it leaves the path empty, so a
+         * lone `addPathSegment("")` serializes as the root `/` under an authority and contributes
+         * nothing without one. An interior empty segment (`/a//b`) is expressible only through
+         * [encodedPath]. A path assembled purely from segments stays rootless until [build], which
+         * prepends the root `/` iff the value has an authority (RFC 3986 §3.3) — so rootless
+         * `urn:`/`mailto:` paths build segment-wise, independent of setter order.
+         *
+         * @param segment the decoded segment to append.
+         * @return this builder, for chaining.
+         */
+        public fun addPathSegment(segment: String): Builder =
+            pushSegment(PercentCodec.encode(segment, URI_PATH_SEGMENT_ENCODE_SET))
+
+        /**
+         * Appends one already-encoded path segment verbatim (RFC 3986 §3.3).
+         *
+         * The caller owns the encoding: percent-escapes are kept exactly as supplied and validated by
+         * the strict parser at [build]. Because a segment is `*pchar`, [segment] must not carry a raw
+         * `/`, `\`, `?`, or `#` — those are component delimiters, not segment data, and would
+         * otherwise silently re-split the built value (SPEC [MODEL-39]); use [addPathSegment] to carry
+         * them as data. Separator and rooting rules are those of [addPathSegment]: the segment joins
+         * at the path's segment boundary, and a path built purely from segments is rooted at [build]
+         * iff the value has an authority.
+         *
+         * @param segment the encoded segment to append; kept exactly as supplied.
+         * @return this builder, for chaining.
+         * @throws IllegalArgumentException when [segment] contains a raw `/`, `\`, `?`, or `#`.
+         */
+        public fun addEncodedPathSegment(segment: String): Builder = pushSegment(segment)
+
+        /**
+         * Sets or clears the raw encoded query (without its leading `?`).
          *
          * @param query the encoded query, or `null` to drop the `?` entirely.
          */
@@ -394,7 +483,7 @@ public class Uri internal constructor(
         }
 
         /**
-         * Sets or clears the raw encoded fragment (without its leading `#`) ([MODEL-33]).
+         * Sets or clears the raw encoded fragment (without its leading `#`).
          *
          * @param fragment the encoded fragment, or `null` to drop the `#` entirely.
          */
@@ -411,11 +500,12 @@ public class Uri internal constructor(
          *   URI: a [userInfo] or [port] set without a [host], or an authority paired with a
          *   non-rooted [encodedPath].
          * @throws UriSyntaxException when the components do not form a valid URI — a builder misuse is
-         *   a programmer error rather than a recoverable parse failure ([ERR-6]).
+         *   a programmer error rather than a recoverable parse failure.
          */
         public fun build(): Uri {
-            validateComposable()
-            return UriParser.parse(recompose(), options).fold(
+            val path = effectivePath()
+            validateComposable(path)
+            return UriParser.parse(recompose(path), options).fold(
                 onOk = { Uri(it) },
                 onErr = { throw UriSyntaxException(it) },
             )
@@ -425,24 +515,58 @@ public class Uri internal constructor(
          * Rejects component combinations no RFC 3986 recomposition can represent (RFC 3986 §3.2/§3.3).
          *
          * `userinfo`/`port` are authority sub-components, so they require a host; a caller wanting an
-         * empty authority passes `host("")`. A present authority forbids a rootless path, which would
-         * otherwise merge into the authority on re-parse.
+         * empty authority passes `host("")`. A present authority forbids a rootless [path], which
+         * would otherwise merge into the authority on re-parse; a segment-built path is already rooted
+         * by [effectivePath] when a host is present, so only a verbatim rootless path can trip this.
          */
-        private fun validateComposable() {
+        private fun validateComposable(path: String) {
             require(host != null || (userInfo.isNullOrEmpty() && port == null)) {
                 "userInfo/port require a host: set host(\"\") for an empty-authority URI, or drop them"
             }
-            require(host == null || encodedPath.isEmpty() || encodedPath.startsWith(SLASH)) {
-                "a path with an authority must be empty or start with '/': $encodedPath"
+            require(host == null || path.isEmpty() || path.startsWith(SLASH)) {
+                "a path with an authority must be empty or start with '/': $path"
             }
         }
 
+        /**
+         * Appends [encodedSegment] at the path's segment boundary; rooting is deferred to
+         * [effectivePath].
+         *
+         * The path takes the segment directly when it is empty (a rootless first segment) or already
+         * ends in `/` (an open final slot); otherwise a separating `/` is inserted first. A segment
+         * must already be exactly one segment, so a raw `/`, `\`, `?`, or `#` is rejected rather than
+         * silently re-split (RFC 3986 §3.3; SPEC [MODEL-39]).
+         */
+        private fun pushSegment(encodedSegment: String): Builder {
+            val delimiter = encodedSegment.indexOfFirst { it in SEGMENT_DELIMITERS }
+            require(delimiter < 0) {
+                "a path segment must not contain '/', '\\', '?', or '#' " +
+                    "(found '${encodedSegment[delimiter]}' at index $delimiter): $encodedSegment"
+            }
+            if (encodedPath.isEmpty()) isSegmentBuiltPath = true
+            if (encodedPath.isNotEmpty() && !encodedPath.endsWith(SLASH)) encodedPath += SLASH
+            encodedPath += encodedSegment
+            check(encodedPath.endsWith(encodedSegment)) { "the pushed segment must terminate the path" }
+            return this
+        }
+
+        /**
+         * The path [recompose] serializes: a segment-built path gains its root `/` exactly when an
+         * authority is present, because RFC 3986 §3.3 forbids a rootless path after an authority while
+         * the rootless form is the only one an authority-less `urn:`-style value can carry.
+         */
+        private fun effectivePath(): String {
+            if (!isSegmentBuiltPath || host == null) return encodedPath
+            check(!encodedPath.startsWith(SLASH)) { "a segment-built path is stored rootless: $encodedPath" }
+            return SLASH + encodedPath
+        }
+
         /** Recomposes a parseable URI string from the accumulated components (RFC 3986 §5.3). */
-        private fun recompose(): String {
+        private fun recompose(path: String): String {
             val sb = StringBuilder()
             if (scheme != null) sb.append(scheme).append(':')
             if (host != null) appendAuthority(sb)
-            sb.append(guardRecomposedUriPath(scheme, host != null, encodedPath))
+            sb.append(guardRecomposedUriPath(scheme, host != null, path))
             if (query != null) sb.append('?').append(query)
             if (fragment != null) sb.append('#').append(fragment)
             return sb.toString()

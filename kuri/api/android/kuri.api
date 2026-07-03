@@ -7,7 +7,6 @@ public final class org/dexpace/kuri/Iri {
 public final class org/dexpace/kuri/Kuri {
 	public static final field INSTANCE Lorg/dexpace/kuri/Kuri;
 	public static final field VERSION Ljava/lang/String;
-	public final fun version ()Ljava/lang/String;
 }
 
 public final class org/dexpace/kuri/ParseOptions {
@@ -35,6 +34,7 @@ public final class org/dexpace/kuri/Uri {
 	public final fun authority ()Ljava/lang/String;
 	public static final fun canParse (Ljava/lang/String;)Z
 	public static final fun canParse (Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;)Z
+	public final fun encodedPath ()Ljava/lang/String;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun fragment ()Ljava/lang/String;
 	public fun hashCode ()I
@@ -47,6 +47,8 @@ public final class org/dexpace/kuri/Uri {
 	public static final fun parse (Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;)Lorg/dexpace/kuri/error/ParseResult;
 	public static final fun parseOrNull (Ljava/lang/String;)Lorg/dexpace/kuri/Uri;
 	public static final fun parseOrNull (Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;)Lorg/dexpace/kuri/Uri;
+	public static final fun parseOrThrow (Ljava/lang/String;)Lorg/dexpace/kuri/Uri;
+	public static final fun parseOrThrow (Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;)Lorg/dexpace/kuri/Uri;
 	public final fun path ()Ljava/lang/String;
 	public final fun pathSegments ()Ljava/util/List;
 	public final fun port ()Ljava/lang/Integer;
@@ -63,6 +65,8 @@ public final class org/dexpace/kuri/Uri {
 
 public final class org/dexpace/kuri/Uri$Builder {
 	public fun <init> ()V
+	public final fun addEncodedPathSegment (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun addPathSegment (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun allowIpv6ZoneId (Z)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun build ()Lorg/dexpace/kuri/Uri;
 	public final fun encodedPath (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
@@ -85,12 +89,16 @@ public final class org/dexpace/kuri/Uri$Companion {
 	public final fun parseOrNull (Ljava/lang/String;)Lorg/dexpace/kuri/Uri;
 	public final fun parseOrNull (Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;)Lorg/dexpace/kuri/Uri;
 	public static synthetic fun parseOrNull$default (Lorg/dexpace/kuri/Uri$Companion;Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/Uri;
+	public final fun parseOrThrow (Ljava/lang/String;)Lorg/dexpace/kuri/Uri;
+	public final fun parseOrThrow (Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;)Lorg/dexpace/kuri/Uri;
+	public static synthetic fun parseOrThrow$default (Lorg/dexpace/kuri/Uri$Companion;Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/Uri;
 }
 
 public final class org/dexpace/kuri/Url {
 	public static final field Companion Lorg/dexpace/kuri/Url$Companion;
 	public final fun authority ()Ljava/lang/String;
 	public static final fun canParse (Ljava/lang/String;)Z
+	public static final fun canParse (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Z
 	public final fun effectivePort ()I
 	public final fun encodedFragment ()Ljava/lang/String;
 	public final fun encodedPath ()Ljava/lang/String;
@@ -105,6 +113,9 @@ public final class org/dexpace/kuri/Url {
 	public static final fun parse (Ljava/lang/String;)Lorg/dexpace/kuri/error/ParseResult;
 	public static final fun parse (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Lorg/dexpace/kuri/error/ParseResult;
 	public static final fun parseOrNull (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public static final fun parseOrNull (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Lorg/dexpace/kuri/Url;
+	public static final fun parseOrThrow (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public static final fun parseOrThrow (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Lorg/dexpace/kuri/Url;
 	public final fun password ()Ljava/lang/String;
 	public final fun pathSegments ()Ljava/util/List;
 	public final fun port ()Ljava/lang/Integer;
@@ -135,10 +146,17 @@ public final class org/dexpace/kuri/Url$Builder {
 
 public final class org/dexpace/kuri/Url$Companion {
 	public final fun canParse (Ljava/lang/String;)Z
+	public final fun canParse (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Z
+	public static synthetic fun canParse$default (Lorg/dexpace/kuri/Url$Companion;Ljava/lang/String;Lorg/dexpace/kuri/Url;ILjava/lang/Object;)Z
 	public final fun parse (Ljava/lang/String;)Lorg/dexpace/kuri/error/ParseResult;
 	public final fun parse (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Lorg/dexpace/kuri/error/ParseResult;
 	public static synthetic fun parse$default (Lorg/dexpace/kuri/Url$Companion;Ljava/lang/String;Lorg/dexpace/kuri/Url;ILjava/lang/Object;)Lorg/dexpace/kuri/error/ParseResult;
 	public final fun parseOrNull (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public final fun parseOrNull (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Lorg/dexpace/kuri/Url;
+	public static synthetic fun parseOrNull$default (Lorg/dexpace/kuri/Url$Companion;Ljava/lang/String;Lorg/dexpace/kuri/Url;ILjava/lang/Object;)Lorg/dexpace/kuri/Url;
+	public final fun parseOrThrow (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public final fun parseOrThrow (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Lorg/dexpace/kuri/Url;
+	public static synthetic fun parseOrThrow$default (Lorg/dexpace/kuri/Url$Companion;Ljava/lang/String;Lorg/dexpace/kuri/Url;ILjava/lang/Object;)Lorg/dexpace/kuri/Url;
 }
 
 public final class org/dexpace/kuri/error/HostError : java/lang/Enum {
@@ -156,6 +174,15 @@ public final class org/dexpace/kuri/error/HostError : java/lang/Enum {
 }
 
 public abstract interface class org/dexpace/kuri/error/ParseResult {
+	public abstract fun getOrNull ()Ljava/lang/Object;
+	public abstract fun getOrThrow ()Ljava/lang/Object;
+	public abstract fun isOk ()Z
+}
+
+public final class org/dexpace/kuri/error/ParseResult$DefaultImpls {
+	public static fun getOrNull (Lorg/dexpace/kuri/error/ParseResult;)Ljava/lang/Object;
+	public static fun getOrThrow (Lorg/dexpace/kuri/error/ParseResult;)Ljava/lang/Object;
+	public static fun isOk (Lorg/dexpace/kuri/error/ParseResult;)Z
 }
 
 public final class org/dexpace/kuri/error/ParseResult$Err : org/dexpace/kuri/error/ParseResult {
@@ -165,7 +192,12 @@ public final class org/dexpace/kuri/error/ParseResult$Err : org/dexpace/kuri/err
 	public static synthetic fun copy$default (Lorg/dexpace/kuri/error/ParseResult$Err;Lorg/dexpace/kuri/error/UriParseError;ILjava/lang/Object;)Lorg/dexpace/kuri/error/ParseResult$Err;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getError ()Lorg/dexpace/kuri/error/UriParseError;
+	public synthetic fun getOrNull ()Ljava/lang/Object;
+	public fun getOrNull ()Ljava/lang/Void;
+	public synthetic fun getOrThrow ()Ljava/lang/Object;
+	public fun getOrThrow ()Ljava/lang/Void;
 	public fun hashCode ()I
+	public fun isOk ()Z
 	public fun toString ()Ljava/lang/String;
 }
 
@@ -175,25 +207,31 @@ public final class org/dexpace/kuri/error/ParseResult$Ok : org/dexpace/kuri/erro
 	public final fun copy (Ljava/lang/Object;)Lorg/dexpace/kuri/error/ParseResult$Ok;
 	public static synthetic fun copy$default (Lorg/dexpace/kuri/error/ParseResult$Ok;Ljava/lang/Object;ILjava/lang/Object;)Lorg/dexpace/kuri/error/ParseResult$Ok;
 	public fun equals (Ljava/lang/Object;)Z
+	public fun getOrNull ()Ljava/lang/Object;
+	public fun getOrThrow ()Ljava/lang/Object;
 	public final fun getValue ()Ljava/lang/Object;
 	public fun hashCode ()I
+	public fun isOk ()Z
 	public fun toString ()Ljava/lang/String;
 }
 
 public final class org/dexpace/kuri/error/ParseResultKt {
 	public static final fun fold (Lorg/dexpace/kuri/error/ParseResult;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)Ljava/lang/Object;
-	public static final fun getOrNull (Lorg/dexpace/kuri/error/ParseResult;)Ljava/lang/Object;
-	public static final fun getOrThrow (Lorg/dexpace/kuri/error/ParseResult;)Ljava/lang/Object;
-	public static final fun isOk (Lorg/dexpace/kuri/error/ParseResult;)Z
 	public static final fun map (Lorg/dexpace/kuri/error/ParseResult;Lkotlin/jvm/functions/Function1;)Lorg/dexpace/kuri/error/ParseResult;
 }
 
 public abstract interface class org/dexpace/kuri/error/UriParseError {
+	public abstract fun getMessage ()Ljava/lang/String;
+}
+
+public final class org/dexpace/kuri/error/UriParseError$DefaultImpls {
+	public static fun getMessage (Lorg/dexpace/kuri/error/UriParseError;)Ljava/lang/String;
 }
 
 public final class org/dexpace/kuri/error/UriParseError$EmptyHost : org/dexpace/kuri/error/UriParseError {
 	public static final field INSTANCE Lorg/dexpace/kuri/error/UriParseError$EmptyHost;
 	public fun equals (Ljava/lang/Object;)Z
+	public fun getMessage ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -207,6 +245,7 @@ public final class org/dexpace/kuri/error/UriParseError$ForbiddenHostCodePoint :
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAt ()I
 	public final fun getCodePoint ()I
+	public fun getMessage ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -220,6 +259,7 @@ public final class org/dexpace/kuri/error/UriParseError$InputTooLong : org/dexpa
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getLength ()I
 	public final fun getMax ()I
+	public fun getMessage ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -232,6 +272,7 @@ public final class org/dexpace/kuri/error/UriParseError$InvalidHost : org/dexpac
 	public static synthetic fun copy$default (Lorg/dexpace/kuri/error/UriParseError$InvalidHost;Ljava/lang/String;Lorg/dexpace/kuri/error/HostError;ILjava/lang/Object;)Lorg/dexpace/kuri/error/UriParseError$InvalidHost;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getHost ()Ljava/lang/String;
+	public fun getMessage ()Ljava/lang/String;
 	public final fun getReason ()Lorg/dexpace/kuri/error/HostError;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
@@ -244,6 +285,7 @@ public final class org/dexpace/kuri/error/UriParseError$InvalidPercentEncoding :
 	public static synthetic fun copy$default (Lorg/dexpace/kuri/error/UriParseError$InvalidPercentEncoding;IILjava/lang/Object;)Lorg/dexpace/kuri/error/UriParseError$InvalidPercentEncoding;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAt ()I
+	public fun getMessage ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -254,6 +296,7 @@ public final class org/dexpace/kuri/error/UriParseError$InvalidPort : org/dexpac
 	public final fun copy (Ljava/lang/String;)Lorg/dexpace/kuri/error/UriParseError$InvalidPort;
 	public static synthetic fun copy$default (Lorg/dexpace/kuri/error/UriParseError$InvalidPort;Ljava/lang/String;ILjava/lang/Object;)Lorg/dexpace/kuri/error/UriParseError$InvalidPort;
 	public fun equals (Ljava/lang/Object;)Z
+	public fun getMessage ()Ljava/lang/String;
 	public final fun getText ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
@@ -268,6 +311,7 @@ public final class org/dexpace/kuri/error/UriParseError$InvalidScheme : org/dexp
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAt ()I
 	public final fun getDetail ()Ljava/lang/String;
+	public fun getMessage ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -275,6 +319,7 @@ public final class org/dexpace/kuri/error/UriParseError$InvalidScheme : org/dexp
 public final class org/dexpace/kuri/error/UriParseError$MissingScheme : org/dexpace/kuri/error/UriParseError {
 	public static final field INSTANCE Lorg/dexpace/kuri/error/UriParseError$MissingScheme;
 	public fun equals (Ljava/lang/Object;)Z
+	public fun getMessage ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -295,10 +340,16 @@ public final class org/dexpace/kuri/error/ValidationError : java/lang/Enum {
 }
 
 public abstract interface class org/dexpace/kuri/host/Host {
+	public abstract fun asText ()Ljava/lang/String;
+}
+
+public final class org/dexpace/kuri/host/Host$DefaultImpls {
+	public static fun asText (Lorg/dexpace/kuri/host/Host;)Ljava/lang/String;
 }
 
 public final class org/dexpace/kuri/host/Host$Empty : org/dexpace/kuri/host/Host {
 	public static final field INSTANCE Lorg/dexpace/kuri/host/Host$Empty;
+	public fun asText ()Ljava/lang/String;
 	public fun equals (Ljava/lang/Object;)Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
@@ -306,6 +357,7 @@ public final class org/dexpace/kuri/host/Host$Empty : org/dexpace/kuri/host/Host
 
 public final class org/dexpace/kuri/host/Host$IpFuture : org/dexpace/kuri/host/Host {
 	public fun <init> (Ljava/lang/String;)V
+	public fun asText ()Ljava/lang/String;
 	public final fun component1 ()Ljava/lang/String;
 	public final fun copy (Ljava/lang/String;)Lorg/dexpace/kuri/host/Host$IpFuture;
 	public static synthetic fun copy$default (Lorg/dexpace/kuri/host/Host$IpFuture;Ljava/lang/String;ILjava/lang/Object;)Lorg/dexpace/kuri/host/Host$IpFuture;
@@ -317,18 +369,21 @@ public final class org/dexpace/kuri/host/Host$IpFuture : org/dexpace/kuri/host/H
 
 public final class org/dexpace/kuri/host/Host$Ipv4 : org/dexpace/kuri/host/Host {
 	public fun <init> (I)V
+	public fun asText ()Ljava/lang/String;
 	public final fun component1 ()I
 	public final fun copy (I)Lorg/dexpace/kuri/host/Host$Ipv4;
 	public static synthetic fun copy$default (Lorg/dexpace/kuri/host/Host$Ipv4;IILjava/lang/Object;)Lorg/dexpace/kuri/host/Host$Ipv4;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getValue ()I
 	public fun hashCode ()I
+	public final fun octets ()[I
 	public fun toString ()Ljava/lang/String;
 }
 
 public final class org/dexpace/kuri/host/Host$Ipv6 : org/dexpace/kuri/host/Host {
 	public fun <init> (Ljava/util/List;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/util/List;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun asText ()Ljava/lang/String;
 	public final fun component1 ()Ljava/util/List;
 	public final fun component2 ()Ljava/lang/String;
 	public final fun copy (Ljava/util/List;Ljava/lang/String;)Lorg/dexpace/kuri/host/Host$Ipv6;
@@ -342,6 +397,7 @@ public final class org/dexpace/kuri/host/Host$Ipv6 : org/dexpace/kuri/host/Host 
 
 public final class org/dexpace/kuri/host/Host$Opaque : org/dexpace/kuri/host/Host {
 	public fun <init> (Ljava/lang/String;)V
+	public fun asText ()Ljava/lang/String;
 	public final fun component1 ()Ljava/lang/String;
 	public final fun copy (Ljava/lang/String;)Lorg/dexpace/kuri/host/Host$Opaque;
 	public static synthetic fun copy$default (Lorg/dexpace/kuri/host/Host$Opaque;Ljava/lang/String;ILjava/lang/Object;)Lorg/dexpace/kuri/host/Host$Opaque;
@@ -353,6 +409,7 @@ public final class org/dexpace/kuri/host/Host$Opaque : org/dexpace/kuri/host/Hos
 
 public final class org/dexpace/kuri/host/Host$RegName : org/dexpace/kuri/host/Host {
 	public fun <init> (Ljava/lang/String;)V
+	public fun asText ()Ljava/lang/String;
 	public final fun component1 ()Ljava/lang/String;
 	public final fun copy (Ljava/lang/String;)Lorg/dexpace/kuri/host/Host$RegName;
 	public static synthetic fun copy$default (Lorg/dexpace/kuri/host/Host$RegName;Ljava/lang/String;ILjava/lang/Object;)Lorg/dexpace/kuri/host/Host$RegName;
@@ -366,28 +423,53 @@ public final class org/dexpace/kuri/host/HostSerializationKt {
 	public static final fun serialize (Lorg/dexpace/kuri/host/Host;)Ljava/lang/String;
 }
 
-public final class org/dexpace/kuri/query/QueryParameters {
+public final class org/dexpace/kuri/query/QueryParameter {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParameter;
+	public static synthetic fun copy$default (Lorg/dexpace/kuri/query/QueryParameter;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lorg/dexpace/kuri/query/QueryParameter;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getName ()Ljava/lang/String;
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class org/dexpace/kuri/query/QueryParameters : java/lang/Iterable, kotlin/jvm/internal/markers/KMappedMarker {
+	public static final field Companion Lorg/dexpace/kuri/query/QueryParameters$Companion;
+	public final fun contains (Ljava/lang/String;)Z
+	public fun equals (Ljava/lang/Object;)Z
 	public final fun get (Ljava/lang/String;)Ljava/lang/String;
 	public final fun getAll (Ljava/lang/String;)Ljava/util/List;
 	public final fun has (Ljava/lang/String;)Z
+	public fun hashCode ()I
 	public final fun isEmpty ()Z
+	public fun iterator ()Ljava/util/Iterator;
 	public final fun nameAt (I)Ljava/lang/String;
 	public final fun names ()Ljava/util/Set;
+	public final fun newBuilder ()Lorg/dexpace/kuri/query/QueryParametersBuilder;
+	public static final fun of (Ljava/util/Map;)Lorg/dexpace/kuri/query/QueryParameters;
+	public static final fun parse (Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParameters;
 	public final fun size ()I
+	public final fun toMap ()Ljava/util/Map;
 	public final fun toQueryString ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
 	public final fun valueAt (I)Ljava/lang/String;
+}
+
+public final class org/dexpace/kuri/query/QueryParameters$Companion {
+	public final fun of (Ljava/util/Map;)Lorg/dexpace/kuri/query/QueryParameters;
+	public final fun parse (Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParameters;
 }
 
 public final class org/dexpace/kuri/query/QueryParametersBuilder {
 	public fun <init> ()V
 	public final fun add (Ljava/lang/String;Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParametersBuilder;
+	public final fun addAll (Ljava/util/Map;)Lorg/dexpace/kuri/query/QueryParametersBuilder;
 	public final fun build ()Lorg/dexpace/kuri/query/QueryParameters;
 	public final fun removeAll (Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParametersBuilder;
 	public final fun set (Ljava/lang/String;Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParametersBuilder;
 	public final fun sort ()Lorg/dexpace/kuri/query/QueryParametersBuilder;
-}
-
-public final class org/dexpace/kuri/query/QueryParametersBuilderKt {
-	public static final fun newBuilder (Lorg/dexpace/kuri/query/QueryParameters;)Lorg/dexpace/kuri/query/QueryParametersBuilder;
 }
 

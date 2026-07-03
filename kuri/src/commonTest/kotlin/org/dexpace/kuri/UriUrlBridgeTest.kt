@@ -4,8 +4,6 @@
  */
 package org.dexpace.kuri
 
-import org.dexpace.kuri.error.getOrNull
-import org.dexpace.kuri.error.isOk
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

@@ -7,15 +7,13 @@ package org.dexpace.kuri.host
 /**
  * The addressable-name portion of an authority, modelled as a sealed type so the
  * host *kind* is part of the type, exhaustively matchable, and able to drive
- * serialization — notably IPv6/IP-future bracketing (SPEC §3.5, §7.9, [MODEL-14],
- * [HOST-45]).
+ * serialization — notably IPv6/IP-future bracketing (SPEC §3.5, §7.9).
  *
  * This is the stored shape only. Host parsing, validation, IDNA/UTS-46 processing,
  * IPv4 interpretation, zone-id handling, and canonical serialization are normative
  * in §7 and live in the dedicated host parser/serializer modules; the variants here
  * carry no behaviour. Stored IPv6/IP-future values never include the surrounding
- * `[`/`]` brackets — bracketing is a serialization concern applied on output
- * ([MODEL-18], [HOST-46]).
+ * `[`/`]` brackets — bracketing is a serialization concern applied on output.
  *
  * Because data classes cannot reject malformed arguments inline without leaking a
  * throwing constructor into the (future) public surface, the structural invariants
@@ -24,11 +22,25 @@ package org.dexpace.kuri.host
  *
  * Distinguish `host == null` (no authority component; there was no `//`) from
  * [Empty] (an authority is present but the host is the empty string, e.g.
- * `file:///path`). The two MUST NOT be conflated ([MODEL-15]).
+ * `file:///path`). The two MUST NOT be conflated.
  */
 public sealed interface Host {
     /**
-     * A registered name or domain stored in already-canonical form ([MODEL-16]).
+     * Renders this host to its canonical authority text, bracketing IPv6 / IP-future
+     * literals.
+     *
+     * The result reapplies the RFC 3986 §3.2.2 / WHATWG §11.2 bracketing rules that the
+     * stored variants deliberately omit: `[`…`]` for [Ipv6] and [IpFuture], and the value
+     * verbatim otherwise. Equivalent to the [Host.serialize] extension, but exposed as a
+     * member so it is discoverable directly on a [Host] and ergonomic from Java
+     * (`host.asText()`).
+     *
+     * @return the host's canonical authority text.
+     */
+    public fun asText(): String = serializeHost(this)
+
+    /**
+     * A registered name or domain stored in already-canonical form.
      *
      * For the `Url` profile this is an IDNA/UTS-46 ToASCII-processed, lowercased
      * ASCII domain; for the `Uri` profile it is an RFC 3986 reg-name preserved
@@ -43,7 +55,7 @@ public sealed interface Host {
 
     /**
      * An IPv4 address held as a single 32-bit quantity in a Kotlin [Int],
-     * interpreted as unsigned ([MODEL-17]).
+     * interpreted as unsigned.
      *
      * The original textual form (dotted, hex, octal, shorthand) is intentionally
      * not stored; the canonical dotted-decimal serialization is computed from
@@ -53,10 +65,23 @@ public sealed interface Host {
      */
     public data class Ipv4(
         public val value: Int,
-    ) : Host
+    ) : Host {
+        /**
+         * Unpacks the stored 32-bit [value] into its four octets, most-significant first.
+         *
+         * The structured counterpart to [asText]: where `asText()` yields the canonical
+         * dotted-decimal string, this returns the raw bytes for callers that need the
+         * numeric form. Both views share the serializer's unpacking, so they always
+         * agree. Each octet is in `0..255` and the result always has length four; the
+         * stored [value] is unchanged.
+         *
+         * @return a fresh four-element array of octets, high-order octet first, each `0..255`.
+         */
+        public fun octets(): IntArray = ipv4Octets(value)
+    }
 
     /**
-     * An IPv6 address held as its eight 16-bit groups ([MODEL-18], [MODEL-19]).
+     * An IPv6 address held as its eight 16-bit groups.
      *
      * Invariants (enforced by the IPv6 parser, not constructible inline here):
      * [pieces] MUST contain exactly eight elements, each in `0..65535`. Any
@@ -75,8 +100,7 @@ public sealed interface Host {
     ) : Host
 
     /**
-     * An RFC 3986 `IPvFuture` literal, reachable only in the `Uri` profile
-     * ([MODEL-20], [HOST-42]).
+     * An RFC 3986 `IPvFuture` literal, reachable only in the `Uri` profile.
      *
      * @property value the `vN.…` bracket contents (version, `.`, and payload),
      *   stored verbatim without the surrounding `[`/`]`.
@@ -87,7 +111,7 @@ public sealed interface Host {
 
     /**
      * A WHATWG opaque host (non-special `Url` scheme) or an RFC reg-name preserved
-     * verbatim under the `Uri` PRESERVE policy ([MODEL-21]).
+     * verbatim under the `Uri` PRESERVE policy.
      *
      * Only forbidden-host code-point and C0 percent-encoding is applied; no domain
      * lowercasing or IDNA is performed.
@@ -99,8 +123,8 @@ public sealed interface Host {
     ) : Host
 
     /**
-     * An authority component whose host is the empty string ([MODEL-15],
-     * [HOST-46]). Distinct from `host == null`; serializes to the empty string.
+     * An authority component whose host is the empty string. Distinct from
+     * `host == null`; serializes to the empty string.
      */
     public data object Empty : Host
 }

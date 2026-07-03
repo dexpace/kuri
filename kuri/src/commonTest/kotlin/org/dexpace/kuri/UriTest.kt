@@ -7,11 +7,11 @@ package org.dexpace.kuri
 import org.dexpace.kuri.error.HostError
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
-import org.dexpace.kuri.error.getOrNull
-import org.dexpace.kuri.error.getOrThrow
+import org.dexpace.kuri.error.UriSyntaxException
 import org.dexpace.kuri.host.Host
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
@@ -216,6 +216,22 @@ class UriTest {
     fun `static parse factory is reachable`() {
         val result = Uri.parse("foo://h/p")
         assertEquals("foo://h/p", result.getOrNull()?.uriString)
+    }
+
+    @Test
+    fun `parseOrThrow returns the value on success`() {
+        val uri = Uri.parseOrThrow("foo://h/p")
+
+        assertEquals("foo://h/p", uri.uriString)
+    }
+
+    @Test
+    fun `parseOrThrow throws UriSyntaxException carrying the structured error on a malformed input`() {
+        val exception = assertFailsWith<UriSyntaxException> { Uri.parseOrThrow("http://h/p?a=%2") }
+
+        assertIs<UriParseError.InvalidPercentEncoding>(exception.error)
+        assertTrue(exception.message?.isNotBlank() == true, "the exception carries a human-readable message")
+        assertEquals(exception.error.message, exception.message)
     }
 
     // --- RFC 6874 zone identifiers ([HOST-18]) ---------------------------------------

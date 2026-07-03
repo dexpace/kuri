@@ -199,4 +199,11 @@ class Ipv6Test {
         val host = Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1))
         assertEquals("[fe80::1]", host.serialize())
     }
+
+    @Test
+    fun `asText matches the serialize extension for a bracketed ipv6 host`() {
+        val host = Host.Ipv6(listOf(0x2001, 0xDB8, 0, 0, 0, 0, 0, 1))
+        assertEquals(host.serialize(), host.asText(), "the member and extension must agree")
+        assertEquals("[2001:db8::1]", host.asText())
+    }
 }

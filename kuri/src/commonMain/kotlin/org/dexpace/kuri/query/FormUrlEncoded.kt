@@ -24,19 +24,16 @@ internal object FormUrlEncoded {
      *
      * Splits on `&`, **skips every empty segment** (leading, trailing, or doubled `&`), splits each
      * remaining segment on its first `=` (no `=` yields an empty value, never `null`), maps `+` to
-     * space, then percent-decodes as UTF-8. The pair count is bounded by [MAX_PAIRS] ([QUERY-24]):
-     * once the cap is reached, parsing stops and records no further pairs.
+     * space, then percent-decodes as UTF-8. Every pair is kept: the WHATWG form parser has no pair
+     * cap ([QUERY-24]), and work and memory stay linear in the input length.
      */
     internal fun parse(input: String): List<Pair<String, String>> {
         val segments = input.split(PAIR_DELIMITER)
-        val pairs = ArrayList<Pair<String, String>>()
-        var i = 0
-        while (i < segments.size && pairs.size < MAX_PAIRS) {
-            val segment = segments[i]
+        val pairs = ArrayList<Pair<String, String>>(segments.size)
+        for (segment in segments) {
             if (segment.isNotEmpty()) pairs.add(decodeSegment(segment))
-            i++
         }
-        check(pairs.size <= MAX_PAIRS) { "form parse exceeded the pair bound" }
+        check(pairs.size <= segments.size) { "form parse must yield at most one pair per segment" }
         return pairs
     }
 

@@ -5,8 +5,6 @@
 package org.dexpace.kuri
 
 import org.dexpace.kuri.error.UriSyntaxException
-import org.dexpace.kuri.error.getOrNull
-import org.dexpace.kuri.error.getOrThrow
 import org.dexpace.kuri.host.Host
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -314,5 +312,223 @@ class UriBuilderTest {
                 .host("[fe80::1%25eth0]")
                 .build()
         }
+    }
+
+    @Test
+    fun `addPathSegment percent-encodes a slash so it stays within one segment`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("foo")
+                .host("h")
+                .addPathSegment("a b")
+                .addPathSegment("c/d")
+                .build()
+
+        assertEquals("foo://h/a%20b/c%2Fd", uri.uriString)
+        assertEquals(listOf("a b", "c/d"), uri.pathSegments)
+    }
+
+    @Test
+    fun `addEncodedPathSegment appends the segment verbatim`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("foo")
+                .host("h")
+                .addEncodedPathSegment("a")
+                .addEncodedPathSegment("b%20c")
+                .build()
+
+        assertEquals("foo://h/a/b%20c", uri.uriString)
+        assertEquals(listOf("a", "b c"), uri.pathSegments)
+    }
+
+    @Test
+    fun `encodedPath is an alias of path`() {
+        val uri = parseOk("http://h/a/b%20c")
+
+        assertEquals(uri.path, uri.encodedPath)
+        assertEquals("/a/b%20c", uri.encodedPath)
+    }
+
+    @Test
+    fun `two segments under an authority join with a single separator`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .addPathSegment("a")
+                .addPathSegment("b")
+                .build()
+
+        assertEquals("http://h/a/b", uri.uriString)
+        assertEquals(listOf("a", "b"), uri.pathSegments)
+    }
+
+    @Test
+    fun `builds a rootless urn path segment-wise`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("urn")
+                .addPathSegment("isbn:0451450523")
+                .build()
+
+        assertEquals("urn:isbn%3A0451450523", uri.uriString)
+        assertEquals(listOf("isbn:0451450523"), uri.pathSegments)
+    }
+
+    @Test
+    fun `builds a rootless urn path from an encoded segment`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("urn")
+                .addEncodedPathSegment("isbn:0451450523")
+                .build()
+
+        assertEquals("urn:isbn:0451450523", uri.uriString)
+    }
+
+    @Test
+    fun `a segment fills the open slot left by a trailing slash`() {
+        val rebuilt = parseOk("http://h/").newBuilder().addPathSegment("x").build()
+
+        assertEquals("http://h/x", rebuilt.uriString)
+    }
+
+    @Test
+    fun `an empty then non-empty segment collapses into the open slot`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .addPathSegment("")
+                .addPathSegment("x")
+                .build()
+
+        assertEquals("http://h/x", uri.uriString)
+    }
+
+    @Test
+    fun `an empty segment materializes as a trailing slash`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .addPathSegment("a")
+                .addPathSegment("")
+                .build()
+
+        assertEquals("http://h/a/", uri.uriString)
+        assertEquals(listOf("a", ""), uri.pathSegments)
+    }
+
+    @Test
+    fun `a lone empty segment with no authority contributes nothing`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("urn")
+                .addPathSegment("")
+                .build()
+
+        assertEquals("urn:", uri.uriString)
+    }
+
+    @Test
+    fun `segment rooting does not depend on setter order`() {
+        val segmentThenHost =
+            Uri
+                .Builder()
+                .addPathSegment("a")
+                .host("h")
+                .build()
+        val hostThenSegment =
+            Uri
+                .Builder()
+                .host("h")
+                .addPathSegment("a")
+                .build()
+
+        assertEquals("//h/a", segmentThenHost.uriString)
+        assertEquals("//h/a", hostThenSegment.uriString)
+    }
+
+    @Test
+    fun `clearing the host before build yields the rootless form`() {
+        val uri =
+            Uri
+                .Builder()
+                .host("h")
+                .addPathSegment("a")
+                .host(null)
+                .scheme("urn")
+                .build()
+
+        assertEquals("urn:a", uri.uriString)
+    }
+
+    @Test
+    fun `a scheme-less colon-first pushed segment keeps the dot guard`() {
+        val uri = Uri.Builder().addEncodedPathSegment("a:b").build()
+
+        assertNull(uri.scheme)
+        assertEquals("./a:b", uri.uriString)
+    }
+
+    @Test
+    fun `addEncodedPathSegment rejects a raw delimiter that would re-split the value`() {
+        for (bad in listOf("a/b", "a?b", "a#b", "a\\b")) {
+            assertFailsWith<IllegalArgumentException>("expected $bad to be rejected") {
+                Uri.Builder().addEncodedPathSegment(bad)
+            }
+        }
+    }
+
+    @Test
+    fun `addPathSegment carries a delimiter as data within one segment`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .addPathSegment("a#b")
+                .build()
+
+        assertEquals("http://h/a%23b", uri.uriString)
+        assertEquals(listOf("a#b"), uri.pathSegments)
+    }
+
+    @Test
+    fun `addEncodedPathSegment preserves a dot segment verbatim in the uri profile`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .addEncodedPathSegment("a")
+                .addEncodedPathSegment("..")
+                .build()
+
+        assertEquals("http://h/a/..", uri.uriString)
+    }
+
+    @Test
+    fun `an interior empty segment is expressible through encodedPath`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .encodedPath("/a//b")
+                .build()
+
+        assertEquals("http://h/a//b", uri.uriString)
+        assertEquals(uri, uri.newBuilder().build())
     }
 }

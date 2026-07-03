@@ -5,39 +5,35 @@
 package org.dexpace.kuri.error
 
 /**
- * Non-fatal parsing anomalies (SPEC §12.3).
+ * The closed classification of non-fatal WHATWG validation anomalies (SPEC §12.3).
  *
  * WHATWG parsing is a lenient repair process: it accepts and silently corrects
- * inputs a strict reader would reject, recording each correction as a
- * *validation error*. `kuri` preserves these so strict or security-sensitive
- * callers can inspect what was repaired while lenient callers ignore them. A
- * validation error is observational only: it MUST NOT change the produced value
- * relative to an otherwise identical run ([ERR-20]), and on its own MUST NOT
- * downgrade an [ParseResult.Ok] to an [ParseResult.Err] ([TERM-3]).
+ * inputs a strict reader would reject, and each such correction is a
+ * *validation error*. A validation error is observational only: it MUST NOT
+ * change the produced value relative to an otherwise identical run, and on its
+ * own MUST NOT downgrade an [ParseResult.Ok] to an [ParseResult.Err].
  *
- * This is a faithful *starter subset* of the §12.3 kinds — the ones reachable
- * before the parser's authority/host/path states exist. The full set
- * (`ExtraAuthoritySlashes`, `CredentialsInAuthority`, `DefaultPortRemoved`,
- * `EmptyHostForFileScheme`, …) lands with the parser. Offset/`isFailure`
- * metadata from §12.3 is carried by the parser-side record that wraps this kind;
- * this enum is just the closed classification.
+ * This enum is the closed set of anomaly kinds `kuri` classifies, defined for
+ * completeness of the error model. Any offset or `isFailure` metadata from
+ * §12.3 is carried by the record that wraps an anomaly with one of these kinds;
+ * the enum itself is just the classification.
  */
 public enum class ValidationError {
-    /** An ASCII tab/LF/CR (U+0009/U+000A/U+000D) was stripped from the input ([ERR-19]). */
+    /** An ASCII tab/LF/CR (U+0009/U+000A/U+000D) was stripped from the input. */
     TAB_OR_NEWLINE_REMOVED,
 
-    /** A leading or trailing C0-control-or-space (U+0000..U+0020) was trimmed ([ERR-19]). */
+    /** A leading or trailing C0-control-or-space (U+0000..U+0020) was trimmed. */
     LEADING_OR_TRAILING_C0_CONTROL_OR_SPACE,
 
-    /** A `\` was interpreted as `/` under a special scheme ([ERR-19], table row c). */
+    /** A `\` was interpreted as `/` under a special scheme (table row c). */
     BACKSLASH_AS_SOLIDUS,
 
-    /** An authority-introducing slash run was not exactly `//` ([ERR-19], table row m). */
+    /** An authority-introducing slash run was not exactly `//` (table row m). */
     MISSING_AUTHORITY_SLASHES,
 
     /**
      * A code point that is not a URL code point (and not a valid percent-escape)
-     * appeared in a component (the WHATWG *invalid-URL-unit* anomaly, [GRAM-16]).
+     * appeared in a component (the WHATWG *invalid-URL-unit* anomaly).
      */
     INVALID_URL_UNIT,
 }

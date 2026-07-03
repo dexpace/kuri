@@ -5,9 +5,11 @@
 package org.dexpace.kuri.query
 
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -19,7 +21,7 @@ class QueryParametersTest {
     @Test
     fun `parse preserves order and duplicate names per QUERY-5`() {
         val params = QueryParameters.parse("a=1&b=2&a=3")
-        assertEquals(3, params.size())
+        assertEquals(3, params.size)
         assertEquals(listOf("a" to "1", "b" to "2", "a" to "3"), params.entries)
     }
 
@@ -125,7 +127,7 @@ class QueryParametersTest {
     fun `empty snapshot reports empty per QUERY-9`() {
         val params = QueryParametersBuilder().build()
         assertTrue(params.isEmpty())
-        assertEquals(0, params.size())
+        assertEquals(0, params.size)
         assertEquals("", params.toQueryString())
     }
 
@@ -167,16 +169,138 @@ class QueryParametersTest {
     }
 
     @Test
-    fun `parse caps the pair count at the resource bound per QUERY-24`() {
-        val overLimit = (0 until MAX_PAIRS + 1).joinToString("&") { "k$it=v$it" }
-        val params = QueryParameters.parse(overLimit)
-        assertEquals(MAX_PAIRS, params.size())
-        assertEquals("k0", params.nameAt(0))
+    fun `parse materializes every pair with no count cap per QUERY-24`() {
+        val pairCount = 1001
+        val input = (0 until pairCount).joinToString("&") { "k$it=v$it" }
+        val params = QueryParameters.parse(input)
+        assertEquals(pairCount, params.size)
+        assertEquals("k1000", params.nameAt(1000))
+        assertEquals(input, params.toQueryString())
     }
 
     @Test
-    fun `parse keeps exactly the bound when pairs equal the limit per QUERY-24`() {
-        val atLimit = (0 until MAX_PAIRS).joinToString("&") { "k$it" }
-        assertEquals(MAX_PAIRS, QueryParameters.parse(atLimit).size())
+    fun `of and toQueryString round-trip a snapshot larger than a thousand pairs`() {
+        val pairCount = 1001
+        val map = LinkedHashMap<String, String?>(pairCount)
+        for (i in 0 until pairCount) {
+            map["k$i"] = "v$i"
+        }
+        val snapshot = QueryParameters.of(map)
+        assertEquals(pairCount, snapshot.size)
+        assertEquals(snapshot, QueryParameters.parse(snapshot.toQueryString()))
+    }
+
+    @Test
+    fun `toString serializes a snapshot of any size without failing`() {
+        val builder = QueryParametersBuilder()
+        for (i in 0 until 1001) {
+            builder.add("k$i", "v$i")
+        }
+        val params = builder.build()
+        assertTrue(params.toString().startsWith("QueryParameters(k0=v0&"))
+    }
+
+    @Test
+    fun `snapshots with the same ordered pairs are equal and share a hash`() {
+        val first = QueryParameters.parse("a=1&b=2&a=3")
+        val second =
+            QueryParametersBuilder()
+                .add("a", "1")
+                .add("b", "2")
+                .add("a", "3")
+                .build()
+        assertEquals(first, second)
+        assertEquals(first.hashCode(), second.hashCode())
+    }
+
+    @Test
+    fun `snapshots differing in order or duplicates are unequal`() {
+        val base = QueryParameters.parse("a=1&b=2")
+        assertNotEquals(base, QueryParameters.parse("b=2&a=1"))
+        assertNotEquals(base, QueryParameters.parse("a=1&b=2&a=1"))
+    }
+
+    @Test
+    fun `equality keeps the null value distinct from the empty value`() {
+        assertNotEquals(QueryParameters.parse("a"), QueryParameters.parse("a="))
+    }
+
+    @Test
+    fun `toString renders the raw query string`() {
+        val params = QueryParameters.parse("a=1&b=2")
+        assertEquals("QueryParameters(a=1&b=2)", params.toString())
+        assertContains(params.toString(), params.toQueryString())
+    }
+
+    @Test
+    fun `public parse round-trips a representative query`() {
+        val params = QueryParameters.parse("?q=hello%20world&lang=en&lang=fr&empty=&flag")
+        assertEquals("hello world", params["q"])
+        assertEquals(listOf<String?>("en", "fr"), params.getAll("lang"))
+        assertEquals("", params["empty"])
+        assertNull(params["flag"])
+        assertEquals("q=hello%20world&lang=en&lang=fr&empty=&flag", params.toQueryString())
+    }
+
+    @Test
+    fun `of builds one pair per map entry in iteration order`() {
+        val map = linkedMapOf("a" to "1", "b" to null, "c" to "")
+        val params = QueryParameters.of(map)
+        assertEquals(listOf("a" to "1", "b" to null, "c" to ""), params.entries)
+        assertEquals("a=1&b&c=", params.toQueryString())
+    }
+
+    @Test
+    fun `iteration yields the pairs in order as QueryParameter values`() {
+        val params = QueryParameters.parse("a=1&b&a=3")
+        val collected = ArrayList<QueryParameter>()
+        for (pair in params) {
+            collected.add(pair)
+        }
+        assertEquals(
+            listOf(
+                QueryParameter("a", "1"),
+                QueryParameter("b", null),
+                QueryParameter("a", "3"),
+            ),
+            collected,
+        )
+    }
+
+    @Test
+    fun `iterator returns a fresh independent iterator on every call`() {
+        val params = QueryParameters.parse("a=1&b")
+        val first = params.iterator().asSequence().toList()
+        val second = params.iterator().asSequence().toList()
+        assertEquals(first, second)
+        assertEquals(2, first.size)
+    }
+
+    @Test
+    fun `toMap keeps the first value per name and drops duplicates`() {
+        val map = QueryParameters.parse("a=1&b=2&a=3").toMap()
+        assertEquals(mapOf("a" to "1", "b" to "2"), map)
+        assertEquals(listOf("a", "b"), map.keys.toList())
+    }
+
+    @Test
+    fun `operator get reads the first value by name`() {
+        val params = QueryParameters.parse("a=1&a=2&b=3")
+        assertEquals("1", params["a"])
+        assertEquals("3", params["b"])
+        assertNull(params["missing"])
+    }
+
+    @Test
+    fun `operator contains reports membership by name`() {
+        val params = QueryParameters.parse("a=1&b=2")
+        assertTrue("a" in params)
+        assertFalse("z" in params)
+    }
+
+    @Test
+    fun `size property counts pairs including duplicates`() {
+        val params = QueryParameters.parse("a=1&a=2&b=3")
+        assertEquals(3, params.size)
     }
 }

@@ -9,15 +9,15 @@ package org.dexpace.kuri.error
  *
  * Carried by [UriParseError.InvalidHost] so callers can distinguish *why* a host
  * was rejected without parsing free-form text. The §7 host failures map onto these
- * variants exactly; distinct causes MUST NOT be collapsed into one opaque value
- * ([ERR-11]). The set is `sealed`/closed so a `when` over it is exhaustive without
+ * variants exactly; distinct causes MUST NOT be collapsed into one opaque value.
+ * The set is `sealed`/closed so a `when` over it is exhaustive without
  * an `else` and adding a cause is an intentional, reviewable change.
  */
 public enum class HostError {
     /** UTS-46 ToASCII/ToUnicode produced an error (§7.4 IDNA pipeline). */
     IdnaFailed,
 
-    /** A numeric host or octet exceeds its width-bounded maximum (§7.3 [HOST-22]). */
+    /** A numeric host or octet exceeds its width-bounded maximum (§7.3). */
     Ipv4Overflow,
 
     /** An ends-in-a-number host carried an invalid numeric part (`Url` profile, §7.3.1). */

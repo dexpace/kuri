@@ -5,17 +5,16 @@
 package org.dexpace.kuri
 
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class KuriTest {
     @Test
     fun versionIsNotBlank() {
-        assertTrue(Kuri.version().isNotBlank())
+        assertTrue(Kuri.VERSION.isNotBlank())
     }
 
     @Test
-    fun versionMatchesConstant() {
-        assertEquals(Kuri.VERSION, Kuri.version())
+    fun versionHasDottedShape() {
+        assertTrue(Kuri.VERSION.contains('.'), "the version string is dotted, e.g. 0.1.0-SNAPSHOT")
     }
 }
