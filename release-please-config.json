@@ -15,7 +15,8 @@
     { "type": "revert", "section": "Reverted" },
     { "type": "docs", "section": "Documentation", "hidden": true },
     { "type": "chore", "section": "Miscellaneous", "hidden": true },
-    { "type": "test", "section": "Tests", "hidden": true }
+    { "type": "test", "section": "Tests", "hidden": true },
+    { "type": "ci", "section": "Continuous Integration", "hidden": true }
   ],
   "packages": {
     ".": {

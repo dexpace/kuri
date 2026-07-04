@@ -66,20 +66,3 @@ tasks.register("generateFixtures") {
     description = "Run every Go fixture and lookup-table generator under tools/."
     dependsOn(codegenTasks)
 }
-
-// --- Git hooks ---------------------------------------------------------------
-// Point git at the tracked .githooks/ directory so the Conventional-Commits commit-msg gate is
-// active for every contributor without a manual setup step. `git config core.hooksPath` is
-// idempotent, so re-running on every build is a cheap no-op once configured. Note it supersedes any
-// per-clone hooks under .git/hooks/ for this repo. The `.git` File is
-// resolved to a *local* val at configuration time and captured into the onlyIf predicate as a plain
-// File (never the build-script/Project object), so the task stays configuration-cache compatible and
-// self-skips in a source tarball or any non-git checkout. The `:kuri` module wires this into its
-// `check` task (see kuri/build.gradle.kts) so a normal `./gradlew build` installs the hook.
-tasks.register<Exec>("installGitHooks") {
-    group = "git hooks"
-    description = "Route git at the tracked .githooks/ directory (installs the commit-msg gate)."
-    val gitDir = rootProject.file(".git")
-    onlyIf { gitDir.exists() }
-    commandLine("git", "config", "core.hooksPath", ".githooks")
-}
