@@ -1,0 +1,49 @@
+name: Commit Convention
+
+# Enforce the Conventional Commits format in CI (there is no local git hook). Two checks share one
+# validator, .github/scripts/check-conventional-commit.sh:
+#   - on a pull request: the PR *title* — which becomes the squashed commit subject on merge and is
+#     what release-please parses for the next version bump — must be conventional;
+#   - on push to main: the HEAD commit message must be conventional, catching whatever reaches the
+#     default branch (a merge commit is exempt, so a squash-merged PR title is what gets checked).
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+  push:
+    branches: [ main ]
+
+concurrency:
+  group: commit-convention-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    name: Conventional PR title
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the PR title
+        # The title is read from an environment variable and never interpolated into the script body,
+        # so a crafted PR title cannot inject shell.
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          printf '%s\n' "$PR_TITLE" > "$RUNNER_TEMP/message.txt"
+          sh .github/scripts/check-conventional-commit.sh "$RUNNER_TEMP/message.txt"
+
+  head-commit:
+    name: Conventional HEAD commit
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the HEAD commit message
+        run: |
+          git log -1 --pretty=%B > "$RUNNER_TEMP/message.txt"
+          sh .github/scripts/check-conventional-commit.sh "$RUNNER_TEMP/message.txt"

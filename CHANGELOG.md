@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). While kuri is in the `0.x`
 series the public API is not yet frozen and may change between minor releases.
 
-## [Unreleased]
+## [0.1.0-alpha.1] - 2026-07-04
 
 ### Added
 

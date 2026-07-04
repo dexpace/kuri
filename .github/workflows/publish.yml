@@ -1,0 +1,50 @@
+name: Publish
+
+# Reusable + manually dispatchable publish job. release-please.yml calls it when a release is cut, and
+# it can be run on demand from the Actions tab. Publishing runs on macOS because it is the only host
+# that can build every Kotlin/Native target (the Apple ones included), so a single job produces one
+# complete Central Portal deployment rather than several partial ones.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref (tag) to publish.
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to publish (defaults to the ref the workflow runs on).
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish to Maven Central
+    runs-on: macos-latest
+    # Building and signing every target's artifacts then uploading is far heavier than a test run;
+    # bound it well above the real runtime so only a genuine hang trips the limit.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: '21'
+      # The Android target's publication needs an SDK (compileSdk 35) at build time.
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Publish and release to Maven Central
+        # The publish/signing tasks are not configuration-cache compatible, and gradle.properties turns
+        # the cache on by default; disable it for this run.
+        run: ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache --stacktrace
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USER }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
