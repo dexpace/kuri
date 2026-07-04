@@ -170,6 +170,15 @@ kover {
     }
 }
 
+// Install the tracked commit-msg hook as part of a normal build. Wiring lives on this side of the
+// cross-project edge — depending on the root task through a lazy provider resolved at configuration
+// time — which keeps it configuration-cache compatible (no execution-time Project access). Because
+// `build` depends on `check`, `./gradlew build` and `./gradlew check` both install the hook, and the
+// install task itself is idempotent.
+tasks.named("check") {
+    dependsOn(rootProject.tasks.named("installGitHooks"))
+}
+
 // Publish every Kotlin Multiplatform target (plus the root `kotlinMultiplatform` publication) to Maven
 // Central through the Central Portal. The vanniktech plugin wires the per-target publications, a
 // Dokka-generated Javadoc jar and GPG signing; coordinates derive from the module `group` and the
