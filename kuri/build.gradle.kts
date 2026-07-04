@@ -1,5 +1,8 @@
 @file:OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
 
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.KotlinMultiplatform
+import com.vanniktech.maven.publish.SonatypeHost
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
@@ -11,11 +14,10 @@ plugins {
     alias(libs.plugins.kover)
     alias(libs.plugins.binary.compat)
     alias(libs.plugins.dokka)
-    `maven-publish`
+    alias(libs.plugins.maven.publish)
 }
 
 group = "org.dexpace"
-version = "0.1.0-SNAPSHOT"
 
 // Align Java compilation target with the Kotlin JVM target so the Kotlin Gradle
 // plugin's consistency check passes when both toolchain (JDK 21) and bytecode
@@ -168,33 +170,42 @@ kover {
     }
 }
 
-// The Kotlin Multiplatform plugin auto-registers one Maven publication per target (plus the root
-// `kotlinMultiplatform` publication); here we only attach the shared POM metadata every published
-// artifact needs. Coordinates come from the module `group`/`version` above.
-publishing {
-    publications.withType<MavenPublication>().configureEach {
-        pom {
-            name.set("kuri")
-            description.set("A standards-faithful URI and URL library for Kotlin and Java.")
+// Publish every Kotlin Multiplatform target (plus the root `kotlinMultiplatform` publication) to Maven
+// Central through the Central Portal. The vanniktech plugin wires the per-target publications, a
+// Dokka-generated Javadoc jar and GPG signing; coordinates derive from the module `group` and the
+// `version` set in gradle.properties (managed by release-please). Central release is left manual for
+// local/dry runs — CI runs the `publishAndReleaseToMavenCentral` task to upload and release in one go.
+mavenPublishing {
+    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = false)
+    signAllPublications()
+
+    configure(
+        KotlinMultiplatform(
+            javadocJar = JavadocJar.Dokka("dokkaGeneratePublicationHtml"),
+        ),
+    )
+
+    pom {
+        name.set("kuri")
+        description.set("A standards-faithful URI and URL library for Kotlin and Java.")
+        url.set("https://github.com/dexpace/kuri")
+        licenses {
+            license {
+                name.set("MIT License")
+                url.set("https://opensource.org/licenses/MIT")
+                distribution.set("repo")
+            }
+        }
+        developers {
+            developer {
+                id.set("OmarAljarrah")
+                name.set("Omar Aljarrah")
+            }
+        }
+        scm {
             url.set("https://github.com/dexpace/kuri")
-            licenses {
-                license {
-                    name.set("MIT License")
-                    url.set("https://opensource.org/licenses/MIT")
-                    distribution.set("repo")
-                }
-            }
-            developers {
-                developer {
-                    id.set("OmarAljarrah")
-                    name.set("Omar Aljarrah")
-                }
-            }
-            scm {
-                url.set("https://github.com/dexpace/kuri")
-                connection.set("scm:git:https://github.com/dexpace/kuri.git")
-                developerConnection.set("scm:git:ssh://git@github.com/dexpace/kuri.git")
-            }
+            connection.set("scm:git:https://github.com/dexpace/kuri.git")
+            developerConnection.set("scm:git:ssh://git@github.com/dexpace/kuri.git")
         }
     }
 }

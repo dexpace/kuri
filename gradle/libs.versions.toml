@@ -6,6 +6,7 @@ detekt = "1.23.8"
 kover = "0.9.8"
 binary-compat = "0.18.1"
 dokka = "2.0.0"
+maven-publish = "0.30.0"
 
 [libraries]
 # kotlin-test is pulled in via the kotlin("test") MPP helper; listed for reference.
@@ -18,3 +19,4 @@ detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 binary-compat = { id = "org.jetbrains.kotlinx.binary-compatibility-validator", version.ref = "binary-compat" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
+maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publish" }

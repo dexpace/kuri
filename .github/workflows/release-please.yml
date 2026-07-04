@@ -1,0 +1,37 @@
+name: Release Please
+
+# On every push to main, release-please maintains a release PR rolling up conventional commits into
+# the next version bump + CHANGELOG. Merging that PR tags the release and publishes: the publish job
+# below runs in the SAME workflow run, gated on release_created, so it does not rely on the release
+# event re-triggering — a release created with the default GITHUB_TOKEN does not start new workflow runs.
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Release PR / release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    name: Publish release
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    uses: ./.github/workflows/publish.yml
+    with:
+      ref: ${{ needs.release-please.outputs.tag_name }}
+    secrets: inherit
