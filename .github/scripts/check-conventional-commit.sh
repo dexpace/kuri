@@ -11,7 +11,7 @@
 #
 # Rules: the header is  type(scope)!: subject  — type from the allowed list, optional lowercase
 # (scope) and optional ! breaking marker, exactly one space after the colon, a non-empty subject,
-# the whole header at most 100 characters, and no trailing period or space. Git-generated
+# the whole header at most 100 characters, and no trailing period or whitespace. Git-generated
 # Merge/Revert/fixup!/squash!/amend! headers are exempt. Portable POSIX sh: grep, wc, printf only.
 
 MSG_FILE="$1"
@@ -42,7 +42,7 @@ elif [ "$LENGTH" -gt 100 ]; then
 else
     case "$HEADER" in
         *.) REASON="subject must not end with a period" ;;
-        *" ") REASON="subject must not end with a space" ;;
+        *[[:space:]]) REASON="subject must not end with whitespace" ;;
     esac
 fi
 
