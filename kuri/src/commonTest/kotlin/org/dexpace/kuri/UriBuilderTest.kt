@@ -345,10 +345,10 @@ class UriBuilderTest {
     }
 
     @Test
-    fun `encodedPath is an alias of path`() {
+    fun `path is decoded while encodedPath is verbatim`() {
         val uri = parseOk("http://h/a/b%20c")
 
-        assertEquals(uri.path, uri.encodedPath)
+        assertEquals("/a/b c", uri.path)
         assertEquals("/a/b%20c", uri.encodedPath)
     }
 

@@ -50,6 +50,18 @@ public class QueryParametersBuilder internal constructor(
     }
 
     /**
+     * Appends [parameter] without deduplicating, the [QueryParameter] overload of [add] (SPEC §10.3.2).
+     *
+     * Accepts the element type yielded when a [QueryParameters] snapshot is iterated, so a pair can be
+     * re-appended directly without first destructuring it into its name and value. A `null`
+     * [QueryParameter.value] is retained as the no-`=` sentinel.
+     *
+     * @param parameter the decoded pair to append.
+     * @return this builder, for chaining.
+     */
+    public fun add(parameter: QueryParameter): QueryParametersBuilder = add(parameter.name, parameter.value)
+
+    /**
      * Appends every entry of [pairs] in the map's iteration order without deduplicating, the bulk
      * form of [add] (SPEC §10.3.2). A `null` value is retained as the no-`=` sentinel.
      *
@@ -87,6 +99,19 @@ public class QueryParametersBuilder internal constructor(
         check(pairs.count { it.first == name } == 1) { "set must leave exactly one pair named $name" }
         return this
     }
+
+    /**
+     * Replace-first / remove-rest / keep-position for [parameter], the [QueryParameter] overload of
+     * [set] (SPEC §10.3.2).
+     *
+     * Accepts the element type yielded when a [QueryParameters] snapshot is iterated, so a pair can be
+     * applied directly without first destructuring it into its name and value. A `null`
+     * [QueryParameter.value] is retained as the no-`=` sentinel.
+     *
+     * @param parameter the decoded pair to set, matched case-sensitively on its [QueryParameter.name].
+     * @return this builder, for chaining.
+     */
+    public fun set(parameter: QueryParameter): QueryParametersBuilder = set(parameter.name, parameter.value)
 
     /**
      * Removes every pair named [name], preserving the order of the rest (SPEC §10.3.2).

@@ -7,6 +7,7 @@ package org.dexpace.kuri.error
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -105,6 +106,58 @@ internal class ParseResultTest {
 
         // assert
         assertFalse(invoked, "transform must not run on the failure path")
+    }
+
+    @Test
+    fun `Ok equals another Ok with an equal value and differs on an unequal value`() {
+        // arrange + act + assert
+        assertEquals(ParseResult.Ok(1), ParseResult.Ok(1))
+        assertNotEquals(ParseResult.Ok(1), ParseResult.Ok(2))
+    }
+
+    @Test
+    fun `equal Oks share a hash code`() {
+        // arrange + act + assert
+        assertEquals(ParseResult.Ok("scheme").hashCode(), ParseResult.Ok("scheme").hashCode())
+    }
+
+    @Test
+    fun `Err equals another Err with an equal error and differs on an unequal error`() {
+        // arrange
+        val port: ParseResult<Nothing> = ParseResult.Err(UriParseError.InvalidPort("99999"))
+        val samePort: ParseResult<Nothing> = ParseResult.Err(UriParseError.InvalidPort("99999"))
+        val missing: ParseResult<Nothing> = ParseResult.Err(UriParseError.MissingScheme)
+
+        // act + assert
+        assertEquals(port, samePort)
+        assertNotEquals(port, missing)
+    }
+
+    @Test
+    fun `equal Errs share a hash code`() {
+        // arrange
+        val error: UriParseError = UriParseError.MissingScheme
+
+        // act + assert
+        assertEquals(ParseResult.Err(error).hashCode(), ParseResult.Err(error).hashCode())
+    }
+
+    @Test
+    fun `an Ok never equals an Err`() {
+        // arrange
+        val ok: ParseResult<Int> = ParseResult.Ok(1)
+        val err: ParseResult<Int> = ParseResult.Err(UriParseError.MissingScheme)
+
+        // act + assert
+        assertNotEquals(ok, err)
+        assertNotEquals(err, ok)
+    }
+
+    @Test
+    fun `toString renders the variant and its payload`() {
+        // arrange + act + assert
+        assertEquals("Ok(1)", ParseResult.Ok(1).toString())
+        assertEquals("Err(MissingScheme)", ParseResult.Err(UriParseError.MissingScheme).toString())
     }
 
     @Test

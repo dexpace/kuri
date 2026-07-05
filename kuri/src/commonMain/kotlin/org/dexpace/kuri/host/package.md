@@ -12,6 +12,11 @@ authority at all and must not be conflated with [Host.Empty].
 
 Stored values are always already-canonical and never carry the surrounding `[`/`]` brackets —
 bracketing is a serialization concern. A host renders back to its canonical authority text via the
-[Host.asText] member (or the equivalent [Host.serialize] extension), reapplying the RFC 3986
-§3.2.2 / WHATWG §11.2 bracketing rules for IPv6 and IP-future literals. For the numeric form,
-[Host.Ipv4.octets] exposes the four structured bytes, high-order octet first.
+[Host.asText] member, reapplying the RFC 3986 §3.2.2 / WHATWG §11.2 bracketing rules for IPv6 and
+IP-future literals. For the numeric form, [Host.Ipv4.octets] exposes the four structured bytes,
+high-order octet first.
+
+A structured [Host] can be handed straight to a builder — `Uri.Builder.host(Host)` and
+`Url.Builder.host(Host)` accept one and re-canonicalize it — so a host taken from one value transfers
+to another without a manual round-trip through text. Constructing an invalid variant directly (an
+[Host.Ipv6] without exactly eight pieces, an empty [Host.IpFuture]) throws [IllegalArgumentException].

@@ -34,12 +34,17 @@ public final class org/dexpace/kuri/Uri {
 	public final fun authority ()Ljava/lang/String;
 	public static final fun canParse (Ljava/lang/String;)Z
 	public static final fun canParse (Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;)Z
+	public final fun effectivePort ()Ljava/lang/Integer;
 	public final fun encodedPath ()Ljava/lang/String;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun fileExtension ()Ljava/lang/String;
+	public final fun fileName ()Ljava/lang/String;
 	public final fun fragment ()Ljava/lang/String;
 	public fun hashCode ()I
 	public final fun host ()Lorg/dexpace/kuri/host/Host;
 	public final fun hostName ()Ljava/lang/String;
+	public final fun isAbsolute ()Z
+	public final fun isOpaquePath ()Z
 	public final fun newBuilder ()Lorg/dexpace/kuri/Uri$Builder;
 	public final fun normalized ()Lorg/dexpace/kuri/Uri;
 	public final fun normalizedEquals (Lorg/dexpace/kuri/Uri;)Z
@@ -53,29 +58,50 @@ public final class org/dexpace/kuri/Uri {
 	public final fun pathSegments ()Ljava/util/List;
 	public final fun port ()Ljava/lang/Integer;
 	public final fun query ()Ljava/lang/String;
+	public final fun queryParameters ()Lorg/dexpace/kuri/query/QueryParameters;
+	public final fun relativize (Lorg/dexpace/kuri/Uri;)Lorg/dexpace/kuri/Uri;
 	public final fun resolve (Ljava/lang/String;)Lorg/dexpace/kuri/error/ParseResult;
 	public final fun resolve (Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;)Lorg/dexpace/kuri/error/ParseResult;
 	public static synthetic fun resolve$default (Lorg/dexpace/kuri/Uri;Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/error/ParseResult;
+	public final fun resolveOrNull (Ljava/lang/String;)Lorg/dexpace/kuri/Uri;
+	public final fun resolveOrNull (Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;)Lorg/dexpace/kuri/Uri;
+	public static synthetic fun resolveOrNull$default (Lorg/dexpace/kuri/Uri;Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/Uri;
+	public final fun resolveOrThrow (Ljava/lang/String;)Lorg/dexpace/kuri/Uri;
+	public final fun resolveOrThrow (Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;)Lorg/dexpace/kuri/Uri;
+	public static synthetic fun resolveOrThrow$default (Lorg/dexpace/kuri/Uri;Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/Uri;
 	public final fun scheme ()Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
 	public final fun toUrl ()Lorg/dexpace/kuri/error/ParseResult;
+	public final fun toUrlOrNull ()Lorg/dexpace/kuri/Url;
+	public final fun toUrlOrThrow ()Lorg/dexpace/kuri/Url;
 	public final fun uriString ()Ljava/lang/String;
 	public final fun userInfo ()Ljava/lang/String;
+	public final fun withFragment (Ljava/lang/String;)Lorg/dexpace/kuri/Uri;
+	public final fun withPort (Ljava/lang/Integer;)Lorg/dexpace/kuri/Uri;
+	public final fun withoutFragment ()Lorg/dexpace/kuri/Uri;
 }
 
 public final class org/dexpace/kuri/Uri$Builder {
 	public fun <init> ()V
 	public final fun addEncodedPathSegment (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun addPathSegment (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun addPathSegments (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun addQueryParameter (Ljava/lang/String;Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun allowIpv6ZoneId (Z)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun build ()Lorg/dexpace/kuri/Uri;
+	public final fun buildOrNull ()Lorg/dexpace/kuri/Uri;
 	public final fun encodedPath (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun fragment (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun host (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun host (Lorg/dexpace/kuri/host/Host;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun path (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun port (Ljava/lang/Integer;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun query (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun removeAllQueryParameters (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun removePathSegment (I)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun scheme (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun setPathSegment (ILjava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public final fun setQueryParameter (Ljava/lang/String;Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun userInfo (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
 }
 
@@ -103,11 +129,15 @@ public final class org/dexpace/kuri/Url {
 	public final fun encodedFragment ()Ljava/lang/String;
 	public final fun encodedPath ()Ljava/lang/String;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun fileExtension ()Ljava/lang/String;
+	public final fun fileName ()Ljava/lang/String;
 	public final fun fragment ()Ljava/lang/String;
+	public final fun hasOpaqueOrigin ()Z
 	public fun hashCode ()I
 	public final fun host ()Lorg/dexpace/kuri/host/Host;
 	public final fun hostName ()Ljava/lang/String;
 	public final fun href ()Ljava/lang/String;
+	public final fun isSpecial ()Z
 	public final fun newBuilder ()Lorg/dexpace/kuri/Url$Builder;
 	public final fun origin ()Ljava/lang/String;
 	public static final fun parse (Ljava/lang/String;)Lorg/dexpace/kuri/error/ParseResult;
@@ -121,25 +151,39 @@ public final class org/dexpace/kuri/Url {
 	public final fun port ()Ljava/lang/Integer;
 	public final fun query ()Ljava/lang/String;
 	public final fun queryParameters ()Lorg/dexpace/kuri/query/QueryParameters;
+	public final fun relativize (Lorg/dexpace/kuri/Url;)Ljava/lang/String;
 	public final fun resolve (Ljava/lang/String;)Lorg/dexpace/kuri/error/ParseResult;
+	public final fun resolveOrNull (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public final fun resolveOrThrow (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
 	public final fun scheme ()Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
 	public final fun toUri ()Lorg/dexpace/kuri/Uri;
 	public final fun username ()Ljava/lang/String;
+	public final fun validationErrors ()Ljava/util/List;
+	public final fun withFragment (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public final fun withPort (Ljava/lang/Integer;)Lorg/dexpace/kuri/Url;
+	public final fun withoutFragment ()Lorg/dexpace/kuri/Url;
 }
 
 public final class org/dexpace/kuri/Url$Builder {
 	public fun <init> ()V
 	public final fun addEncodedPathSegment (Ljava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
 	public final fun addPathSegment (Ljava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
+	public final fun addPathSegments (Ljava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
+	public final fun addQueryParameter (Ljava/lang/String;Ljava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
 	public final fun build ()Lorg/dexpace/kuri/Url;
+	public final fun buildOrNull ()Lorg/dexpace/kuri/Url;
 	public final fun encodedPath (Ljava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
 	public final fun fragment (Ljava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
 	public final fun host (Ljava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
+	public final fun host (Lorg/dexpace/kuri/host/Host;)Lorg/dexpace/kuri/Url$Builder;
 	public final fun password (Ljava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
 	public final fun port (Ljava/lang/Integer;)Lorg/dexpace/kuri/Url$Builder;
 	public final fun query (Ljava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
+	public final fun removeAllQueryParameters (Ljava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
+	public final fun removePathSegment (I)Lorg/dexpace/kuri/Url$Builder;
 	public final fun scheme (Ljava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
+	public final fun setPathSegment (ILjava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
 	public final fun setQueryParameter (Ljava/lang/String;Ljava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
 	public final fun username (Ljava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
 }
@@ -187,9 +231,6 @@ public final class org/dexpace/kuri/error/ParseResult$DefaultImpls {
 
 public final class org/dexpace/kuri/error/ParseResult$Err : org/dexpace/kuri/error/ParseResult {
 	public fun <init> (Lorg/dexpace/kuri/error/UriParseError;)V
-	public final fun component1 ()Lorg/dexpace/kuri/error/UriParseError;
-	public final fun copy (Lorg/dexpace/kuri/error/UriParseError;)Lorg/dexpace/kuri/error/ParseResult$Err;
-	public static synthetic fun copy$default (Lorg/dexpace/kuri/error/ParseResult$Err;Lorg/dexpace/kuri/error/UriParseError;ILjava/lang/Object;)Lorg/dexpace/kuri/error/ParseResult$Err;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getError ()Lorg/dexpace/kuri/error/UriParseError;
 	public synthetic fun getOrNull ()Ljava/lang/Object;
@@ -203,9 +244,6 @@ public final class org/dexpace/kuri/error/ParseResult$Err : org/dexpace/kuri/err
 
 public final class org/dexpace/kuri/error/ParseResult$Ok : org/dexpace/kuri/error/ParseResult {
 	public fun <init> (Ljava/lang/Object;)V
-	public final fun component1 ()Ljava/lang/Object;
-	public final fun copy (Ljava/lang/Object;)Lorg/dexpace/kuri/error/ParseResult$Ok;
-	public static synthetic fun copy$default (Lorg/dexpace/kuri/error/ParseResult$Ok;Ljava/lang/Object;ILjava/lang/Object;)Lorg/dexpace/kuri/error/ParseResult$Ok;
 	public fun equals (Ljava/lang/Object;)Z
 	public fun getOrNull ()Ljava/lang/Object;
 	public fun getOrThrow ()Ljava/lang/Object;
@@ -419,8 +457,27 @@ public final class org/dexpace/kuri/host/Host$RegName : org/dexpace/kuri/host/Ho
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class org/dexpace/kuri/host/HostSerializationKt {
-	public static final fun serialize (Lorg/dexpace/kuri/host/Host;)Ljava/lang/String;
+public final class org/dexpace/kuri/idna/Idn {
+	public static final field INSTANCE Lorg/dexpace/kuri/idna/Idn;
+	public static final fun toAscii (Ljava/lang/String;)Lorg/dexpace/kuri/error/ParseResult;
+	public static final fun toUnicode (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class org/dexpace/kuri/percent/Percent {
+	public static final field INSTANCE Lorg/dexpace/kuri/percent/Percent;
+	public static final fun decode (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun encode (Ljava/lang/String;Lorg/dexpace/kuri/percent/Percent$Component;)Ljava/lang/String;
+}
+
+public final class org/dexpace/kuri/percent/Percent$Component : java/lang/Enum {
+	public static final field COMPONENT Lorg/dexpace/kuri/percent/Percent$Component;
+	public static final field FRAGMENT Lorg/dexpace/kuri/percent/Percent$Component;
+	public static final field PATH_SEGMENT Lorg/dexpace/kuri/percent/Percent$Component;
+	public static final field QUERY Lorg/dexpace/kuri/percent/Percent$Component;
+	public static final field USER_INFO Lorg/dexpace/kuri/percent/Percent$Component;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lorg/dexpace/kuri/percent/Percent$Component;
+	public static fun values ()[Lorg/dexpace/kuri/percent/Percent$Component;
 }
 
 public final class org/dexpace/kuri/query/QueryParameter {
@@ -438,7 +495,7 @@ public final class org/dexpace/kuri/query/QueryParameter {
 
 public final class org/dexpace/kuri/query/QueryParameters : java/lang/Iterable, kotlin/jvm/internal/markers/KMappedMarker {
 	public static final field Companion Lorg/dexpace/kuri/query/QueryParameters$Companion;
-	public final fun contains (Ljava/lang/String;)Z
+	public final synthetic fun contains (Ljava/lang/String;)Z
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun get (Ljava/lang/String;)Ljava/lang/String;
 	public final fun getAll (Ljava/lang/String;)Ljava/util/List;
@@ -450,8 +507,11 @@ public final class org/dexpace/kuri/query/QueryParameters : java/lang/Iterable, 
 	public final fun names ()Ljava/util/Set;
 	public final fun newBuilder ()Lorg/dexpace/kuri/query/QueryParametersBuilder;
 	public static final fun of (Ljava/util/Map;)Lorg/dexpace/kuri/query/QueryParameters;
+	public static final fun of ([Lorg/dexpace/kuri/query/QueryParameter;)Lorg/dexpace/kuri/query/QueryParameters;
 	public static final fun parse (Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParameters;
+	public static final fun parseForm (Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParameters;
 	public final fun size ()I
+	public final fun toFormUrlEncoded ()Ljava/lang/String;
 	public final fun toMap ()Ljava/util/Map;
 	public final fun toQueryString ()Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
@@ -460,16 +520,27 @@ public final class org/dexpace/kuri/query/QueryParameters : java/lang/Iterable, 
 
 public final class org/dexpace/kuri/query/QueryParameters$Companion {
 	public final fun of (Ljava/util/Map;)Lorg/dexpace/kuri/query/QueryParameters;
+	public final fun of ([Lorg/dexpace/kuri/query/QueryParameter;)Lorg/dexpace/kuri/query/QueryParameters;
 	public final fun parse (Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParameters;
+	public final fun parseForm (Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParameters;
 }
 
 public final class org/dexpace/kuri/query/QueryParametersBuilder {
 	public fun <init> ()V
 	public final fun add (Ljava/lang/String;Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParametersBuilder;
+	public final fun add (Lorg/dexpace/kuri/query/QueryParameter;)Lorg/dexpace/kuri/query/QueryParametersBuilder;
 	public final fun addAll (Ljava/util/Map;)Lorg/dexpace/kuri/query/QueryParametersBuilder;
 	public final fun build ()Lorg/dexpace/kuri/query/QueryParameters;
 	public final fun removeAll (Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParametersBuilder;
 	public final fun set (Ljava/lang/String;Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParametersBuilder;
+	public final fun set (Lorg/dexpace/kuri/query/QueryParameter;)Lorg/dexpace/kuri/query/QueryParametersBuilder;
 	public final fun sort ()Lorg/dexpace/kuri/query/QueryParametersBuilder;
+}
+
+public final class org/dexpace/kuri/scheme/Schemes {
+	public static final field INSTANCE Lorg/dexpace/kuri/scheme/Schemes;
+	public static final fun defaultPort (Ljava/lang/String;)Ljava/lang/Integer;
+	public static final fun isSpecial (Ljava/lang/String;)Z
+	public static final fun isValid (Ljava/lang/String;)Z
 }
 

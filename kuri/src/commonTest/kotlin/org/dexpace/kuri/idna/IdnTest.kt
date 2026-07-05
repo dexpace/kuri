@@ -1,0 +1,71 @@
+/*
+ * Copyright (c) 2026 dexpace and Omar Aljarrah
+ * SPDX-License-Identifier: MIT
+ */
+package org.dexpace.kuri.idna
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+
+/**
+ * Behavioural tests for the public [Idn] facade over the internal [Idna] engine (UTS-46, SPEC §7.4).
+ * Verifies the fallible [Idn.toAscii] / best-effort [Idn.toUnicode] split; exhaustive UTS-46
+ * behaviour is covered by [IdnaTest] and the WPT conformance suite.
+ */
+class IdnTest {
+    // Non-ASCII literals are built from code points so their stored NFC form is deterministic.
+    private val uUmlaut = Char(0x00FC).toString()
+
+    @Test
+    fun `toAscii encodes a non-ascii label with the xn-- prefix`() {
+        val input = "b" + uUmlaut + "cher.example"
+        assertEquals("xn--bcher-kva.example", Idn.toAscii(input).getOrNull())
+    }
+
+    @Test
+    fun `toAscii lower-cases an all-ascii domain`() {
+        assertEquals("example.com", Idn.toAscii("EXAMPLE.COM").getOrNull())
+    }
+
+    @Test
+    fun `toAscii keeps an existing xn-- label across the round trip`() {
+        assertEquals("xn--bcher-kva.example", Idn.toAscii("xn--bcher-kva.example").getOrNull())
+    }
+
+    @Test
+    fun `toAscii fails on a disallowed code point`() {
+        // U+0080 is a plain disallowed code point, so ToASCII must reject it fatally.
+        val input = "exa" + Char(0x0080) + "mple.com"
+        val result = Idn.toAscii(input)
+        assertFalse(result.isOk())
+        assertNull(result.getOrNull())
+    }
+
+    @Test
+    fun `toUnicode decodes an xn-- label back to unicode`() {
+        assertEquals("b" + uUmlaut + "cher.example", Idn.toUnicode("xn--bcher-kva.example"))
+    }
+
+    @Test
+    fun `toUnicode passes an ascii domain through unchanged`() {
+        assertEquals("example.com", Idn.toUnicode("example.com"))
+    }
+
+    @Test
+    fun `toUnicode is total and leaves an undecodable label unchanged`() {
+        // A payload that is not valid Punycode is best-effort returned verbatim, never rejected.
+        val undecodable = "xn--" + Char(0x00E9)
+        assertEquals(undecodable, Idn.toUnicode(undecodable))
+    }
+
+    @Test
+    fun `toAscii and toUnicode round-trip a unicode domain`() {
+        val unicode = "b" + uUmlaut + "cher.example"
+        val ascii = assertNotNull(Idn.toAscii(unicode).getOrNull())
+        assertEquals("xn--bcher-kva.example", ascii)
+        assertEquals(unicode, Idn.toUnicode(ascii))
+    }
+}

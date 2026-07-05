@@ -48,7 +48,7 @@ class IriTest {
     fun `percent-encodes a non-ascii path point as utf8 octets`() {
         val uri = Iri.toUri("http://h/fa$sharpS").getOrThrow()
 
-        assertEquals("/fa%C3%9F", uri.path)
+        assertEquals("/fa%C3%9F", uri.encodedPath)
     }
 
     @Test
@@ -72,21 +72,21 @@ class IriTest {
         val uri = Iri.toUri("http://[::1]/$uUmlaut").getOrThrow()
 
         assertEquals("[::1]", uri.hostName)
-        assertEquals("/%C3%BC", uri.path)
+        assertEquals("/%C3%BC", uri.encodedPath)
     }
 
     @Test
     fun `does not double-encode an existing triplet`() {
         val uri = Iri.toUri("http://h/%20$uUmlaut").getOrThrow()
 
-        assertEquals("/%20%C3%BC", uri.path)
+        assertEquals("/%20%C3%BC", uri.encodedPath)
     }
 
     @Test
     fun `encodes a supplementary-plane path point as its four utf8 octets`() {
         val uri = Iri.toUri("http://h/$grinning").getOrThrow()
 
-        assertEquals("/%F0%9F%98%80", uri.path)
+        assertEquals("/%F0%9F%98%80", uri.encodedPath)
     }
 
     @Test
@@ -107,7 +107,7 @@ class IriTest {
 
         val uri = Iri.toUri("http://h/$nonCharacter").getOrThrow()
 
-        assertEquals("/%EF%B7%90", uri.path)
+        assertEquals("/%EF%B7%90", uri.encodedPath)
     }
 
     @Test

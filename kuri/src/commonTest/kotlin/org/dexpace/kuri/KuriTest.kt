@@ -15,6 +15,6 @@ class KuriTest {
 
     @Test
     fun versionHasDottedShape() {
-        assertTrue(Kuri.VERSION.contains('.'), "the version string is dotted, e.g. 0.1.0-SNAPSHOT")
+        assertTrue(Kuri.VERSION.contains('.'), "the version string is dotted, e.g. 0.1.0-alpha.1")
     }
 }

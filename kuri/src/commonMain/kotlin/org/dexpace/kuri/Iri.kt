@@ -67,7 +67,7 @@ public object Iri {
         val out = StringBuilder()
         uri.scheme?.let { out.append(it).append(':') }
         appendAuthorityDisplay(out, uri)
-        out.append(PercentCodec.decodeNonAscii(uri.path))
+        out.append(PercentCodec.decodeNonAscii(uri.encodedPath))
         uri.query?.let { out.append('?').append(PercentCodec.decodeNonAscii(it)) }
         uri.fragment?.let { out.append('#').append(PercentCodec.decodeNonAscii(it)) }
         return out.toString()

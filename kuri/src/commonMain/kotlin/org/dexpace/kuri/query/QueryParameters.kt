@@ -9,6 +9,7 @@ import org.dexpace.kuri.percent.PercentEncodeSet
 import org.dexpace.kuri.percent.PercentEncodeSets
 import kotlin.jvm.JvmName
 import kotlin.jvm.JvmStatic
+import kotlin.jvm.JvmSynthetic
 
 /** The `&` that joins pairs and splits the raw query (SPEC §10.2.1, §10.3.3). */
 private const val PAIR_SEPARATOR: String = "&"
@@ -126,12 +127,16 @@ public class QueryParameters internal constructor(
     public fun has(name: String): Boolean = entries.any { it.first == name }
 
     /**
-     * True when at least one pair is named [name]; the `operator` counterpart of [has] that enables
-     * membership syntax from Kotlin: `"name" in params` (SPEC §10.3).
+     * The Kotlin `in` operator over [has], enabling membership syntax `"name" in params` (SPEC §10.3).
+     *
+     * Marked `@JvmSynthetic` because it only exists to back the `in` operator: Java callers see the
+     * single canonical [has] method instead of a redundant `contains`. From Kotlin the operator and
+     * [has] are interchangeable.
      *
      * @param name the decoded name to test, matched case-sensitively.
      * @return `true` iff at least one pair carries [name].
      */
+    @JvmSynthetic
     public operator fun contains(name: String): Boolean = has(name)
 
     /**
@@ -188,6 +193,20 @@ public class QueryParameters internal constructor(
         entries.joinToString(PAIR_SEPARATOR) { (name, value) ->
             encodeName(name) + (value?.let { VALUE_SEPARATOR + encodeValue(it) } ?: "")
         }
+
+    /**
+     * Re-serializes the pairs as an `application/x-www-form-urlencoded` body (SPEC §10.4).
+     *
+     * Unlike [toQueryString], this uses the HTML form dialect: space becomes `+`, encoding is always
+     * UTF-8, and only `* - . _` and ASCII alphanumerics survive unescaped (so literal `+`/`&`/`=`
+     * become `%2B`/`%26`/`%3D`). A `null` value emits the name alone, exactly as [toQueryString] does,
+     * so the no-`=` sentinel stays consistent across both renderers. Serialization is total and never
+     * fails.
+     *
+     * @return the form-encoded body (without a leading `?`); `""` when [isEmpty].
+     * @see parseForm to parse such a body back into a snapshot.
+     */
+    public fun toFormUrlEncoded(): String = FormUrlEncoded.serialize(entries)
 
     /**
      * Iterates the decoded pairs in appearance order, duplicates included (SPEC §10.3).
@@ -290,6 +309,22 @@ public class QueryParameters internal constructor(
         }
 
         /**
+         * Parses an `application/x-www-form-urlencoded` [body] into a snapshot (SPEC §10.4).
+         *
+         * This is the HTML form dialect, distinct from [parse]: it splits on `&`, **skips** empty
+         * segments (leading, trailing, or doubled `&`), decodes `+` as space, and always decodes as
+         * UTF-8. A segment with no `=` yields an empty value, never the `null` no-`=` sentinel that
+         * [parse] produces, because the form grammar has no such distinction. Order and duplicates are
+         * preserved, and no pair-count cap is applied (work stays linear in `body`'s length).
+         *
+         * @param body the form-encoded body, without a leading `?`.
+         * @return the decoded, ordered, duplicate-preserving snapshot of every non-empty segment.
+         * @see parse for the generic query decoding used by URL/URI query strings.
+         */
+        @JvmStatic
+        public fun parseForm(body: String): QueryParameters = QueryParameters(FormUrlEncoded.parse(body))
+
+        /**
          * Builds a [QueryParameters] from [pairs] in the map's iteration order (SPEC §10.3.2).
          *
          * One pair is appended per map entry, so the snapshot has no duplicate names and its order
@@ -302,6 +337,21 @@ public class QueryParameters internal constructor(
          */
         @JvmStatic
         public fun of(pairs: Map<String, String?>): QueryParameters = QueryParametersBuilder().addAll(pairs).build()
+
+        /**
+         * Builds a [QueryParameters] from [pairs] in argument order (SPEC §10.3.2).
+         *
+         * One pair is appended per argument, so ordering and duplicate names are both preserved — the
+         * map-keyed `of` overload cannot express duplicates (a map collapses repeated keys), so use
+         * this factory when two pairs share a name. A `null` [QueryParameter.value] is retained as the
+         * no-`=` sentinel.
+         *
+         * @param pairs the decoded pairs to include, in order; duplicates are kept.
+         * @return a snapshot holding one pair per argument, in argument order.
+         */
+        @JvmStatic
+        public fun of(vararg pairs: QueryParameter): QueryParameters =
+            QueryParameters(pairs.map { it.name to it.value })
 
         /** Index of the next `&` at or after [pos], or `length` when none remains. */
         private fun nextSeparator(

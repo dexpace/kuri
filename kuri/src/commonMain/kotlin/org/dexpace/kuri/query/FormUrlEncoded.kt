@@ -43,10 +43,14 @@ internal object FormUrlEncoded {
      * Joins pairs with `&`, emits `name=value`, and encodes each octet over UTF-8: space becomes
      * `+`, ASCII alphanumerics and `* - . _` pass through, and every other octet becomes `%XX`.
      * Thus literal `+` -> `%2B`, `&` -> `%26`, `=` -> `%3D`.
+     *
+     * The value is `String?` so this bridges the generic query model, whose no-`=` sentinel is `null`:
+     * a `null` value emits the name alone (no `=`), matching the generic query serializer. Re-parsing
+     * that name-only segment yields an empty value, since the form dialect has no null.
      */
-    internal fun serialize(pairs: List<Pair<String, String>>): String =
+    internal fun serialize(pairs: List<Pair<String, String?>>): String =
         pairs.joinToString(PAIR_DELIMITER) { (name, value) ->
-            encodeComponent(name) + NAME_VALUE_DELIMITER + encodeComponent(value)
+            encodeComponent(name) + (value?.let { NAME_VALUE_DELIMITER + encodeComponent(it) } ?: "")
         }
 
     /** Splits a non-empty segment on its first `=` and decodes both sides ([QUERY-21]). */
