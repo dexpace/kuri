@@ -5,10 +5,11 @@
   </picture>
 </p>
 
-<p align="center">A standards-faithful URI and URL library for Kotlin and Java.</p>
+<p align="center">A standards-faithful URI and URL library for Kotlin Multiplatform and Java.</p>
 
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <a href="https://central.sonatype.com/artifact/org.dexpace/kuri"><img alt="Maven Central" src="https://img.shields.io/maven-central/v/org.dexpace/kuri?logo=apachemaven&logoColor=white&label=Maven%20Central"></a>
   <a href="https://kotlinlang.org"><img alt="Kotlin" src="https://img.shields.io/badge/kotlin-2.4.0-7F52FF.svg?logo=kotlin&logoColor=white"></a>
   <img alt="Kotlin Multiplatform" src="https://img.shields.io/badge/kotlin-multiplatform-7F52FF.svg?logo=kotlin&logoColor=white">
   <img alt="JDK" src="https://img.shields.io/badge/JDK-8%2B-437291.svg?logo=openjdk&logoColor=white">
@@ -34,48 +35,41 @@
 
 ## Installation
 
+kuri is published to **Maven Central**. The artifact id is identical across Kotlin Multiplatform targets; the Gradle
+module metadata selects the right per-platform variant automatically.
+
+| Coordinate | Value           |
+|------------|-----------------|
+| Group      | `org.dexpace`   |
+| Artifact   | `kuri`          |
+| Version    | `0.1.0-alpha.1` |
+
 > [!NOTE]
-> **Not yet published to a public repository.** kuri is not on Maven Central yet, so it cannot be resolved from a
-> remote repository. You can still consume it today by publishing to your local Maven repository or by wiring a
-> composite build — see below.
+> kuri is in an early **alpha** series: the public API is not yet frozen and may change between releases, so pin to an
+> exact version.
 
-The coordinates:
-
-| Coordinate | Value                                                                   |
-|------------|-------------------------------------------------------------------------|
-| Group      | `org.dexpace`                                                           |
-| Artifact   | `kuri`                                                                  |
-| Version    | `0.1.0-SNAPSHOT` (current dev build; `0.1.0` will be the first release) |
-
-The artifact id is identical across Kotlin Multiplatform targets; the Gradle plugin selects the right variant for your
-platform automatically.
-
-**Try it today via your local Maven repository.** Publish the current snapshot to `~/.m2`:
-
-```
-./gradlew publishToMavenLocal
-```
-
-Then add `mavenLocal()` and the dependency to the consuming project:
+**Gradle (Kotlin Multiplatform or Kotlin/JVM)** — add the dependency to your common (or JVM) source set:
 
 ```kotlin
 repositories {
-    mavenLocal()
     mavenCentral()
 }
 
 dependencies {
-    implementation("org.dexpace:kuri:0.1.0-SNAPSHOT")
+    implementation("org.dexpace:kuri:0.1.0-alpha.1")
 }
 ```
 
 Gradle module metadata resolves the correct per-platform variant automatically.
 
-**Or wire a composite build** — point the consumer's `settings.gradle.kts` at a local kuri checkout, with no publish
-step:
+**Maven (Java / JVM)** — reference the JVM artifact explicitly:
 
-```kotlin
-includeBuild("../kuri")
+```xml
+<dependency>
+  <groupId>org.dexpace</groupId>
+  <artifactId>kuri-jvm</artifactId>
+  <version>0.1.0-alpha.1</version>
+</dependency>
 ```
 
 **Requirements**
@@ -85,6 +79,10 @@ includeBuild("../kuri")
 | Java runtime         | Java 8 or newer (the JVM artifact is compiled to `1.8` bytecode for broad compatibility) |
 | Kotlin consumers     | Kotlin 2.0 or newer; the public API lives in common Kotlin                               |
 | Runtime dependencies | None beyond the Kotlin standard library                                                  |
+
+**Consuming from source** — to try an unreleased build, publish to your local Maven repository (`./gradlew
+publishToMavenLocal`, then add `mavenLocal()`), or wire a composite build with `includeBuild("../kuri")` in the
+consumer's `settings.gradle.kts`.
 
 ## Quick start
 
@@ -322,7 +320,7 @@ the native test suites requires a matching operating system or simulator.
 
 ## Versioning and stability
 
-kuri follows [Semantic Versioning 2.0.0](https://semver.org/). At `0.1.0-SNAPSHOT` the public API is not yet frozen and
+kuri follows [Semantic Versioning 2.0.0](https://semver.org/). At `0.1.0-alpha.1` the public API is not yet frozen and
 may change before `1.0.0`, and minor releases in the `0.x` series may carry breaking changes, so pin to an exact
 version. Every public signature is tracked in a checked-in binary-compatibility snapshot under `api/`, so an unintended
 API change fails the build (see [Building from source](#building-from-source)).

@@ -187,7 +187,7 @@ mavenPublishing {
 
     pom {
         name.set("kuri")
-        description.set("A standards-faithful URI and URL library for Kotlin and Java.")
+        description.set("A standards-faithful URI and URL library for Kotlin Multiplatform and Java.")
         url.set("https://github.com/dexpace/kuri")
         licenses {
             license {
