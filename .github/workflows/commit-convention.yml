@@ -26,7 +26,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # Check out the BASE branch (not the PR head) so the validator script cannot be weakened by the
+      # PR under review. The PR title itself comes from the event payload, not the checkout.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
       - name: Validate the PR title
         # The title is read from an environment variable and never interpolated into the script body,
         # so a crafted PR title cannot inject shell.

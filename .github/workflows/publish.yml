@@ -18,8 +18,10 @@ on:
         required: false
         type: string
 
+# contents: write so a manual (workflow_dispatch) bootstrap run can create the tag + GitHub Release
+# that release-please would otherwise have made, and so the job can upload artifacts to that Release.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   publish:
@@ -28,6 +30,9 @@ jobs:
     # Building and signing every target's artifacts then uploading is far heavier than a test run;
     # bound it well above the real runtime so only a genuine hang trips the limit.
     timeout-minutes: 90
+    env:
+      # Optional release notification. Empty (secret unset) => the notify step is skipped, not failed.
+      RELEASE_WEBHOOK_URL: ${{ secrets.RELEASE_WEBHOOK_URL }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,6 +44,39 @@ jobs:
       # The Android target's publication needs an SDK (compileSdk 35) at build time.
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
+
+      - name: Resolve version
+        id: version
+        # gradle.properties is the single source of truth for the version; read it once and reuse for
+        # the tag, the Release, and the artifact archive name.
+        run: |
+          version="$(sed -n 's/^version=//p' gradle.properties | head -n1)"
+          if [ -z "$version" ]; then
+            echo "could not read version= from gradle.properties" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure tag and Release exist
+        # On the release-please path the tag + Release already exist, so this is a no-op. On a manual
+        # bootstrap dispatch they do not: create them here, otherwise the first published version would
+        # never be tagged (later changelog compare-links would 404) and there would be no Release to
+        # attach artifacts to.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; nothing to create."
+          else
+            echo "Creating tag and Release $TAG at $GITHUB_SHA."
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "Automated release of $TAG." \
+              --target "$GITHUB_SHA"
+          fi
+
       - name: Publish and release to Maven Central
         # The publish/signing tasks are not configuration-cache compatible, and gradle.properties turns
         # the cache on by default; disable it for this run.
@@ -48,3 +86,76 @@ jobs:
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
+
+      - name: Stage all published artifacts
+        # Re-publish to the local Maven repo to collect every target's jar/klib + sources + javadoc +
+        # POM in one place for archiving. Central was already released above; this is purely to gather
+        # files for the Release asset.
+        run: ./gradlew publishToMavenLocal --no-configuration-cache --stacktrace
+        env:
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
+
+      - name: Archive artifacts
+        id: archive
+        # One zip of the whole org/dexpace coordinate subtree keeps the Release page clean while still
+        # shipping every target's artifact.
+        run: |
+          dest="$RUNNER_TEMP/kuri-${{ steps.version.outputs.version }}-maven-artifacts.zip"
+          ( cd "$HOME/.m2/repository" && zip -r "$dest" org/dexpace )
+          echo "path=$dest" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifacts to the Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          ASSET: ${{ steps.archive.outputs.path }}
+        run: gh release upload "$TAG" "$ASSET" --clobber
+
+      - name: Notify
+        # Opt-in: only runs when RELEASE_WEBHOOK_URL is set. Slack expects {"text": ...}; Discord expects
+        # {"content": ...} — change the JSON key to match your channel when you wire the webhook.
+        if: ${{ env.RELEASE_WEBHOOK_URL != '' }}
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          curl -fsS -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\": \"kuri $TAG published to Maven Central\"}" \
+            "$RELEASE_WEBHOOK_URL"
+
+  smoke-test:
+    name: Smoke-test published artifact
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Central propagation to repo1.maven.org can lag well past this window; this is a best-effort
+    # signal only and must never gate or fail the release.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - name: Resolve version
+        id: version
+        run: |
+          version="$(sed -n 's/^version=//p' gradle.properties | head -n1)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Wait for the artifact to resolve from Maven Central
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          url="https://repo1.maven.org/maven2/org/dexpace/kuri-jvm/${VERSION}/kuri-jvm-${VERSION}.pom"
+          attempts=10
+          sleep_s=60
+          i=1
+          while [ "$i" -le "$attempts" ]; do
+            if curl -fsSI "$url" >/dev/null 2>&1; then
+              echo "Resolved $url"
+              exit 0
+            fi
+            echo "Attempt $i/$attempts: not yet available, sleeping ${sleep_s}s"
+            i=$((i + 1))
+            sleep "$sleep_s"
+          done
+          echo "Artifact did not resolve within the retry window (propagation lag is expected)." >&2
+          exit 1

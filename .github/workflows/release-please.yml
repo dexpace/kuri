@@ -8,6 +8,12 @@ on:
   push:
     branches: [ main ]
 
+# Serialize release-please per ref so two quick pushes to main cannot race the release PR or fire two
+# publishes for one version. Never cancel in progress — a queued run must not kill an in-flight publish.
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
   pull-requests: write

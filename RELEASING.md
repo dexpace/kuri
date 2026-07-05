@@ -13,7 +13,9 @@ one-time setup a maintainer needs, and the day-to-day flow of cutting a release.
   landed commits into the next version bump and the `CHANGELOG.md`. Merging that PR tags the release
   and creates a GitHub Release, which triggers the publish job. Publishing runs on a **macOS** runner
   — the only host that can build every Kotlin target, Apple ones included — so a single job produces
-  one complete Central Portal deployment and releases it.
+  one complete Central Portal deployment and releases it. The publish job also uploads a zip of all
+  target artifacts to the GitHub Release, and a best-effort smoke-test job then checks that the
+  artifact resolves from Maven Central.
 
 The two workflows are `.github/workflows/release-please.yml` (the release PR + the publish trigger)
 and `.github/workflows/publish.yml` (the reusable publish job, also runnable on demand).
@@ -65,6 +67,11 @@ Store the results as secrets:
 | `SIGNING_IN_MEMORY_KEY` | ASCII-armored GPG private key |
 | `SIGNING_IN_MEMORY_KEY_PASSWORD` | GPG key passphrase |
 
+There is also one **optional** secret, `RELEASE_WEBHOOK_URL`. If it is set, the publish job POSTs a
+release notification to it after a successful publish; the JSON payload uses Slack's `text` key by
+default and can be switched to Discord's `content` key in `publish.yml`. If it is unset, the
+notification step is silently skipped.
+
 The publish workflow maps these to the Gradle properties the
 [vanniktech maven-publish](https://vanniktech.github.io/gradle-maven-publish-plugin/) plugin reads
 (`ORG_GRADLE_PROJECT_mavenCentralUsername`/`…Password`,
@@ -109,6 +116,10 @@ publish it manually once (after the secrets above are configured):
 
 - **Actions → Publish → Run workflow**, on `main` (where `gradle.properties` reads
   `version=0.1.0-alpha.1`). Leave the `ref` input blank to publish the branch as-is.
+
+This manual `workflow_dispatch` run automatically creates the `v0.1.0-alpha.1` git tag and GitHub
+Release — you no longer have to tag it by hand — and the same run attaches the artifacts zip to that
+Release.
 
 From then on, merging release-please's release PRs publishes automatically.
 
