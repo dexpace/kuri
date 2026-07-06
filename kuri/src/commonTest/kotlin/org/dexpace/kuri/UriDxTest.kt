@@ -332,6 +332,34 @@ class UriDxTest {
     }
 
     @Test
+    fun `setPathSegment emptying a parsed rootless first segment is rejected rather than silently rooted`() {
+        // A newBuilder() of rootless "a/b" whose segment 0 becomes "" would serialize as "/b" and
+        // re-parse as rooted — the same shape the from-scratch builder rejects. buildOrNull must never
+        // throw (returns null); build surfaces the rejection as IllegalArgumentException.
+        val builder = parseOk("a/b").newBuilder().setPathSegment(0, "")
+
+        assertNull(builder.buildOrNull())
+        assertFailsWith<IllegalArgumentException> { builder.build() }
+    }
+
+    @Test
+    fun `removePathSegment emptying a parsed rootless first segment is rejected rather than silently rooted`() {
+        // Removing segment 0 of rootless "a//b" leaves ["", "b"], which re-roots to "/b".
+        val builder = parseOk("a//b").newBuilder().removePathSegment(0)
+
+        assertNull(builder.buildOrNull())
+        assertFailsWith<IllegalArgumentException> { builder.build() }
+    }
+
+    @Test
+    fun `setPathSegment emptying the first segment under an authority stays a rooted path`() {
+        // With a host the stored path is already rooted so the edit is representable and not rejected.
+        val uri = parseOk("http://h/a/b").newBuilder().setPathSegment(0, "").build()
+
+        assertEquals("http://h//b", uri.uriString)
+    }
+
+    @Test
     fun `fileName is the last non-empty decoded segment`() {
         assertEquals("c d.txt", parseOk("http://h/a/b/c%20d.txt").fileName())
         assertEquals("b", parseOk("http://h/a/b/").fileName())
@@ -339,10 +367,35 @@ class UriDxTest {
     }
 
     @Test
+    fun `fileName and fileExtension are empty for an opaque path`() {
+        for (input in listOf("mailto:john.doe@example.com", "urn:isbn:0451450523")) {
+            val uri = parseOk(input)
+
+            assertEquals("", uri.fileName(), "expected no file name for $input")
+            assertEquals("", uri.fileExtension(), "expected no file extension for $input")
+        }
+    }
+
+    @Test
     fun `fileExtension is the text after the last dot of the file name`() {
         assertEquals("gz", parseOk("http://h/a/archive.tar.gz").fileExtension())
         assertEquals("", parseOk("http://h/a/README").fileExtension())
         assertEquals("", parseOk("http://h/a/.bashrc").fileExtension())
+    }
+
+    @Test
+    fun `fileExtension of an all dot stem is empty like a dotfile`() {
+        val cases =
+            mapOf(
+                "http://h/archive.tar.gz" to "gz",
+                "http://h/a.gz" to "gz",
+                "http://h/..gz" to "",
+                "http://h/.gz" to "",
+                "http://h/file." to "",
+            )
+        for ((input, expected) in cases) {
+            assertEquals(expected, parseOk(input).fileExtension(), "wrong extension for $input")
+        }
     }
 
     // --- predicates / ergonomics ---

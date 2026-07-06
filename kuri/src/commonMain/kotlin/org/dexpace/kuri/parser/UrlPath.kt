@@ -144,10 +144,22 @@ internal fun fileNameOf(segments: List<String>): String = segments.lastOrNull { 
  * The extension of a decoded file [name]: the text after its last interior `.`, or `""` when it has
  * none (SPEC §3.3). Shared by the `Uri`/`Url` `fileExtension()` projections.
  *
- * A leading dot marks a dotfile (`".bashrc"` → `""`) and a trailing dot leaves nothing after it
- * (`"file."` → `""`); `"archive.tar.gz"` yields `"gz"`.
+ * A leading dot marks a dotfile (`".bashrc"` → `""`, `"..gz"` → `""`) and a trailing dot leaves
+ * nothing after it (`"file."` → `""`); `"archive.tar.gz"` yields `"gz"`.
  */
 internal fun fileExtensionOf(name: String): String {
     val dot = name.lastIndexOf('.')
-    return if (dot > 0 && dot < name.length - 1) name.substring(dot + 1) else ""
+    if (dot <= 0 || dot >= name.length - 1) return ""
+    // A name whose entire stem before the last dot is itself dots (e.g. "..gz") is a dotfile with no
+    // real base name, so it has no extension — the same rule as the single leading dot in ".gz".
+    val hasNonDotStem = (0 until dot).any { name[it] != '.' }
+    return if (hasNonDotStem) name.substring(dot + 1) else ""
+}
+
+/** Splits [path] on '/' and applies [append] to each piece in order; shared by the Uri/Url addPathSegments builders. */
+internal inline fun appendPathSegmentsSplit(
+    path: String,
+    append: (String) -> Unit,
+) {
+    for (segment in path.split('/')) append(segment)
 }

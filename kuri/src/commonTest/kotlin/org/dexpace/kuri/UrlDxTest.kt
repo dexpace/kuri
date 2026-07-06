@@ -216,10 +216,36 @@ class UrlDxTest {
     }
 
     @Test
+    fun `setPathSegment emptying the first segment of an opaque path is rejected rather than silently rooted`() {
+        // A non-special scheme yields a rootless opaque path; emptying segment 0 would serialize with a
+        // leading '/' and re-parse as rooted. buildOrNull must never throw (returns null); build throws.
+        val builder = parseOk("a:b/c").newBuilder().setPathSegment(0, "")
+
+        assertNull(builder.buildOrNull())
+        assertFailsWith<IllegalArgumentException> { builder.build() }
+    }
+
+    @Test
+    fun `setPathSegment emptying the first segment under an authority stays a rooted path`() {
+        // With a host the stored path is already rooted so the edit is representable and not rejected.
+        val url = parseOk("https://h/a/b").newBuilder().setPathSegment(0, "").build()
+
+        assertEquals("https://h//b", url.href)
+    }
+
+    @Test
     fun `fileName is the last non-empty decoded segment`() {
         assertEquals("b.txt", parseOk("https://h/a/b.txt").fileName())
         assertEquals("a", parseOk("https://h/a/").fileName())
         assertEquals("", parseOk("https://h/").fileName())
+    }
+
+    @Test
+    fun `fileName and fileExtension are empty for an opaque path`() {
+        val url = parseOk("foo:bar/baz.txt")
+
+        assertEquals("", url.fileName())
+        assertEquals("", url.fileExtension())
     }
 
     @Test
@@ -235,6 +261,14 @@ class UrlDxTest {
         for ((input, expected) in cases) {
             assertEquals(expected, parseOk(input).fileExtension(), "wrong extension for $input")
         }
+    }
+
+    @Test
+    fun `fileExtension of an all dot stem is empty like a dotfile`() {
+        assertEquals("gz", parseOk("https://h/archive.tar.gz").fileExtension())
+        assertEquals("gz", parseOk("https://h/a.gz").fileExtension())
+        assertEquals("", parseOk("https://h/..gz").fileExtension())
+        assertEquals("", parseOk("https://h/.gz").fileExtension())
     }
 
     @Test

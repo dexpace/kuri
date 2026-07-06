@@ -13,6 +13,7 @@ import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.Resolver
 import org.dexpace.kuri.parser.UriParser
 import org.dexpace.kuri.parser.UrlPath
+import org.dexpace.kuri.parser.appendPathSegmentsSplit
 import org.dexpace.kuri.parser.fileExtensionOf
 import org.dexpace.kuri.parser.fileNameOf
 import org.dexpace.kuri.parser.splitUriPath
@@ -164,11 +165,17 @@ public class Uri internal constructor(
      * The last non-empty decoded path segment — the "file name" — or `""` when the path has none.
      *
      * Trailing empty segments (a trailing `/`) are skipped, so both `/a/b` and `/a/b/` return `"b"`;
-     * a root-only or empty path returns `""`. Segments are decoded, so `/a/c%20d` returns `"c d"`.
+     * a root-only or empty path returns `""`. An opaque path (`mailto:`, `urn:`, etc.; see
+     * [isOpaquePath]) has no hierarchical file name, so it too returns `""`.
      *
-     * @return the last non-empty decoded segment, or `""` when there is none.
+     * Segments are decoded, so `/a/c%20d` returns `"c d"`. Because the segment is percent-decoded, a
+     * source segment holding an encoded `/` (`%2F`) yields a name containing a literal `/` — e.g.
+     * `/docs/a%2Fb.txt` returns `"a/b.txt"` — so a caller must not use the result directly as a
+     * filesystem name without its own sanitization.
+     *
+     * @return the last non-empty decoded segment, or `""` when there is none or the path is opaque.
      */
-    public fun fileName(): String = fileNameOf(pathSegments)
+    public fun fileName(): String = if (isOpaquePath()) "" else fileNameOf(pathSegments)
 
     /**
      * The file extension of [fileName]: the substring after its last `.`, or `""` when it has none.
@@ -504,11 +511,19 @@ public class Uri internal constructor(
     private val decodedPath: String by lazy { computeDecodedPath() }
     private val decodedPathSegments: List<String> by lazy { computeDecodedPathSegments() }
 
-    /** Percent-decodes the stored path — an opaque path whole, else each segment — backing [path]. */
+    /**
+     * Percent-decodes the stored path — an opaque path whole, else each segment — backing [path].
+     *
+     * Reuses the already-decoded [decodedPathSegments] rather than decoding every segment a second
+     * time: an opaque path is that single decoded value, and a segment path rejoins the decoded
+     * segments through [toUriPathString] so the empty-vs-root-only and rooted-vs-rootless ordering
+     * keeps its single source of truth (UrlPath.kt). Reading [decodedPathSegments] here is safe —
+     * it does not read [decodedPath], so there is no lazy cycle.
+     */
     private fun computeDecodedPath(): String =
         when (val storedPath = components.path) {
-            is UrlPath.Opaque -> PercentCodec.decode(storedPath.path)
-            is UrlPath.Segments -> decodeSegmentsPath(storedPath)
+            is UrlPath.Opaque -> decodedPathSegments.single()
+            is UrlPath.Segments -> UrlPath.Segments(decodedPathSegments, storedPath.rooted).toUriPathString()
         }
 
     /** The decoded segments backing [pathSegments]; an opaque path yields its single decoded value. */
@@ -517,15 +532,6 @@ public class Uri internal constructor(
             is UrlPath.Opaque -> listOf(PercentCodec.decode(storedPath.path))
             is UrlPath.Segments -> storedPath.segments.map { PercentCodec.decode(it) }
         }
-
-    /**
-     * Decodes each segment of [storedPath] then rejoins through [toUriPathString], so the empty-vs-
-     * root-only and rooted-vs-rootless ordering has a single source of truth (UrlPath.kt).
-     */
-    private fun decodeSegmentsPath(storedPath: UrlPath.Segments): String {
-        val decoded = storedPath.segments.map { PercentCodec.decode(it) }
-        return UrlPath.Segments(decoded, storedPath.rooted).toUriPathString()
-    }
 
     /**
      * True for the RFC 3986 opaque shape: an absolute URI with no authority and a rootless path.
@@ -634,6 +640,9 @@ public class Uri internal constructor(
 
         /** True while [encodedPath] was assembled from empty by segment appends; its rooting is decided at [build]. */
         private var isSegmentBuiltPath: Boolean = false
+
+        /** True when a segment edit emptied a rootless path's first segment, which would re-root it. */
+        private var rootlessPathReRooted: Boolean = false
         private var query: String? = null
         private var fragment: String? = null
         private var options: ParseOptions = ParseOptions.DEFAULT
@@ -746,6 +755,7 @@ public class Uri internal constructor(
         public fun encodedPath(encodedPath: String): Builder {
             this.encodedPath = encodedPath
             isSegmentBuiltPath = false // a verbatim path owns its own (root or rootless) shape.
+            rootlessPathReRooted = false
             return this
         }
 
@@ -802,10 +812,7 @@ public class Uri internal constructor(
          * @return this builder, for chaining.
          */
         public fun addPathSegments(pathSegments: String): Builder {
-            val parts = pathSegments.split(SLASH)
-            for (segment in parts) {
-                addPathSegment(segment)
-            }
+            appendPathSegmentsSplit(pathSegments) { addPathSegment(it) }
             return this
         }
 
@@ -815,7 +822,9 @@ public class Uri internal constructor(
          *
          * [segment] is encoded exactly as [addPathSegment] encodes an appended segment, so any `/`,
          * `\`, `?`, `#`, or `%` it holds becomes data rather than a delimiter. The path's absolute
-         * versus rootless shape is preserved.
+         * versus rootless shape is preserved: an edit that would empty a rootless path's first
+         * segment — re-rooting it into an unrepresentable shape — is rejected at [build] ([build]
+         * throws, [buildOrNull] returns `null`) rather than silently changing the path.
          *
          * @param index the zero-based segment position in the current path.
          * @param segment the decoded replacement segment.
@@ -830,6 +839,9 @@ public class Uri internal constructor(
         /**
          * Removes the path segment at [index], preserving the path's absolute versus rootless shape
          * (RFC 3986 §3.3).
+         *
+         * As with [setPathSegment], an edit that would empty a rootless path's first segment
+         * (re-rooting it) is rejected at [build] ([build] throws, [buildOrNull] returns `null`).
          *
          * @param index the zero-based segment position to remove.
          * @return this builder, for chaining.
@@ -960,7 +972,7 @@ public class Uri internal constructor(
                 "a path with an authority must be empty or start with '/': $path"
             }
             require(segmentPathWellFormed()) {
-                "a segment-built path cannot begin with an empty segment (it would parse as rooted): $encodedPath"
+                "a rootless path cannot begin with an empty segment; the edit would re-root it: $encodedPath"
             }
         }
 
@@ -969,14 +981,17 @@ public class Uri internal constructor(
             authorityHasHost() && pathFitsAuthority(path) && segmentPathWellFormed()
 
         /**
-         * True unless a segment-built path has been corrupted into a rooted shape.
+         * True unless a rootless path has been corrupted into a rooted shape.
          *
-         * A path assembled from [addPathSegment]/[setPathSegment] is stored rootless (rooting is added
-         * at [effectivePath] only under a host). Setting segment `0` to `""` would re-serialize it with
-         * a leading `/`, which re-parses as a *rooted* path — an unrepresentable rootless shape. That is
-         * the only way a segment-built path acquires a leading `/`, so this flags exactly that misuse.
+         * Two edits can do this. A path assembled from [addPathSegment]/[setPathSegment] is stored
+         * rootless (rooting is added at [effectivePath] only under a host); setting its segment `0` to
+         * `""` re-serializes it with a leading `/`, the [isSegmentBuiltPath] case. Independently, a
+         * *parsed* rootless path (from [newBuilder]) whose first segment a segment edit empties is
+         * caught by [rootlessPathReRooted]. Either way the result re-parses as a *rooted* path — an
+         * unrepresentable rootless shape — so this rejects both.
          */
-        private fun segmentPathWellFormed(): Boolean = !isSegmentBuiltPath || !encodedPath.startsWith(SLASH)
+        private fun segmentPathWellFormed(): Boolean =
+            !rootlessPathReRooted && (!isSegmentBuiltPath || !encodedPath.startsWith(SLASH))
 
         /** True when a [host] is present, or neither [userInfo] nor [port] (which require one) is set. */
         private fun authorityHasHost(): Boolean = host != null || (userInfo.isNullOrEmpty() && port == null)
@@ -1000,6 +1015,7 @@ public class Uri internal constructor(
                     "(found '${encodedSegment[delimiter]}' at index $delimiter): $encodedSegment"
             }
             if (encodedPath.isEmpty()) isSegmentBuiltPath = true
+            rootlessPathReRooted = false // appending fresh content supersedes any prior re-root flag.
             if (encodedPath.isNotEmpty() && !encodedPath.endsWith(SLASH)) encodedPath += SLASH
             encodedPath += encodedSegment
             check(encodedPath.endsWith(encodedSegment)) { "the pushed segment must terminate the path" }
@@ -1021,6 +1037,10 @@ public class Uri internal constructor(
                 throw IndexOutOfBoundsException("path segment index $index out of bounds for size ${segments.size}")
             }
             edit(segments)
+            // A rootless path whose first segment becomes empty serializes with a leading '/', which re-parses
+            // as a rooted path — the same unrepresentable shape the from-scratch builder rejects. Flag it so
+            // build() throws and buildOrNull() returns null instead of silently re-rooting the path.
+            rootlessPathReRooted = !current.rooted && segments.firstOrNull()?.isEmpty() == true
             encodedPath = UrlPath.Segments(segments, current.rooted).toUriPathString()
             return this
         }

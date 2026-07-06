@@ -13,6 +13,7 @@ import org.dexpace.kuri.host.serialize
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.UrlParser
 import org.dexpace.kuri.parser.UrlPath
+import org.dexpace.kuri.parser.appendPathSegmentsSplit
 import org.dexpace.kuri.parser.fileExtensionOf
 import org.dexpace.kuri.parser.fileNameOf
 import org.dexpace.kuri.percent.PercentCodec
@@ -340,11 +341,16 @@ public class Url internal constructor(
      *
      * The "file name" of the path: `http://h/a/b.txt` yields `b.txt`, and a directory-style path
      * ending in `/` (`http://h/a/`) skips the trailing empty segment to yield `a`. Empty for a path
-     * that is empty, `/`, or made only of empty segments.
+     * that is empty, `/`, or made only of empty segments. An opaque path (a non-special scheme such
+     * as `mailto:` or `foo:bar/baz`) has no hierarchical file name, so it too returns `""`.
      *
-     * @return the last non-empty decoded segment, or `""`.
+     * Because the segment is percent-decoded, a source segment holding an encoded `/` (`%2F`) yields
+     * a name containing a literal `/` — e.g. `http://h/docs/a%2Fb.txt` returns `"a/b.txt"` — so a
+     * caller must not use the result directly as a filesystem name without its own sanitization.
+     *
+     * @return the last non-empty decoded segment, or `""` when there is none or the path is opaque.
      */
-    public fun fileName(): String = fileNameOf(pathSegments)
+    public fun fileName(): String = if (components.path is UrlPath.Opaque) "" else fileNameOf(pathSegments)
 
     /**
      * The extension of [fileName]: the text after its last `.`, or `""` when it has none (SPEC §3.3).
@@ -530,6 +536,9 @@ public class Url internal constructor(
 
         /** True while [encodedPath] was assembled from empty by segment appends; its rooting is decided at [build]. */
         private var isSegmentBuiltPath: Boolean = false
+
+        /** True when a segment edit emptied a rootless path's first segment, which would re-root it. */
+        private var rootlessPathReRooted: Boolean = false
         private var encodedQuery: String? = null
         private var encodedFragment: String? = null
 
@@ -622,6 +631,7 @@ public class Url internal constructor(
         public fun encodedPath(encodedPath: String): Builder {
             this.encodedPath = encodedPath
             isSegmentBuiltPath = false // a verbatim path owns its own (root or rootless) shape.
+            rootlessPathReRooted = false
             return this
         }
 
@@ -686,10 +696,7 @@ public class Url internal constructor(
          * @return this builder, for chaining.
          */
         public fun addPathSegments(path: String): Builder {
-            val pieces = path.split(SLASH)
-            for (piece in pieces) {
-                addPathSegment(piece)
-            }
+            appendPathSegmentsSplit(path) { addPathSegment(it) }
             return this
         }
 
@@ -698,7 +705,10 @@ public class Url internal constructor(
          *
          * Segment positions are those of [Url.pathSegments]: for `http://h/a/b/c`, index `0` is `a`.
          * [segment] is encoded like [addPathSegment] (any `/`, `\`, or `%` escaped) so it stays a
-         * single segment, and the path keeps its existing rooted/rootless shape.
+         * single segment, and the path keeps its existing rooted/rootless shape: an edit that would
+         * empty a rootless path's first segment — re-rooting it into an unrepresentable shape — is
+         * rejected at [build] ([build] throws, [buildOrNull] returns `null`) rather than silently
+         * changing the path.
          *
          * @param index the zero-based segment position to replace.
          * @param segment the decoded replacement segment.
@@ -714,7 +724,9 @@ public class Url internal constructor(
          * Removes the path segment at [index], preserving the order of the rest.
          *
          * Segment positions are those of [Url.pathSegments]. Removing the only segment of a rooted path
-         * leaves the root `/`; the path keeps its existing rooted/rootless shape otherwise.
+         * leaves the root `/`; the path keeps its existing rooted/rootless shape otherwise. As with
+         * [setPathSegment], an edit that would empty a rootless path's first segment (re-rooting it) is
+         * rejected at [build] ([build] throws, [buildOrNull] returns `null`).
          *
          * @param index the zero-based segment position to remove.
          * @return this builder, for chaining.
@@ -805,7 +817,7 @@ public class Url internal constructor(
                 "a path with an authority must be empty or start with '/': $path"
             }
             require(segmentPathWellFormed()) {
-                "a segment-built path cannot begin with an empty segment (it would parse as rooted): $encodedPath"
+                "a rootless path cannot begin with an empty segment; the edit would re-root it: $encodedPath"
             }
             return buildResult(path).getOrThrow()
         }
@@ -856,6 +868,7 @@ public class Url internal constructor(
                     "(found '${encodedSegment[delimiter]}' at index $delimiter): $encodedSegment"
             }
             if (encodedPath.isEmpty()) isSegmentBuiltPath = true
+            rootlessPathReRooted = false // appending fresh content supersedes any prior re-root flag.
             if (encodedPath.isNotEmpty() && !encodedPath.endsWith(SLASH)) encodedPath += SLASH
             encodedPath += encodedSegment
             check(encodedPath.endsWith(encodedSegment)) { "the pushed segment must terminate the path" }
@@ -873,14 +886,17 @@ public class Url internal constructor(
         }
 
         /**
-         * True unless a segment-built path has been corrupted into a rooted shape.
+         * True unless a rootless path has been corrupted into a rooted shape.
          *
-         * A path assembled from [addPathSegment]/[setPathSegment] is stored rootless (rooting is added
-         * at [effectivePath] only under a host). Setting segment `0` to `""` would re-serialize it with
-         * a leading `/`, which re-parses as a *rooted* path — an unrepresentable rootless shape. That is
-         * the only way a segment-built path acquires a leading `/`, so this flags exactly that misuse.
+         * Two edits can do this. A path assembled from [addPathSegment]/[setPathSegment] is stored
+         * rootless (rooting is added at [effectivePath] only under a host); setting its segment `0` to
+         * `""` re-serializes it with a leading `/`, the [isSegmentBuiltPath] case. Independently, a
+         * *parsed* rootless path (from [newBuilder]) whose first segment a segment edit empties is
+         * caught by [rootlessPathReRooted]. Either way the result re-parses as a *rooted* path — an
+         * unrepresentable rootless shape — so this rejects both.
          */
-        private fun segmentPathWellFormed(): Boolean = !isSegmentBuiltPath || !encodedPath.startsWith(SLASH)
+        private fun segmentPathWellFormed(): Boolean =
+            !rootlessPathReRooted && (!isSegmentBuiltPath || !encodedPath.startsWith(SLASH))
 
         /** Recomposes a parseable URL string from the accumulated components. */
         private fun recompose(path: String): String {
@@ -931,11 +947,16 @@ public class Url internal constructor(
             index: Int,
             edit: (MutableList<String>) -> Unit,
         ): Builder {
+            val wasRooted = encodedPath.startsWith(SLASH)
             val segments = currentSegments()
             if (index !in segments.indices) {
                 throw IndexOutOfBoundsException("path segment index $index out of bounds for size ${segments.size}")
             }
             edit(segments)
+            // A rootless path whose first segment becomes empty serializes with a leading '/', which re-parses
+            // as a rooted path — the same unrepresentable shape the from-scratch builder rejects. Flag it so
+            // build() throws and buildOrNull() returns null instead of silently re-rooting the path.
+            rootlessPathReRooted = !wasRooted && segments.firstOrNull()?.isEmpty() == true
             replaceEncodedSegments(segments)
             return this
         }
