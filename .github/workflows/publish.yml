@@ -127,9 +127,11 @@ jobs:
     name: Smoke-test published artifact
     needs: publish
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    # Central propagation to repo1.maven.org can lag well past this window; this is a best-effort
-    # signal only and must never gate or fail the release.
+    # The resolve loop below waits ~30 min for Central to propagate; timeout-minutes sits above that as
+    # a backstop so the job is never killed mid-wait. Central propagation to repo1.maven.org can lag
+    # well past even 30 min, so this stays a best-effort signal only and must never gate or fail the
+    # release.
+    timeout-minutes: 35
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -145,7 +147,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           url="https://repo1.maven.org/maven2/org/dexpace/kuri-jvm/${VERSION}/kuri-jvm-${VERSION}.pom"
-          attempts=10
+          attempts=30
           sleep_s=60
           i=1
           while [ "$i" -le "$attempts" ]; do
