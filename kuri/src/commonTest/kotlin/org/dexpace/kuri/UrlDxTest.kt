@@ -76,6 +76,21 @@ class UrlDxTest {
     }
 
     @Test
+    fun `addQueryParameter on a bare question mark does not leak a leading ampersand`() {
+        val url = parseOk("https://h/?").newBuilder().addQueryParameter("a", "1").build()
+
+        assertEquals("https://h/?a=1", url.href)
+    }
+
+    @Test
+    fun `removeAllQueryParameters is a no-op on a query-less URL`() {
+        val url = parseOk("https://h/p").newBuilder().removeAllQueryParameters("x").build()
+
+        assertNull(url.query)
+        assertEquals("https://h/p", url.href)
+    }
+
+    @Test
     fun `buildOrNull returns the canonical url when the components are valid`() {
         val url =
             Url
@@ -186,6 +201,21 @@ class UrlDxTest {
     }
 
     @Test
+    fun `setPathSegment to an empty leading segment is rejected rather than silently rooted`() {
+        val builder =
+            Url
+                .Builder()
+                .scheme("https")
+                .host("h")
+                .addPathSegment("a")
+                .addPathSegment("b")
+                .setPathSegment(0, "")
+
+        assertNull(builder.buildOrNull())
+        assertFailsWith<IllegalArgumentException> { builder.build() }
+    }
+
+    @Test
     fun `fileName is the last non-empty decoded segment`() {
         assertEquals("b.txt", parseOk("https://h/a/b.txt").fileName())
         assertEquals("a", parseOk("https://h/a/").fileName())
@@ -229,6 +259,16 @@ class UrlDxTest {
     }
 
     @Test
+    fun `withPort is a no-op when a port cannot attach`() {
+        // WHATWG's port setter ignores a port on a file URL or one with no or empty host.
+        val fileUrl = parseOk("file:///tmp/x")
+        val opaque = parseOk("mailto:a@b.example")
+
+        assertEquals(fileUrl, fileUrl.withPort(8080))
+        assertEquals(opaque, opaque.withPort(8080))
+    }
+
+    @Test
     fun `withFragment sets and withoutFragment clears the fragment`() {
         val base = parseOk("https://h/p")
 
@@ -263,5 +303,29 @@ class UrlDxTest {
         val crossHost = parseOk("https://other.example/a/b")
 
         assertNull(base.relativize(crossHost))
+    }
+
+    @Test
+    fun `relativize round-trips when the base path has no trailing slash`() {
+        val base = parseOk("https://h/a/b")
+        val target = parseOk("https://h/a/b/c")
+
+        assertEquals(target, base.resolveOrThrow(assertNotNull(base.relativize(target))))
+    }
+
+    @Test
+    fun `relativize round-trips for an empty suffix when the target is the base plus a slash`() {
+        val base = parseOk("https://h/a/b")
+        val target = parseOk("https://h/a/b/")
+
+        assertEquals(target, base.resolveOrThrow(assertNotNull(base.relativize(target))))
+    }
+
+    @Test
+    fun `relativize round-trips when the base carries a query the target drops`() {
+        val base = parseOk("https://h/p?x=1")
+        val target = parseOk("https://h/p")
+
+        assertEquals(target, base.resolveOrThrow(assertNotNull(base.relativize(target))))
     }
 }

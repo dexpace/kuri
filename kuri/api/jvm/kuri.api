@@ -103,7 +103,6 @@ public final class org/dexpace/kuri/Uri$Builder {
 	public final fun fragment (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun host (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun host (Lorg/dexpace/kuri/host/Host;)Lorg/dexpace/kuri/Uri$Builder;
-	public final fun path (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun port (Ljava/lang/Integer;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun query (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
 	public final fun removeAllQueryParameters (Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;

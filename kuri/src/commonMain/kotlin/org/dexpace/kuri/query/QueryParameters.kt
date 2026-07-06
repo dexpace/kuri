@@ -199,9 +199,9 @@ public class QueryParameters internal constructor(
      *
      * Unlike [toQueryString], this uses the HTML form dialect: space becomes `+`, encoding is always
      * UTF-8, and only `* - . _` and ASCII alphanumerics survive unescaped (so literal `+`/`&`/`=`
-     * become `%2B`/`%26`/`%3D`). A `null` value emits the name alone, exactly as [toQueryString] does,
-     * so the no-`=` sentinel stays consistent across both renderers. Serialization is total and never
-     * fails.
+     * become `%2B`/`%26`/`%3D`). The form dialect has no null, so a `null` value renders as an empty
+     * value (`name=`), matching the WHATWG serializer; the no-`=` sentinel is preserved only by
+     * [toQueryString]. Serialization is total and never fails.
      *
      * @return the form-encoded body (without a leading `?`); `""` when [isEmpty].
      * @see parseForm to parse such a body back into a snapshot.
@@ -277,6 +277,23 @@ public class QueryParameters internal constructor(
     }
 
     public companion object {
+        /** The shared empty snapshot; reused for every absent-query projection (see [parseOrEmpty]). */
+        internal val EMPTY: QueryParameters = QueryParameters(emptyList())
+
+        /**
+         * Projects a raw [query] to a decoded snapshot, reusing the shared [EMPTY] snapshot when there
+         * is nothing to parse.
+         *
+         * The snapshot helper shared by the `Uri`/`Url` query accessors and their builders. Both an
+         * absent query (`null`, no `?`) and a present-but-empty query (`""`, a bare `?`) project to
+         * [EMPTY] — matching WHATWG's `URLSearchParams`, which yields no pairs for an empty query — so
+         * an edit that starts from a bare `?` does not carry a phantom empty pair into the result. The
+         * raw `null`-vs-`""` distinction stays observable on the `query` string property; it is simply
+         * not a *pair* in the decoded view. Use [parse] directly to keep `parse("")`'s single sentinel
+         * pair.
+         */
+        internal fun parseOrEmpty(query: String?): QueryParameters = if (query.isNullOrEmpty()) EMPTY else parse(query)
+
         /**
          * Derives a [QueryParameters] from the raw query [query] (SPEC §10.2.1).
          *

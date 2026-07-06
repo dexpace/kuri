@@ -7,13 +7,14 @@ package org.dexpace.kuri
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriSyntaxException
 import org.dexpace.kuri.error.ValidationError
-import org.dexpace.kuri.error.fold
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.host.serialize
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.UrlParser
 import org.dexpace.kuri.parser.UrlPath
+import org.dexpace.kuri.parser.fileExtensionOf
+import org.dexpace.kuri.parser.fileNameOf
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSet
 import org.dexpace.kuri.percent.PercentEncodeSets
@@ -157,7 +158,7 @@ public class Url internal constructor(
     /** A decoded, immutable snapshot of the query's `name=value` pairs; never live. */
     @get:JvmName("queryParameters")
     public val queryParameters: QueryParameters
-        get() = components.query?.let { QueryParameters.parse(it) } ?: QueryParameters(emptyList())
+        get() = QueryParameters.parseOrEmpty(components.query)
 
     /**
      * The raw encoded fragment without its leading `#`, or `null` when no `#` was present.
@@ -208,7 +209,14 @@ public class Url internal constructor(
      *
      * @return `true` iff [origin] serializes to the opaque `"null"`.
      */
-    public fun hasOpaqueOrigin(): Boolean = origin == OPAQUE_ORIGIN
+    public fun hasOpaqueOrigin(): Boolean =
+        when {
+            // Mirrors the branch structure of [origin] but decides from the scheme alone, without
+            // allocating the tuple-origin string for the common special-scheme case.
+            scheme == BLOB_SCHEME -> blobOrigin() == OPAQUE_ORIGIN
+            Scheme.isSpecial(scheme) && scheme != FILE_SCHEME -> false
+            else -> true
+        }
 
     /** Cached canonical serialization, computed once (permits caching an immutable value). */
     private val canonicalHref: String by lazy { Serializer.serialize(components, ParseProfile.URL) }
@@ -302,14 +310,18 @@ public class Url internal constructor(
      * authority — or [target] is otherwise not reachable as a relative suffix of this URL's path —
      * there is no relative form and the result is `null` (mirroring the Rust `url` crate's
      * `make_relative`). Delegates to [Uri.relativize] over the profile-bridged [toUri] values, so the
-     * RFC 3986 dot-segment semantics apply.
+     * RFC 3986 dot-segment semantics apply, then re-verifies the candidate under this profile's own
+     * (WHATWG) [resolve] — returning `null` rather than a reference that would not reproduce [target]
+     * where the two resolution algorithms differ.
      *
      * @param target the absolute URL to express relative to this one.
-     * @return the relative-reference string, or `null` when [target] shares no origin with this URL.
+     * @return the relative-reference string that resolves to [target], or `null` when none does.
      */
     public fun relativize(target: Url): String? {
-        val relative: Uri = toUri().relativize(target.toUri())
-        return if (relative.isAbsolute()) null else relative.toString()
+        val relative = toUri().relativize(target.toUri())
+        if (relative.isAbsolute()) return null
+        val reference = relative.toString()
+        return if (resolveOrNull(reference) == target) reference else null
     }
 
     /**
@@ -332,7 +344,7 @@ public class Url internal constructor(
      *
      * @return the last non-empty decoded segment, or `""`.
      */
-    public fun fileName(): String = pathSegments.lastOrNull { it.isNotEmpty() } ?: ""
+    public fun fileName(): String = fileNameOf(pathSegments)
 
     /**
      * The extension of [fileName]: the text after its last `.`, or `""` when it has none (SPEC §3.3).
@@ -343,24 +355,25 @@ public class Url internal constructor(
      *
      * @return the decoded extension without its leading `.`, or `""` when [fileName] has none.
      */
-    public fun fileExtension(): String {
-        val name = fileName()
-        val dot = name.lastIndexOf('.')
-        return if (dot > 0 && dot < name.length - 1) name.substring(dot + 1) else ""
-    }
+    public fun fileExtension(): String = fileExtensionOf(fileName())
 
     /**
      * Returns a copy of this URL with its explicit [port] set (or elided when `null`).
      *
      * A convenience for `newBuilder().port(port).build()`. Only the port changes, so a value obtained
      * from [parse] always rebuilds; a port outside `0..65535` is a programmer error, not a parse
-     * failure. On a URL with no authority the port has nowhere to attach and is silently dropped.
+     * failure. When a port cannot attach — a URL with no host, an empty host, or the `file` scheme
+     * (which never carries a port) — the receiver is returned unchanged, matching WHATWG's port setter.
      *
      * @param port a port in `0..65535`, or `null` to elide it (so [effectivePort] falls back to the default).
-     * @return a new [Url] identical to this one but for its port.
-     * @throws IllegalArgumentException when [port] is outside `0..65535`.
+     * @return a new [Url] identical to this one but for its port, or this URL unchanged when a port
+     *   cannot attach.
+     * @throws IllegalArgumentException when [port] is outside `0..65535` and a port can attach.
      */
-    public fun withPort(port: Int?): Url = newBuilder().port(port).build()
+    public fun withPort(port: Int?): Url {
+        if (host == null || host == Host.Empty || scheme.equals(FILE_SCHEME, ignoreCase = true)) return this
+        return newBuilder().port(port).build()
+    }
 
     /**
      * Returns a copy of this URL with its [fragment] set (or removed when `null`).
@@ -674,7 +687,6 @@ public class Url internal constructor(
          */
         public fun addPathSegments(path: String): Builder {
             val pieces = path.split(SLASH)
-            check(pieces.isNotEmpty()) { "splitting a string always yields at least one piece" }
             for (piece in pieces) {
                 addPathSegment(piece)
             }
@@ -696,15 +708,7 @@ public class Url internal constructor(
         public fun setPathSegment(
             index: Int,
             segment: String,
-        ): Builder {
-            val segments = currentSegments()
-            if (index < 0 || index >= segments.size) {
-                throw IndexOutOfBoundsException("path segment index $index out of bounds for size ${segments.size}")
-            }
-            segments[index] = PercentCodec.encode(segment, URL_PATH_SEGMENT_ENCODE_SET)
-            replaceEncodedSegments(segments)
-            return this
-        }
+        ): Builder = replaceSegments(index) { it[index] = PercentCodec.encode(segment, URL_PATH_SEGMENT_ENCODE_SET) }
 
         /**
          * Removes the path segment at [index], preserving the order of the rest.
@@ -716,17 +720,7 @@ public class Url internal constructor(
          * @return this builder, for chaining.
          * @throws IndexOutOfBoundsException when [index] is negative or `>=` the current segment count.
          */
-        public fun removePathSegment(index: Int): Builder {
-            val segments = currentSegments()
-            if (index < 0 || index >= segments.size) {
-                throw IndexOutOfBoundsException("path segment index $index out of bounds for size ${segments.size}")
-            }
-            val expected = segments.size - 1
-            segments.removeAt(index)
-            replaceEncodedSegments(segments)
-            check(segments.size == expected) { "removePathSegment must drop exactly one segment" }
-            return this
-        }
+        public fun removePathSegment(index: Int): Builder = replaceSegments(index) { it.removeAt(index) }
 
         /**
          * Sets or clears the raw encoded query (without its leading `?`).
@@ -810,10 +804,10 @@ public class Url internal constructor(
             require(pathMatchesAuthority(path)) {
                 "a path with an authority must be empty or start with '/': $path"
             }
-            return UrlParser.parse(recompose(path)).fold(
-                onOk = { Url(it) },
-                onErr = { throw UriSyntaxException(it) },
-            )
+            require(segmentPathWellFormed()) {
+                "a segment-built path cannot begin with an empty segment (it would parse as rooted): $encodedPath"
+            }
+            return buildResult(path).getOrThrow()
         }
 
         /**
@@ -830,11 +824,21 @@ public class Url internal constructor(
          */
         public fun buildOrNull(): Url? {
             val path = effectivePath()
-            if (!hasRequiredHost() || !pathMatchesAuthority(path)) {
+            if (!hasRequiredHost() || !pathMatchesAuthority(path) || !segmentPathWellFormed()) {
                 return null
             }
-            return UrlParser.parse(recompose(path)).getOrNull()?.let { Url(it) }
+            return buildResult(path).getOrNull()
         }
+
+        /**
+         * Recomposes [path] with the accumulated components and re-parses it through the `Url` engine.
+         *
+         * The single recompose→parse projection [build] and [buildOrNull] share. Given a [path] it is
+         * total — it never throws — so [buildOrNull] projecting it with [ParseResult.getOrNull] cannot
+         * throw once the host/authority gate has passed, while [build] projects it with
+         * [ParseResult.getOrThrow] to surface a parse failure as [UriSyntaxException].
+         */
+        private fun buildResult(path: String): ParseResult<Url> = UrlParser.parse(recompose(path)).map { Url(it) }
 
         /**
          * Appends [encodedSegment] at the path's segment boundary; rooting is deferred to
@@ -865,9 +869,18 @@ public class Url internal constructor(
          */
         private fun effectivePath(): String {
             if (!isSegmentBuiltPath || host == null) return encodedPath
-            check(!encodedPath.startsWith(SLASH)) { "a segment-built path is stored rootless: $encodedPath" }
             return SLASH + encodedPath
         }
+
+        /**
+         * True unless a segment-built path has been corrupted into a rooted shape.
+         *
+         * A path assembled from [addPathSegment]/[setPathSegment] is stored rootless (rooting is added
+         * at [effectivePath] only under a host). Setting segment `0` to `""` would re-serialize it with
+         * a leading `/`, which re-parses as a *rooted* path — an unrepresentable rootless shape. That is
+         * the only way a segment-built path acquires a leading `/`, so this flags exactly that misuse.
+         */
+        private fun segmentPathWellFormed(): Boolean = !isSegmentBuiltPath || !encodedPath.startsWith(SLASH)
 
         /** Recomposes a parseable URL string from the accumulated components. */
         private fun recompose(path: String): String {
@@ -902,12 +915,30 @@ public class Url internal constructor(
             host == null || path.isEmpty() || path.startsWith(SLASH)
 
         /** The current query as a decoded snapshot, or an empty snapshot when no query is set. */
-        private fun currentQueryParameters(): QueryParameters =
-            encodedQuery?.let { QueryParameters.parse(it) } ?: QueryParameters(emptyList())
+        private fun currentQueryParameters(): QueryParameters = QueryParameters.parseOrEmpty(encodedQuery)
 
         /** Writes [params] back to [encodedQuery], dropping the `?` entirely once no pairs remain. */
         private fun writeQueryParameters(params: QueryParameters): Builder =
             query(if (params.isEmpty()) null else params.toQueryString())
+
+        /**
+         * Splits the current path into segments, applies [edit] to the mutable list at the
+         * bounds-checked [index], and rewrites [encodedPath] from the result; the rooted-vs-rootless
+         * shape is preserved (a rootless segment-built path stays rootless, still rooted at [build]
+         * under a host).
+         */
+        private fun replaceSegments(
+            index: Int,
+            edit: (MutableList<String>) -> Unit,
+        ): Builder {
+            val segments = currentSegments()
+            if (index !in segments.indices) {
+                throw IndexOutOfBoundsException("path segment index $index out of bounds for size ${segments.size}")
+            }
+            edit(segments)
+            replaceEncodedSegments(segments)
+            return this
+        }
 
         /**
          * The stored [encodedPath] split into its segments; a leading root `/` is dropped and an empty

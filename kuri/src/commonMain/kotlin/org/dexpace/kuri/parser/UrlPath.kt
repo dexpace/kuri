@@ -130,3 +130,24 @@ internal fun splitUriPath(path: String): UrlPath.Segments =
         path.startsWith(URI_PATH_SEPARATOR) -> UrlPath.Segments(path.substring(1).split('/'), rooted = true)
         else -> UrlPath.Segments(path.split('/'), rooted = false)
     }
+
+/**
+ * The "file name" of decoded path [segments]: the last non-empty segment, or `""` when there is
+ * none (SPEC §3.3). Shared by the `Uri`/`Url` `fileName()` projections.
+ *
+ * A trailing empty segment (a trailing `/`, e.g. `["a", ""]`) is skipped, so both `["a", "b"]` and
+ * `["a", "b", ""]` yield `"b"`; an empty, root-only, or all-empty segment list yields `""`.
+ */
+internal fun fileNameOf(segments: List<String>): String = segments.lastOrNull { it.isNotEmpty() } ?: ""
+
+/**
+ * The extension of a decoded file [name]: the text after its last interior `.`, or `""` when it has
+ * none (SPEC §3.3). Shared by the `Uri`/`Url` `fileExtension()` projections.
+ *
+ * A leading dot marks a dotfile (`".bashrc"` → `""`) and a trailing dot leaves nothing after it
+ * (`"file."` → `""`); `"archive.tar.gz"` yields `"gz"`.
+ */
+internal fun fileExtensionOf(name: String): String {
+    val dot = name.lastIndexOf('.')
+    return if (dot > 0 && dot < name.length - 1) name.substring(dot + 1) else ""
+}

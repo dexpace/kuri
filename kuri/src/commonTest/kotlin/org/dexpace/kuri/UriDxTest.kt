@@ -45,13 +45,13 @@ class UriDxTest {
     }
 
     @Test
-    fun `builder path setter takes an already-encoded path`() {
+    fun `encodedPath setter takes an already-encoded path distinct from the decoded getter`() {
         val uri =
             Uri
                 .Builder()
                 .scheme("http")
                 .host("h")
-                .path("/a%2Fb")
+                .encodedPath("/a%2Fb")
                 .build()
 
         assertEquals("/a%2Fb", uri.encodedPath)
@@ -75,9 +75,13 @@ class UriDxTest {
     }
 
     @Test
-    fun `queryParameters keeps a present-but-empty query distinct from an absent one`() {
-        assertEquals(1, parseOk("http://h/p?").queryParameters().size)
+    fun `queryParameters is empty for a present-but-empty query like URLSearchParams`() {
+        // A bare `?` decodes to no pairs, exactly as `URLSearchParams("")` yields none; the
+        // absent-vs-present distinction stays observable on the raw `query` string, not the pair count.
+        assertTrue(parseOk("http://h/p?").queryParameters().isEmpty())
         assertTrue(parseOk("http://h/p").queryParameters().isEmpty())
+        assertEquals("", parseOk("http://h/p?").query)
+        assertNull(parseOk("http://h/p").query)
     }
 
     // --- builder query setters ---
@@ -103,6 +107,21 @@ class UriDxTest {
 
         assertFalse(uri.queryParameters().has("a"))
         assertTrue(uri.queryParameters().has("b"))
+    }
+
+    @Test
+    fun `addQueryParameter on a bare question mark does not leak a leading ampersand`() {
+        val uri = parseOk("http://h/p?").newBuilder().addQueryParameter("a", "1").build()
+
+        assertEquals("http://h/p?a=1", uri.uriString)
+    }
+
+    @Test
+    fun `removeAllQueryParameters is a no-op on a query-less URI`() {
+        val uri = parseOk("http://h/p").newBuilder().removeAllQueryParameters("x").build()
+
+        assertEquals("http://h/p", uri.uriString)
+        assertNull(uri.query)
     }
 
     // --- resolve / toUrl parity ---
@@ -188,6 +207,23 @@ class UriDxTest {
         assertEquals("[::1]", uri.hostName)
     }
 
+    @Test
+    fun `host sink round-trips a zoned ipv6 host when zone ids are enabled`() {
+        val zoneOptions = ParseOptions.Builder().allowIpv6ZoneId(true).build()
+        val zoned = Uri.parse("http://[fe80::1%25eth0]/", zoneOptions).getOrNull()?.host ?: fail("expected a host")
+
+        val uri =
+            Uri
+                .Builder()
+                .allowIpv6ZoneId(true)
+                .scheme("http")
+                .host(zoned)
+                .encodedPath("/")
+                .build()
+
+        assertEquals("[fe80::1%25eth0]", uri.hostName)
+    }
+
     // --- relativize ---
 
     @Test
@@ -213,6 +249,32 @@ class UriDxTest {
         val target = parseOk("mailto:b@example.com")
 
         assertEquals(target, parseOk("mailto:a@example.com").relativize(target))
+    }
+
+    @Test
+    fun `relativize round-trips when the base path has no trailing slash`() {
+        // §5.2.3 merges onto the base's directory (/a/), so the reference must be "b/c", not "c".
+        val base = parseOk("http://h/a/b")
+        val target = parseOk("http://h/a/b/c")
+
+        assertEquals(target, base.resolveOrThrow(base.relativize(target).uriString))
+    }
+
+    @Test
+    fun `relativize round-trips for an empty suffix when the target is the base plus a slash`() {
+        val base = parseOk("http://h/a/b")
+        val target = parseOk("http://h/a/b/")
+
+        assertEquals(target, base.resolveOrThrow(base.relativize(target).uriString))
+    }
+
+    @Test
+    fun `relativize round-trips when the base carries a query the target drops`() {
+        // An empty reference would re-inherit the base query; the reference must clear it.
+        val base = parseOk("http://h/p?x=1")
+        val target = parseOk("http://h/p")
+
+        assertEquals(target, base.resolveOrThrow(base.relativize(target).uriString))
     }
 
     // --- path-segment editing + fileName / fileExtension ---
@@ -247,9 +309,26 @@ class UriDxTest {
 
     @Test
     fun `setPathSegment rejects an out-of-bounds index`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<IndexOutOfBoundsException> {
             parseOk("http://h/a").newBuilder().setPathSegment(5, "x")
         }
+    }
+
+    @Test
+    fun `setPathSegment to an empty leading segment is rejected rather than silently rooted`() {
+        // "a/b" -> ["", "b"] would serialize as "/b" and re-parse as rooted; reject it as uncomposable
+        // instead of throwing from buildOrNull (which must never throw).
+        val builder =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .addPathSegment("a")
+                .addPathSegment("b")
+                .setPathSegment(0, "")
+
+        assertNull(builder.buildOrNull())
+        assertFailsWith<IllegalArgumentException> { builder.build() }
     }
 
     @Test
@@ -295,6 +374,14 @@ class UriDxTest {
     fun `withPort sets and elides the port`() {
         assertEquals(2, parseOk("http://h:1/").withPort(2).port)
         assertNull(parseOk("http://h:1/").withPort(null).port)
+    }
+
+    @Test
+    fun `withPort is a no-op on an authority-less URI`() {
+        // A port has nowhere to attach without an authority, so the value is returned unchanged.
+        val uri = parseOk("mailto:a@example.com")
+
+        assertEquals(uri, uri.withPort(25))
     }
 
     @Test

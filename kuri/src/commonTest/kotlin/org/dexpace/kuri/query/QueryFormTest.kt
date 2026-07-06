@@ -30,9 +30,12 @@ class QueryFormTest {
     }
 
     @Test
-    fun `toFormUrlEncoded emits a name-only pair for a null value like toQueryString`() {
+    fun `toFormUrlEncoded always emits equals for a null value unlike toQueryString`() {
         val params = QueryParameters.of(QueryParameter("flag", null))
-        assertEquals("flag", params.toFormUrlEncoded())
+
+        // The form dialect has no null, so it renders an empty value (name=), matching the WHATWG
+        // serializer; only the generic query serializer keeps the no-= sentinel (name).
+        assertEquals("flag=", params.toFormUrlEncoded())
         assertEquals("flag", params.toQueryString())
     }
 

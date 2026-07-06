@@ -6,7 +6,6 @@ package org.dexpace.kuri
 
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriSyntaxException
-import org.dexpace.kuri.error.fold
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.host.serialize
@@ -14,6 +13,8 @@ import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.Resolver
 import org.dexpace.kuri.parser.UriParser
 import org.dexpace.kuri.parser.UrlPath
+import org.dexpace.kuri.parser.fileExtensionOf
+import org.dexpace.kuri.parser.fileNameOf
 import org.dexpace.kuri.parser.splitUriPath
 import org.dexpace.kuri.parser.toUriPathString
 import org.dexpace.kuri.percent.PercentCodec
@@ -114,16 +115,12 @@ public class Uri internal constructor(
      */
     @get:JvmName("path")
     public val path: String
-        get() = decodedPath()
+        get() = decodedPath
 
     /** The decoded path segments in order (read-only); an opaque path yields its single decoded value. */
     @get:JvmName("pathSegments")
     public val pathSegments: List<String>
-        get() =
-            when (val storedPath = components.path) {
-                is UrlPath.Opaque -> listOf(PercentCodec.decode(storedPath.path))
-                is UrlPath.Segments -> storedPath.segments.map { PercentCodec.decode(it) }
-            }
+        get() = decodedPathSegments
 
     /**
      * The raw encoded query without its leading `?`, or `null` when no `?` was present.
@@ -154,14 +151,14 @@ public class Uri internal constructor(
     /**
      * A decoded, immutable snapshot of this URI's query `name=value` pairs; never a live view.
      *
-     * Parses [query] with generic query decoding (`+` kept literal). An absent query (`query == null`)
-     * yields an empty snapshot, while a present-but-empty query (`query == ""`) yields the single
-     * empty pair the WHATWG/`URLSearchParams` parser produces, so the two stay distinguishable.
+     * Parses [query] with generic query decoding (`+` kept literal). Both an absent query
+     * (`query == null`) and a present-but-empty query (`query == ""`) yield an empty snapshot — as
+     * WHATWG's `URLSearchParams` yields no pairs for an empty query string. The absent-vs-present
+     * distinction is preserved on the raw [query] string, not in this decoded pair view.
      *
      * @return the decoded, ordered, duplicate-preserving snapshot; empty when there is no query.
      */
-    public fun queryParameters(): QueryParameters =
-        query?.let { QueryParameters.parse(it) } ?: QueryParameters(emptyList())
+    public fun queryParameters(): QueryParameters = QueryParameters.parseOrEmpty(query)
 
     /**
      * The last non-empty decoded path segment — the "file name" — or `""` when the path has none.
@@ -171,7 +168,7 @@ public class Uri internal constructor(
      *
      * @return the last non-empty decoded segment, or `""` when there is none.
      */
-    public fun fileName(): String = pathSegments.lastOrNull { it.isNotEmpty() } ?: ""
+    public fun fileName(): String = fileNameOf(pathSegments)
 
     /**
      * The file extension of [fileName]: the substring after its last `.`, or `""` when it has none.
@@ -181,11 +178,7 @@ public class Uri internal constructor(
      *
      * @return the extension after the last interior `.` of [fileName], or `""` when there is none.
      */
-    public fun fileExtension(): String {
-        val name = fileName()
-        val dot = name.lastIndexOf('.')
-        return if (dot > 0 && dot < name.length - 1) name.substring(dot + 1) else ""
-    }
+    public fun fileExtension(): String = fileExtensionOf(fileName())
 
     /** Cached canonical-but-unnormalized serialization, computed once. */
     private val canonicalUri: String by lazy { Serializer.serialize(components, ParseProfile.URI) }
@@ -288,43 +281,66 @@ public class Uri internal constructor(
      * Returns a relative reference that [resolve]s back to [target] against this URI (RFC 3986 §5.2
      * inverse; SPEC §9).
      *
-     * The inverse of [resolve] for the common case: when this URI and [target] share the same [scheme]
-     * and [authority] (compared exactly) and neither has an opaque path (see [isOpaquePath]), the
-     * result drops the shared path prefix and carries [target]'s trailing path, query, and fragment,
-     * so resolving it against this URI reproduces [target]. When the two do not share an origin, or
-     * [target] is not at or under this URI's path directory, [target] is returned unchanged (already a
-     * valid reference). This is total: it never throws.
+     * The inverse of [resolve]: when this URI and [target] share the same [scheme] and [authority]
+     * (compared exactly) and neither has an opaque path (see [isOpaquePath]), the result is a relative
+     * reference — the target's path suffix below this URI's directory, plus its query and fragment —
+     * for which `this.resolve(result)` reproduces [target]. RFC 3986 §5.2.3 merges a rootless reference
+     * onto this URI's *directory* (everything up to its last `/`), so that directory, not the full base
+     * path, is what the suffix is measured against — `http://h/a/b` relativizes `http://h/a/b/c` to
+     * `b/c`, since resolving `c` alone would merge onto `/a/` and miss.
+     *
+     * The contract is enforced, not merely intended: the candidate is resolved back against this URI
+     * and compared to [target], and only returned when it round-trips. When the two share no origin, or
+     * no relative form reproduces [target] — a differing directory, or a case RFC 3986 resolution would
+     * re-read (an empty reference re-inherits the base query; a `..`-bearing suffix) — [target] is
+     * returned unchanged, itself a valid reference. This is total: it never throws.
      *
      * @param target the URI to express relative to this one.
-     * @return a relative-path [Uri] that resolves to [target], or [target] unchanged when it cannot be
-     *   made relative.
+     * @return a relative-path [Uri] that resolves to [target], or [target] unchanged when no relative
+     *   form reproduces it.
      */
     public fun relativize(target: Uri): Uri {
-        val childPath = target.encodedPath
-        val baseDir = relativizeBaseDir(target, childPath) ?: return target
-        check(baseDir.length <= childPath.length) { "a relative suffix cannot exceed the target path" }
-        return Builder()
-            .encodedPath(childPath.substring(baseDir.length))
-            .query(target.query)
-            .fragment(target.fragment)
-            .buildOrNull() ?: target
+        val reference = relativeReference(target) ?: return target
+        return if (resolveOrNull(reference.toString()) == target) reference else target
     }
 
     /**
-     * The base-directory prefix to strip from [childPath] when relativizing [target] against this
-     * URI, or `null` when they cannot be made relative (an opaque path, a different scheme/authority,
-     * or [target] not at or under this URI's path directory).
+     * Builds a candidate relative reference to [target] (path suffix, query, and fragment), or `null`
+     * when the two cannot share a hierarchy (an opaque path on either side, a differing
+     * scheme/authority, or a [target] not under this URI's directory). The caller verifies the
+     * candidate actually resolves to [target] before returning it.
      */
-    private fun relativizeBaseDir(
-        target: Uri,
-        childPath: String,
-    ): String? {
+    private fun relativeReference(target: Uri): Uri? {
         val sharesHierarchy =
             !isOpaquePath() && !target.isOpaquePath() && scheme == target.scheme && authority == target.authority
         if (!sharesHierarchy) return null
-        val basePath = encodedPath
-        val baseDir = if (basePath == childPath || basePath.endsWith(SLASH)) basePath else basePath + SLASH
-        return if (childPath == basePath || childPath.startsWith(baseDir)) baseDir else null
+        return relativePathTo(encodedPath, target.encodedPath)?.let { relativePath ->
+            Builder()
+                .encodedPath(relativePath)
+                .query(target.query)
+                .fragment(target.fragment)
+                .buildOrNull()
+        }
+    }
+
+    /**
+     * The rootless path reference RFC 3986 §5.2.3 resolution merges back onto [basePath]'s directory to
+     * yield [targetPath], or `null` when [targetPath] does not lie under that directory.
+     *
+     * The merge directory is [basePath] up to and including its last `/`; the reference is [targetPath]
+     * with that prefix removed, or `"."` when [targetPath] *is* the directory — an empty suffix would
+     * instead re-inherit the base query on resolution, so it cannot stand for the directory itself.
+     */
+    private fun relativePathTo(
+        basePath: String,
+        targetPath: String,
+    ): String? {
+        val baseDir = basePath.substring(0, basePath.lastIndexOf(SLASH) + 1)
+        return when {
+            targetPath == baseDir -> "."
+            targetPath.startsWith(baseDir) -> targetPath.substring(baseDir.length)
+            else -> null
+        }
     }
 
     /**
@@ -427,13 +443,18 @@ public class Uri internal constructor(
      * Returns a copy of this URI with its [port] set to [port] (or elided when `null`).
      *
      * A thin [newBuilder] rebuild; every other component is preserved. A value obtained from [parse]
-     * always rebuilds, so this does not throw for such a value.
+     * always rebuilds, so this does not throw for such a value. When the URI has no authority (no host
+     * — e.g. `mailto:` or another opaque-path URI), a port has nowhere to attach, so the receiver is
+     * returned unchanged rather than raising — the same lenient rule [Url.withPort] follows.
      *
      * @param port a non-negative port, or `null` to elide it.
-     * @return a new `Uri` with the requested port.
-     * @throws IllegalArgumentException when [port] is negative.
+     * @return a new `Uri` with the requested port, or this URI unchanged when it has no authority.
+     * @throws IllegalArgumentException when [port] is negative and the URI has an authority.
      */
-    public fun withPort(port: Int?): Uri = newBuilder().port(port).build()
+    public fun withPort(port: Int?): Uri {
+        if (authority == null) return this
+        return newBuilder().port(port).build()
+    }
 
     /**
      * Returns a copy of this URI with its [fragment] set to [fragment] (or dropped when `null`).
@@ -479,28 +500,47 @@ public class Uri internal constructor(
         return "$credentials${authorityHost.serialize()}$portPart"
     }
 
+    /** Decoded path and segments, computed once each; the value is immutable, mirroring [canonicalUri]. */
+    private val decodedPath: String by lazy { computeDecodedPath() }
+    private val decodedPathSegments: List<String> by lazy { computeDecodedPathSegments() }
+
     /** Percent-decodes the stored path — an opaque path whole, else each segment — backing [path]. */
-    private fun decodedPath(): String =
+    private fun computeDecodedPath(): String =
         when (val storedPath = components.path) {
             is UrlPath.Opaque -> PercentCodec.decode(storedPath.path)
             is UrlPath.Segments -> decodeSegmentsPath(storedPath)
         }
 
-    /** Joins the decoded segments of [storedPath] with `/`, restoring the leading `/` when rooted. */
-    private fun decodeSegmentsPath(storedPath: UrlPath.Segments): String {
-        val decoded = storedPath.segments.joinToString(SLASH) { PercentCodec.decode(it) }
-        return when {
-            storedPath.segments.isEmpty() -> ""
-            storedPath.rooted -> SLASH + decoded
-            else -> decoded
+    /** The decoded segments backing [pathSegments]; an opaque path yields its single decoded value. */
+    private fun computeDecodedPathSegments(): List<String> =
+        when (val storedPath = components.path) {
+            is UrlPath.Opaque -> listOf(PercentCodec.decode(storedPath.path))
+            is UrlPath.Segments -> storedPath.segments.map { PercentCodec.decode(it) }
         }
+
+    /**
+     * Decodes each segment of [storedPath] then rejoins through [toUriPathString], so the empty-vs-
+     * root-only and rooted-vs-rootless ordering has a single source of truth (UrlPath.kt).
+     */
+    private fun decodeSegmentsPath(storedPath: UrlPath.Segments): String {
+        val decoded = storedPath.segments.map { PercentCodec.decode(it) }
+        return UrlPath.Segments(decoded, storedPath.rooted).toUriPathString()
     }
 
-    /** True for the RFC 3986 opaque shape: an absolute URI with no authority and a rootless path. */
+    /**
+     * True for the RFC 3986 opaque shape: an absolute URI with no authority and a rootless path.
+     *
+     * Reads the structured [UrlPath.Segments.rooted] flag rather than re-serializing the path and
+     * inspecting its first character. A rootless path serializes with a leading `/` only when its first
+     * segment is empty, so a non-empty first segment is the same condition as `!startsWith("/")` —
+     * without the `O(path)` string build on every [isOpaquePath]/[relativize] call.
+     */
     private fun hasRootlessSchemePath(): Boolean {
         if (scheme == null || components.host != null) return false
-        val encoded = encodedPath
-        return encoded.isNotEmpty() && !encoded.startsWith(SLASH)
+        val storedPath = components.path
+        return storedPath is UrlPath.Segments &&
+            !storedPath.rooted &&
+            storedPath.segments.firstOrNull()?.isNotEmpty() == true
     }
 
     /** Parse factories for [Uri] (SPEC §7.5); each returns a value rather than throwing. */
@@ -652,6 +692,12 @@ public class Uri internal constructor(
          * A convenience over `host(host.asText())` for a host obtained from another value; because
          * [build] re-parses, the host is re-canonicalized, so an equal [Host] yields an equal result.
          *
+         * **Zone ids:** a [Host.Ipv6] that carries a zone id (e.g. `fe80::1%eth0`, obtained by parsing
+         * with [ParseOptions.allowIpv6ZoneId]) re-parses only when this builder also has zone ids
+         * enabled. A builder from [newBuilder] carries the source value's setting forward, but a *fresh*
+         * builder rejects zone ids by default, so pair a zoned host with [allowIpv6ZoneId]`(true)` or
+         * [build] raises `UriSyntaxException`. A [Url] never accepts a zone id at all.
+         *
          * @param host the structured host to set.
          * @return this builder, for chaining.
          */
@@ -689,25 +735,19 @@ public class Uri internal constructor(
         /**
          * Replaces the entire encoded path verbatim.
          *
+         * This does NOT percent-encode: [encodedPath] is taken as the raw path (so a `?`, `#`, or `%`
+         * in it is a delimiter or an escape, not data), which is why [Uri.path] — the *decoded*
+         * projection — is not its inverse. To supply decoded data, build the path from
+         * [addPathSegment]/[addPathSegments], which encode each segment.
+         *
          * @param encodedPath the already-encoded path (e.g. `/a/b`); validated at [build].
+         * @return this builder, for chaining.
          */
         public fun encodedPath(encodedPath: String): Builder {
             this.encodedPath = encodedPath
             isSegmentBuiltPath = false // a verbatim path owns its own (root or rootless) shape.
             return this
         }
-
-        /**
-         * Replaces the entire path with an already-encoded path verbatim; an alias of [encodedPath].
-         *
-         * This does NOT percent-encode: [path] is taken as the raw encoded path, so this is the
-         * *encoded* setter even though [Uri.path] is the *decoded* projection. To supply decoded data,
-         * build the path from [addPathSegment]/[addPathSegments], which encode each segment.
-         *
-         * @param path the already-encoded path (e.g. `/a/b`); validated at [build].
-         * @return this builder, for chaining.
-         */
-        public fun path(path: String): Builder = encodedPath(path)
 
         /**
          * Appends one decoded path segment, percent-encoding it (including any `/`, `\`, `%`, `?`, or
@@ -763,7 +803,6 @@ public class Uri internal constructor(
          */
         public fun addPathSegments(pathSegments: String): Builder {
             val parts = pathSegments.split(SLASH)
-            check(parts.isNotEmpty()) { "splitting on '/' always yields at least one part" }
             for (segment in parts) {
                 addPathSegment(segment)
             }
@@ -781,7 +820,7 @@ public class Uri internal constructor(
          * @param index the zero-based segment position in the current path.
          * @param segment the decoded replacement segment.
          * @return this builder, for chaining.
-         * @throws IllegalArgumentException when [index] is negative or `>=` the current segment count.
+         * @throws IndexOutOfBoundsException when [index] is negative or `>=` the current segment count.
          */
         public fun setPathSegment(
             index: Int,
@@ -794,7 +833,7 @@ public class Uri internal constructor(
          *
          * @param index the zero-based segment position to remove.
          * @return this builder, for chaining.
-         * @throws IllegalArgumentException when [index] is negative or `>=` the current segment count.
+         * @throws IndexOutOfBoundsException when [index] is negative or `>=` the current segment count.
          */
         public fun removePathSegment(index: Int): Builder = replaceSegments(index) { it.removeAt(index) }
 
@@ -822,14 +861,7 @@ public class Uri internal constructor(
         public fun setQueryParameter(
             name: String,
             value: String?,
-        ): Builder =
-            query(
-                currentQueryParameters()
-                    .newBuilder()
-                    .set(name, value)
-                    .build()
-                    .toQueryString(),
-            )
+        ): Builder = writeQueryParameters(currentQueryParameters().newBuilder().set(name, value).build())
 
         /**
          * Appends the query parameter [name]=[value] without deduplicating (SPEC §10.3.2).
@@ -844,14 +876,7 @@ public class Uri internal constructor(
         public fun addQueryParameter(
             name: String,
             value: String?,
-        ): Builder =
-            query(
-                currentQueryParameters()
-                    .newBuilder()
-                    .add(name, value)
-                    .build()
-                    .toQueryString(),
-            )
+        ): Builder = writeQueryParameters(currentQueryParameters().newBuilder().add(name, value).build())
 
         /**
          * Removes every query parameter named [name], preserving the order of the rest (SPEC §10.3.2).
@@ -863,13 +888,7 @@ public class Uri internal constructor(
          * @return this builder, for chaining.
          */
         public fun removeAllQueryParameters(name: String): Builder =
-            query(
-                currentQueryParameters()
-                    .newBuilder()
-                    .removeAll(name)
-                    .build()
-                    .toQueryString(),
-            )
+            writeQueryParameters(currentQueryParameters().newBuilder().removeAll(name).build())
 
         /**
          * Sets or clears the raw encoded fragment (without its leading `#`).
@@ -894,10 +913,7 @@ public class Uri internal constructor(
         public fun build(): Uri {
             val path = effectivePath()
             validateComposable(path)
-            return UriParser.parse(recompose(path), options).fold(
-                onOk = { Uri(it) },
-                onErr = { throw UriSyntaxException(it) },
-            )
+            return buildResult(path).getOrThrow()
         }
 
         /**
@@ -914,8 +930,19 @@ public class Uri internal constructor(
         public fun buildOrNull(): Uri? {
             val path = effectivePath()
             if (!isComposable(path)) return null
-            return UriParser.parse(recompose(path), options).getOrNull()?.let { Uri(it) }
+            return buildResult(path).getOrNull()
         }
+
+        /**
+         * Recomposes [path] with the accumulated components and re-parses it through the `Uri` engine.
+         *
+         * The single recompose→parse projection [build] and [buildOrNull] share. Given a [path] it is
+         * total — it never throws — so [buildOrNull] projecting it with [ParseResult.getOrNull] cannot
+         * throw once the composability gate has passed, while [build] projects it with
+         * [ParseResult.getOrThrow] to surface a parse failure as [UriSyntaxException].
+         */
+        private fun buildResult(path: String): ParseResult<Uri> =
+            UriParser.parse(recompose(path), options).map { Uri(it) }
 
         /**
          * Rejects component combinations no RFC 3986 recomposition can represent (RFC 3986 §3.2/§3.3).
@@ -932,10 +959,24 @@ public class Uri internal constructor(
             require(pathFitsAuthority(path)) {
                 "a path with an authority must be empty or start with '/': $path"
             }
+            require(segmentPathWellFormed()) {
+                "a segment-built path cannot begin with an empty segment (it would parse as rooted): $encodedPath"
+            }
         }
 
         /** True iff [build] would pass [validateComposable] for [path] without throwing; for [buildOrNull]. */
-        private fun isComposable(path: String): Boolean = authorityHasHost() && pathFitsAuthority(path)
+        private fun isComposable(path: String): Boolean =
+            authorityHasHost() && pathFitsAuthority(path) && segmentPathWellFormed()
+
+        /**
+         * True unless a segment-built path has been corrupted into a rooted shape.
+         *
+         * A path assembled from [addPathSegment]/[setPathSegment] is stored rootless (rooting is added
+         * at [effectivePath] only under a host). Setting segment `0` to `""` would re-serialize it with
+         * a leading `/`, which re-parses as a *rooted* path — an unrepresentable rootless shape. That is
+         * the only way a segment-built path acquires a leading `/`, so this flags exactly that misuse.
+         */
+        private fun segmentPathWellFormed(): Boolean = !isSegmentBuiltPath || !encodedPath.startsWith(SLASH)
 
         /** True when a [host] is present, or neither [userInfo] nor [port] (which require one) is set. */
         private fun authorityHasHost(): Boolean = host != null || (userInfo.isNullOrEmpty() && port == null)
@@ -976,8 +1017,8 @@ public class Uri internal constructor(
         ): Builder {
             val current = splitUriPath(encodedPath)
             val segments = current.segments.toMutableList()
-            require(index in segments.indices) {
-                "path segment index out of bounds: $index (size ${segments.size})"
+            if (index !in segments.indices) {
+                throw IndexOutOfBoundsException("path segment index $index out of bounds for size ${segments.size}")
             }
             edit(segments)
             encodedPath = UrlPath.Segments(segments, current.rooted).toUriPathString()
@@ -985,8 +1026,20 @@ public class Uri internal constructor(
         }
 
         /** The current [query] parsed to [QueryParameters], or an empty snapshot when the query is absent. */
-        private fun currentQueryParameters(): QueryParameters =
-            query?.let { QueryParameters.parse(it) } ?: QueryParameters(emptyList())
+        private fun currentQueryParameters(): QueryParameters = QueryParameters.parseOrEmpty(query)
+
+        /**
+         * Writes [params] back to [query] after an edit, keeping the `Uri`-profile empty policy.
+         *
+         * When a real pair is removed and none remain, the result is a present-but-empty `""` query (a
+         * bare `?`), never `null` — this is the documented `Uri` split from `Url.Builder`, which drops
+         * the `?` when no pairs remain. But an edit that matches nothing on an already-absent query is a
+         * no-op: it leaves the query `null` rather than conjuring a `?`, so `removeAllQueryParameters`
+         * on a query-less URI does not change it. `query == null` distinguishes the two: only a query
+         * that was present can collapse to `""`.
+         */
+        private fun writeQueryParameters(params: QueryParameters): Builder =
+            query(if (params.isEmpty() && query == null) null else params.toQueryString())
 
         /**
          * The path [recompose] serializes: a segment-built path gains its root `/` exactly when an
@@ -995,7 +1048,6 @@ public class Uri internal constructor(
          */
         private fun effectivePath(): String {
             if (!isSegmentBuiltPath || host == null) return encodedPath
-            check(!encodedPath.startsWith(SLASH)) { "a segment-built path is stored rootless: $encodedPath" }
             return SLASH + encodedPath
         }
 
