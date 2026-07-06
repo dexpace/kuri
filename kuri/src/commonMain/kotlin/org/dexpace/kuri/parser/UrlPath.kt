@@ -333,14 +333,15 @@ internal data class BuilderPath(
      * with no segments therefore serializes to a lone `/` under a host — matching a from-scratch
      * `addPathSegment("")` that stands for the root under an authority — but to `""` without one.
      */
-    fun effectivePath(hasHost: Boolean): String {
-        val rootless = UrlPath.Segments(segments, rooted = false).toUriPathString()
-        return when (rooting) {
+    fun effectivePath(hasHost: Boolean): String =
+        when (rooting) {
             PathRooting.ROOTED -> UrlPath.Segments(segments, rooted = true).toUriPathString()
-            PathRooting.ROOTLESS -> rootless
-            PathRooting.DEFERRED -> if (hasHost) URI_PATH_SEPARATOR + rootless else rootless
+            PathRooting.ROOTLESS -> UrlPath.Segments(segments, rooted = false).toUriPathString()
+            PathRooting.DEFERRED -> {
+                val rootless = UrlPath.Segments(segments, rooted = false).toUriPathString()
+                if (hasHost) URI_PATH_SEPARATOR + rootless else rootless
+            }
         }
-    }
 
     /**
      * Whether this path can be recomposed without silently changing its absolute-vs-rootless shape
