@@ -13,7 +13,7 @@ import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.Resolver
 import org.dexpace.kuri.parser.UriParser
 import org.dexpace.kuri.parser.UrlPath
-import org.dexpace.kuri.parser.appendPathSegmentsSplit
+import org.dexpace.kuri.parser.appendPathSegments
 import org.dexpace.kuri.parser.fileExtensionOf
 import org.dexpace.kuri.parser.fileNameOf
 import org.dexpace.kuri.parser.splitUriPath
@@ -22,6 +22,7 @@ import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSet
 import org.dexpace.kuri.percent.PercentEncodeSets
 import org.dexpace.kuri.query.QueryParameters
+import org.dexpace.kuri.query.editQuery
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.serialize.Serializer
 import org.dexpace.kuri.serialize.UriNormalizer
@@ -297,18 +298,20 @@ public class Uri internal constructor(
      * `b/c`, since resolving `c` alone would merge onto `/a/` and miss.
      *
      * The contract is enforced, not merely intended: the candidate is resolved back against this URI
-     * and compared to [target], and only returned when it round-trips. When the two share no origin, or
-     * no relative form reproduces [target] — a differing directory, or a case RFC 3986 resolution would
-     * re-read (an empty reference re-inherits the base query; a `..`-bearing suffix) — [target] is
-     * returned unchanged, itself a valid reference. This is total: it never throws.
+     * and compared to [target], and returned only when it round-trips. The result is `null` when no
+     * relative form resolves back to [target] — the two differ in [scheme] or [authority], either side
+     * has an opaque path (see [isOpaquePath]), [target] is not under this URI's directory, or the only
+     * candidate is a case RFC 3986 resolution would re-read (an empty reference re-inherits the base
+     * query; a `..`-bearing suffix). This mirrors [Url.relativize], which likewise returns `null` when
+     * no relative form exists. This is total: it never throws.
      *
      * @param target the URI to express relative to this one.
-     * @return a relative-path [Uri] that resolves to [target], or [target] unchanged when no relative
-     *   form reproduces it.
+     * @return the relative-reference [Uri] that resolves to [target], or `null` when no relative form
+     *   reproduces it.
      */
-    public fun relativize(target: Uri): Uri {
-        val reference = relativeReference(target) ?: return target
-        return if (resolveOrNull(reference.toString()) == target) reference else target
+    public fun relativize(target: Uri): Uri? {
+        val reference = relativeReference(target) ?: return null
+        return if (resolveOrNull(reference.toString()) == target) reference else null
     }
 
     /**
@@ -803,16 +806,37 @@ public class Uri internal constructor(
          * Appends each `/`-separated part of [pathSegments] as a decoded segment (OkHttp
          * `HttpUrl.Builder.addPathSegments`).
          *
-         * [pathSegments] is split on `/`, and each part is appended via [addPathSegment] — so every
-         * part is percent-encoded (a raw `?`, `#`, `\`, or `%` in a part becomes data, not a
-         * delimiter) and the trailing-slash and rooting rules of [addPathSegment] apply. A trailing
-         * `/` therefore yields a trailing empty segment (`"a/b/"` -> `["a", "b", ""]`).
+         * Every `/` delimits a segment, so each part is percent-encoded (a raw `?`, `#`, `\`, or `%`
+         * in a part becomes data, not a delimiter) and every empty part is preserved as a genuine
+         * empty segment: an interior or doubled `/` yields one (`"a//b"` -> `["a", "", "b"]`) and a
+         * trailing `/` yields a trailing empty (`"a/b/"` -> `["a", "b", ""]`). Appending onto a
+         * directory-style path (one ending in `/`) fills that trailing slot rather than doubling it,
+         * so `newBuilder()` of `http://h/x/` plus `"a"` builds `http://h/x/a`. When a path is built
+         * from scratch a leading `/` is ignored, since a rootless path cannot begin with an empty
+         * segment; the root `/` is still added at [build] iff the value has an authority.
          *
          * @param pathSegments the `/`-separated decoded path to append (e.g. `"a/b/c"`).
          * @return this builder, for chaining.
          */
         public fun addPathSegments(pathSegments: String): Builder {
-            appendPathSegmentsSplit(pathSegments) { addPathSegment(it) }
+            val startedEmpty = encodedPath.isEmpty()
+            val current = splitUriPath(encodedPath)
+            var merged =
+                appendPathSegments(current.segments, pathSegments) {
+                    PercentCodec.encode(it, URI_PATH_SEGMENT_ENCODE_SET)
+                }
+            val rooted: Boolean
+            if (startedEmpty) {
+                // A path built from scratch is stored rootless (rooted at build under a host); a rootless
+                // path cannot begin with an empty segment, so a leading '/' in the input is dropped.
+                merged = merged.dropWhile { it.isEmpty() }
+                isSegmentBuiltPath = true
+                rooted = false
+            } else {
+                rooted = current.rooted
+            }
+            rootlessPathReRooted = false
+            encodedPath = UrlPath.Segments(merged, rooted).toUriPathString()
             return this
         }
 
@@ -873,7 +897,7 @@ public class Uri internal constructor(
         public fun setQueryParameter(
             name: String,
             value: String?,
-        ): Builder = writeQueryParameters(currentQueryParameters().newBuilder().set(name, value).build())
+        ): Builder = query(editQuery(query, emptyBecomesNull = false) { it.set(name, value) })
 
         /**
          * Appends the query parameter [name]=[value] without deduplicating (SPEC §10.3.2).
@@ -888,7 +912,7 @@ public class Uri internal constructor(
         public fun addQueryParameter(
             name: String,
             value: String?,
-        ): Builder = writeQueryParameters(currentQueryParameters().newBuilder().add(name, value).build())
+        ): Builder = query(editQuery(query, emptyBecomesNull = false) { it.add(name, value) })
 
         /**
          * Removes every query parameter named [name], preserving the order of the rest (SPEC §10.3.2).
@@ -900,7 +924,7 @@ public class Uri internal constructor(
          * @return this builder, for chaining.
          */
         public fun removeAllQueryParameters(name: String): Builder =
-            writeQueryParameters(currentQueryParameters().newBuilder().removeAll(name).build())
+            query(editQuery(query, emptyBecomesNull = false) { it.removeAll(name) })
 
         /**
          * Sets or clears the raw encoded fragment (without its leading `#`).
@@ -971,6 +995,9 @@ public class Uri internal constructor(
             require(pathFitsAuthority(path)) {
                 "a path with an authority must be empty or start with '/': $path"
             }
+            require(host != null || !path.startsWith("//")) {
+                "an authority-less path cannot begin with '//': $path"
+            }
             require(segmentPathWellFormed()) {
                 "a rootless path cannot begin with an empty segment; the edit would re-root it: $encodedPath"
             }
@@ -978,7 +1005,10 @@ public class Uri internal constructor(
 
         /** True iff [build] would pass [validateComposable] for [path] without throwing; for [buildOrNull]. */
         private fun isComposable(path: String): Boolean =
-            authorityHasHost() && pathFitsAuthority(path) && segmentPathWellFormed()
+            authorityHasHost() &&
+                pathFitsAuthority(path) &&
+                (host != null || !path.startsWith("//")) &&
+                segmentPathWellFormed()
 
         /**
          * True unless a rootless path has been corrupted into a rooted shape.
@@ -1044,22 +1074,6 @@ public class Uri internal constructor(
             encodedPath = UrlPath.Segments(segments, current.rooted).toUriPathString()
             return this
         }
-
-        /** The current [query] parsed to [QueryParameters], or an empty snapshot when the query is absent. */
-        private fun currentQueryParameters(): QueryParameters = QueryParameters.parseOrEmpty(query)
-
-        /**
-         * Writes [params] back to [query] after an edit, keeping the `Uri`-profile empty policy.
-         *
-         * When a real pair is removed and none remain, the result is a present-but-empty `""` query (a
-         * bare `?`), never `null` — this is the documented `Uri` split from `Url.Builder`, which drops
-         * the `?` when no pairs remain. But an edit that matches nothing on an already-absent query is a
-         * no-op: it leaves the query `null` rather than conjuring a `?`, so `removeAllQueryParameters`
-         * on a query-less URI does not change it. `query == null` distinguishes the two: only a query
-         * that was present can collapse to `""`.
-         */
-        private fun writeQueryParameters(params: QueryParameters): Builder =
-            query(if (params.isEmpty() && query == null) null else params.toQueryString())
 
         /**
          * The path [recompose] serializes: a segment-built path gains its root `/` exactly when an

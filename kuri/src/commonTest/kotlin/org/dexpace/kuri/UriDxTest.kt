@@ -9,6 +9,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -124,6 +125,16 @@ class UriDxTest {
         assertNull(uri.query)
     }
 
+    @Test
+    fun `removeAllQueryParameters of the last pair leaves a present-but-empty query`() {
+        // The Uri profile keeps a present-but-empty `?` when the last pair is removed, unlike Url which
+        // drops the `?`; the absent-vs-present distinction stays observable on the raw query string.
+        val uri = parseOk("http://h/p?a=1").newBuilder().removeAllQueryParameters("a").build()
+
+        assertEquals("", uri.query)
+        assertEquals("http://h/p?", uri.uriString)
+    }
+
     // --- resolve / toUrl parity ---
 
     @Test
@@ -231,24 +242,24 @@ class UriDxTest {
         val base = parseOk("http://h/a/b/")
         val target = parseOk("http://h/a/b/c/d")
 
-        val relative = base.relativize(target)
+        val relative = assertNotNull(base.relativize(target))
 
         assertEquals("c/d", relative.uriString)
         assertEquals(target, base.resolveOrThrow(relative.uriString))
     }
 
     @Test
-    fun `relativize returns the target unchanged across different authorities`() {
+    fun `relativize returns null across different authorities`() {
         val target = parseOk("http://other/x")
 
-        assertEquals(target, parseOk("http://h/a/").relativize(target))
+        assertNull(parseOk("http://h/a/").relativize(target))
     }
 
     @Test
-    fun `relativize returns the target unchanged for an opaque path`() {
+    fun `relativize returns null for an opaque path`() {
         val target = parseOk("mailto:b@example.com")
 
-        assertEquals(target, parseOk("mailto:a@example.com").relativize(target))
+        assertNull(parseOk("mailto:a@example.com").relativize(target))
     }
 
     @Test
@@ -257,7 +268,7 @@ class UriDxTest {
         val base = parseOk("http://h/a/b")
         val target = parseOk("http://h/a/b/c")
 
-        assertEquals(target, base.resolveOrThrow(base.relativize(target).uriString))
+        assertEquals(target, base.resolveOrThrow(assertNotNull(base.relativize(target)).uriString))
     }
 
     @Test
@@ -265,7 +276,7 @@ class UriDxTest {
         val base = parseOk("http://h/a/b")
         val target = parseOk("http://h/a/b/")
 
-        assertEquals(target, base.resolveOrThrow(base.relativize(target).uriString))
+        assertEquals(target, base.resolveOrThrow(assertNotNull(base.relativize(target)).uriString))
     }
 
     @Test
@@ -274,7 +285,7 @@ class UriDxTest {
         val base = parseOk("http://h/p?x=1")
         val target = parseOk("http://h/p")
 
-        assertEquals(target, base.resolveOrThrow(base.relativize(target).uriString))
+        assertEquals(target, base.resolveOrThrow(assertNotNull(base.relativize(target)).uriString))
     }
 
     // --- path-segment editing + fileName / fileExtension ---
@@ -291,6 +302,56 @@ class UriDxTest {
 
         assertEquals("http://h/a/b%20c/d", uri.uriString)
         assertEquals(listOf("a", "b c", "d"), uri.pathSegments)
+    }
+
+    @Test
+    fun `addPathSegments preserves an interior empty segment`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .addPathSegments("a//b")
+                .build()
+
+        assertEquals("http://h/a//b", uri.uriString)
+        assertEquals(listOf("a", "", "b"), uri.pathSegments)
+    }
+
+    @Test
+    fun `addPathSegments preserves a trailing empty segment`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .addPathSegments("a/b/")
+                .build()
+
+        assertEquals("http://h/a/b/", uri.uriString)
+        assertEquals(listOf("a", "b", ""), uri.pathSegments)
+    }
+
+    @Test
+    fun `addPathSegments onto a directory path fills the trailing slot rather than doubling it`() {
+        val uri = parseOk("http://h/x/").newBuilder().addPathSegments("a").build()
+
+        assertEquals("http://h/x/a", uri.uriString)
+        assertEquals(listOf("x", "a"), uri.pathSegments)
+    }
+
+    @Test
+    fun `addPathSegments drops a leading slash when building a path from scratch`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .addPathSegments("/b")
+                .build()
+
+        assertEquals("http://h/b", uri.uriString)
+        assertEquals(listOf("b"), uri.pathSegments)
     }
 
     @Test
@@ -357,6 +418,19 @@ class UriDxTest {
         val uri = parseOk("http://h/a/b").newBuilder().setPathSegment(0, "").build()
 
         assertEquals("http://h//b", uri.uriString)
+    }
+
+    @Test
+    fun `setPathSegment emptying a rooted first segment without an authority is rejected`() {
+        // RFC 3986 forbids an authority-less absolute path from beginning with '//'. Emptying segment 0
+        // of "/a/b" yields "//b" whose leading "//" would re-parse as an authority; reject it instead of
+        // silently injecting a '.' guard segment.
+        for (input in listOf("/a/b", "foo:/a/b", "file:/a/b")) {
+            val builder = parseOk(input).newBuilder().setPathSegment(0, "")
+
+            assertNull(builder.buildOrNull(), "expected $input to reject an emptied leading segment")
+            assertFailsWith<IllegalArgumentException> { builder.build() }
+        }
     }
 
     @Test

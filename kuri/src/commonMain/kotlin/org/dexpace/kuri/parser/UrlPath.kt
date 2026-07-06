@@ -156,10 +156,34 @@ internal fun fileExtensionOf(name: String): String {
     return if (hasNonDotStem) name.substring(dot + 1) else ""
 }
 
-/** Splits [path] on '/' and applies [append] to each piece in order; shared by the Uri/Url addPathSegments builders. */
-internal inline fun appendPathSegmentsSplit(
-    path: String,
-    append: (String) -> Unit,
-) {
-    for (segment in path.split('/')) append(segment)
+/**
+ * Appends the '/'-separated [input] onto [current] as decoded path segments (OkHttp
+ * `HttpUrl.Builder.addPathSegments` semantics), encoding each piece with [encode].
+ *
+ * Every '/' delimits a segment, so an interior or doubled '/' is preserved as a genuine empty
+ * segment (`"a//b"` -> `["a", "", "b"]`) rather than collapsed, and a trailing '/' opens a slot the
+ * next appended segment fills — so appending onto a directory-style path (`["x", ""]`) fills the
+ * slot (`+"a"` -> `["x", "a"]`) instead of doubling it. A leading empty on a from-scratch path is
+ * dropped by the caller, since a rootless path cannot begin with an empty segment.
+ */
+internal fun appendPathSegments(
+    current: List<String>,
+    input: String,
+    encode: (String) -> String,
+): List<String> {
+    val result = current.toMutableList()
+    var offset = 0
+    while (offset <= input.length) {
+        val slash = input.indexOf('/', offset)
+        val end = if (slash < 0) input.length else slash
+        val piece = encode(input.substring(offset, end))
+        if (result.isNotEmpty() && result.last().isEmpty()) {
+            result[result.lastIndex] = piece
+        } else {
+            result.add(piece)
+        }
+        if (end < input.length) result.add("")
+        offset = end + 1
+    }
+    return result
 }

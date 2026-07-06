@@ -38,6 +38,14 @@ class UrlDxTest {
     }
 
     @Test
+    fun `hasOpaqueOrigin tracks a blob url's inner origin`() {
+        // A blob adopts its inner URL's origin: an http-family inner yields a tuple origin (not
+        // opaque), while an inner the blob cannot unwrap to a tuple origin stays opaque.
+        assertFalse(parseOk("blob:https://example.com:443/").hasOpaqueOrigin())
+        assertTrue(parseOk("blob:ftp://host/path").hasOpaqueOrigin())
+    }
+
+    @Test
     fun `validationErrors is empty for a conformant input`() {
         val url = parseOk("https://example.com/a/b")
 
@@ -186,11 +194,70 @@ class UrlDxTest {
     }
 
     @Test
+    fun `removePathSegment of the only segment re-canonicalizes to the root path`() {
+        // Emptying the path leaves the WHATWG parser to re-canonicalize a special-scheme empty path
+        // back to the root '/', so the shared split/rejoin helpers must not regress this.
+        val url = parseOk("http://h/a").newBuilder().removePathSegment(0).build()
+
+        assertEquals("http://h/", url.toString())
+    }
+
+    @Test
     fun `addPathSegments appends each slash-separated piece`() {
         val url = parseOk("https://h/").newBuilder().addPathSegments("x/y/z").build()
 
         assertEquals("https://h/x/y/z", url.href)
         assertEquals(listOf("x", "y", "z"), url.pathSegments)
+    }
+
+    @Test
+    fun `addPathSegments preserves an interior empty segment`() {
+        val url =
+            Url
+                .Builder()
+                .scheme("https")
+                .host("h")
+                .addPathSegments("a//b")
+                .build()
+
+        assertEquals("https://h/a//b", url.href)
+        assertEquals(listOf("a", "", "b"), url.pathSegments)
+    }
+
+    @Test
+    fun `addPathSegments preserves a trailing empty segment`() {
+        val url =
+            Url
+                .Builder()
+                .scheme("https")
+                .host("h")
+                .addPathSegments("a/b/")
+                .build()
+
+        assertEquals("https://h/a/b/", url.href)
+        assertEquals(listOf("a", "b", ""), url.pathSegments)
+    }
+
+    @Test
+    fun `addPathSegments onto a directory path fills the trailing slot rather than doubling it`() {
+        val url = parseOk("https://h/x/").newBuilder().addPathSegments("a").build()
+
+        assertEquals("https://h/x/a", url.href)
+        assertEquals(listOf("x", "a"), url.pathSegments)
+    }
+
+    @Test
+    fun `addPathSegments drops a leading slash when building a path from scratch`() {
+        val url =
+            Url
+                .Builder()
+                .scheme("https")
+                .host("h")
+                .addPathSegments("/b")
+                .build()
+
+        assertEquals("https://h/b", url.href)
+        assertEquals(listOf("b"), url.pathSegments)
     }
 
     @Test
@@ -231,6 +298,16 @@ class UrlDxTest {
         val url = parseOk("https://h/a/b").newBuilder().setPathSegment(0, "").build()
 
         assertEquals("https://h//b", url.href)
+    }
+
+    @Test
+    fun `setPathSegment emptying a rooted first segment without an authority is rejected`() {
+        // Emptying segment 0 of "/a/b" yields "//b"; the leading "//" would re-parse as an authority, so
+        // an authority-less path may not begin with it. buildOrNull must never throw (returns null).
+        val builder = parseOk("foo:/a/b").newBuilder().setPathSegment(0, "")
+
+        assertNull(builder.buildOrNull())
+        assertFailsWith<IllegalArgumentException> { builder.build() }
     }
 
     @Test

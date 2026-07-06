@@ -161,6 +161,26 @@ public class QueryParametersBuilder internal constructor(
 }
 
 /**
+ * Applies [edit] to the decoded pairs of the raw query [current] and re-serializes the result, the
+ * shared query-parameter edit used by the `Uri`/`Url` builders. [emptyBecomesNull] selects the empty
+ * policy: `true` (the `Url` rule) drops the `?` whenever no pairs remain; `false` (the `Uri` rule)
+ * drops it only when [current] was already absent, so a present-but-empty `""` query survives an edit.
+ */
+internal fun editQuery(
+    current: String?,
+    emptyBecomesNull: Boolean,
+    edit: (QueryParametersBuilder) -> Unit,
+): String? {
+    val params =
+        QueryParameters
+            .parseOrEmpty(current)
+            .newBuilder()
+            .apply(edit)
+            .build()
+    return if (params.isEmpty() && (emptyBecomesNull || current == null)) null else params.toQueryString()
+}
+
+/**
  * Compares [left] and [right] by Unicode code point sequence, surrogate-aware.
  *
  * Returns a negative, zero, or positive result as [left] orders before, equal to, or after [right];
