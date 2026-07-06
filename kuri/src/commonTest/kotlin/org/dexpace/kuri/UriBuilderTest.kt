@@ -527,4 +527,99 @@ class UriBuilderTest {
         assertEquals("http://h/a//b", uri.uriString)
         assertEquals(uri, uri.newBuilder().build())
     }
+
+    @Test
+    fun `interior empty segments survive a setPathSegment edit of another segment`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .encodedPath("/a//b/c")
+                .setPathSegment(0, "z")
+                .build()
+
+        assertEquals("http://h/z//b/c", uri.uriString)
+        assertEquals(listOf("z", "", "b", "c"), uri.pathSegments)
+    }
+
+    @Test
+    fun `a trailing empty segment survives a removePathSegment edit`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .addPathSegment("a")
+                .addPathSegment("b")
+                .addPathSegment("")
+                .removePathSegment(0)
+                .build()
+
+        assertEquals("http://h/b/", uri.uriString)
+        assertEquals(listOf("b", ""), uri.pathSegments)
+    }
+
+    @Test
+    fun `addPathSegments interior and trailing empties survive a later setPathSegment edit`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .addPathSegments("a//b/")
+                .setPathSegment(2, "x")
+                .build()
+
+        assertEquals("http://h/a//x/", uri.uriString)
+        assertEquals(listOf("a", "", "x", ""), uri.pathSegments)
+    }
+
+    @Test
+    fun `addPathSegments after a segment append preserves interior empties`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .addPathSegment("a")
+                .addPathSegments("b//c")
+                .build()
+
+        assertEquals("http://h/a/b//c", uri.uriString)
+        assertEquals(listOf("a", "b", "", "c"), uri.pathSegments)
+    }
+
+    @Test
+    fun `a verbatim query is not canonically re-encoded`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .encodedPath("/p")
+                .query("a=%41")
+                .build()
+
+        assertEquals("a=%41", uri.query)
+        assertEquals("http://h/p?a=%41", uri.uriString)
+    }
+
+    @Test
+    fun `a chain of query parameter edits stays correct`() {
+        val uri =
+            Uri
+                .Builder()
+                .scheme("http")
+                .host("h")
+                .encodedPath("/p")
+                .query("a=1&b=2&a=3")
+                .addQueryParameter("c", "4")
+                .setQueryParameter("a", "9")
+                .removeAllQueryParameters("b")
+                .build()
+
+        assertEquals("a=9&c=4", uri.query)
+        assertEquals("http://h/p?a=9&c=4", uri.uriString)
+    }
 }
