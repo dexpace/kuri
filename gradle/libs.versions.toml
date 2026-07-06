@@ -10,6 +10,7 @@ maven-publish = "0.30.0"
 
 [libraries]
 # kotlin-test is pulled in via the kotlin("test") MPP helper; listed for reference.
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
