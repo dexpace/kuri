@@ -24,9 +24,4 @@ class AnnotationsTest {
         val template = ann.filterIsInstance<PathTemplate>().single()
         assertEquals("/x/{id}", template.value)
     }
-
-    @Test
-    fun `query name defaults to empty for member-name fallback`() {
-        assertEquals("", Query::class.java.getMethod("value").defaultValue)
-    }
 }

@@ -17,7 +17,8 @@ class BindOptionsTest {
     }
 
     @Test
-    fun `rejects a non-positive maxDepth`() {
+    fun `rejects a maxDepth outside 1 to 512`() {
         assertFailsWith<IllegalArgumentException> { BindOptions(maxDepth = 0) }
+        assertFailsWith<IllegalArgumentException> { BindOptions(maxDepth = 513) }
     }
 }
