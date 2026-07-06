@@ -1,0 +1,101 @@
+public final class org/dexpace/kuri/bind/BindOptions {
+	public static final field Companion Lorg/dexpace/kuri/bind/BindOptions$Companion;
+	public static final field DEFAULT Lorg/dexpace/kuri/bind/BindOptions;
+	public fun <init> ()V
+	public fun <init> (Z)V
+	public fun <init> (ZI)V
+	public synthetic fun <init> (ZIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()I
+	public final fun copy (ZI)Lorg/dexpace/kuri/bind/BindOptions;
+	public static synthetic fun copy$default (Lorg/dexpace/kuri/bind/BindOptions;ZIILjava/lang/Object;)Lorg/dexpace/kuri/bind/BindOptions;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMaxDepth ()I
+	public final fun getStrict ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class org/dexpace/kuri/bind/BindOptions$Companion {
+}
+
+public abstract interface annotation class org/dexpace/kuri/bind/Fragment : java/lang/annotation/Annotation {
+}
+
+public abstract interface annotation class org/dexpace/kuri/bind/Host : java/lang/annotation/Annotation {
+}
+
+public final class org/dexpace/kuri/bind/KuriBind {
+	public static final field INSTANCE Lorg/dexpace/kuri/bind/KuriBind;
+	public static final fun bindInto (Lorg/dexpace/kuri/Uri$Builder;Ljava/lang/Object;)Lorg/dexpace/kuri/Uri$Builder;
+	public static final fun bindInto (Lorg/dexpace/kuri/Uri$Builder;Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;)Lorg/dexpace/kuri/Uri$Builder;
+	public static final fun bindInto (Lorg/dexpace/kuri/Url$Builder;Ljava/lang/Object;)Lorg/dexpace/kuri/Url$Builder;
+	public static final fun bindInto (Lorg/dexpace/kuri/Url$Builder;Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;)Lorg/dexpace/kuri/Url$Builder;
+	public static synthetic fun bindInto$default (Lorg/dexpace/kuri/Uri$Builder;Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/Uri$Builder;
+	public static synthetic fun bindInto$default (Lorg/dexpace/kuri/Url$Builder;Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/Url$Builder;
+	public static final fun toUri (Ljava/lang/Object;)Lorg/dexpace/kuri/Uri;
+	public static final fun toUri (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;)Lorg/dexpace/kuri/Uri;
+	public static synthetic fun toUri$default (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/Uri;
+	public static final fun toUriBuilder (Ljava/lang/Object;)Lorg/dexpace/kuri/Uri$Builder;
+	public static final fun toUriBuilder (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;)Lorg/dexpace/kuri/Uri$Builder;
+	public static synthetic fun toUriBuilder$default (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/Uri$Builder;
+	public static final fun toUriBuilderOrNull (Ljava/lang/Object;)Lorg/dexpace/kuri/Uri$Builder;
+	public static final fun toUriBuilderOrNull (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;)Lorg/dexpace/kuri/Uri$Builder;
+	public static synthetic fun toUriBuilderOrNull$default (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/Uri$Builder;
+	public static final fun toUriOrNull (Ljava/lang/Object;)Lorg/dexpace/kuri/Uri;
+	public static final fun toUriOrNull (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;)Lorg/dexpace/kuri/Uri;
+	public static synthetic fun toUriOrNull$default (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/Uri;
+	public static final fun toUrl (Ljava/lang/Object;)Lorg/dexpace/kuri/Url;
+	public static final fun toUrl (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;)Lorg/dexpace/kuri/Url;
+	public static synthetic fun toUrl$default (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/Url;
+	public static final fun toUrlBuilder (Ljava/lang/Object;)Lorg/dexpace/kuri/Url$Builder;
+	public static final fun toUrlBuilder (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;)Lorg/dexpace/kuri/Url$Builder;
+	public static synthetic fun toUrlBuilder$default (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/Url$Builder;
+	public static final fun toUrlBuilderOrNull (Ljava/lang/Object;)Lorg/dexpace/kuri/Url$Builder;
+	public static final fun toUrlBuilderOrNull (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;)Lorg/dexpace/kuri/Url$Builder;
+	public static synthetic fun toUrlBuilderOrNull$default (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/Url$Builder;
+	public static final fun toUrlOrNull (Ljava/lang/Object;)Lorg/dexpace/kuri/Url;
+	public static final fun toUrlOrNull (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;)Lorg/dexpace/kuri/Url;
+	public static synthetic fun toUrlOrNull$default (Ljava/lang/Object;Lorg/dexpace/kuri/bind/BindOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/Url;
+}
+
+public final class org/dexpace/kuri/bind/KuriBindException : java/lang/IllegalArgumentException {
+	public final fun getPath ()Ljava/lang/String;
+}
+
+public abstract interface annotation class org/dexpace/kuri/bind/Password : java/lang/annotation/Annotation {
+}
+
+public abstract interface annotation class org/dexpace/kuri/bind/Path : java/lang/annotation/Annotation {
+	public abstract fun value ()Ljava/lang/String;
+}
+
+public abstract interface annotation class org/dexpace/kuri/bind/PathTemplate : java/lang/annotation/Annotation {
+	public abstract fun value ()Ljava/lang/String;
+}
+
+public abstract interface annotation class org/dexpace/kuri/bind/Port : java/lang/annotation/Annotation {
+}
+
+public abstract interface annotation class org/dexpace/kuri/bind/Query : java/lang/annotation/Annotation {
+	public abstract fun value ()Ljava/lang/String;
+}
+
+public abstract interface annotation class org/dexpace/kuri/bind/QueryMap : java/lang/annotation/Annotation {
+}
+
+public abstract interface annotation class org/dexpace/kuri/bind/Scheme : java/lang/annotation/Annotation {
+}
+
+public abstract interface annotation class org/dexpace/kuri/bind/Uri : java/lang/annotation/Annotation {
+}
+
+public abstract interface annotation class org/dexpace/kuri/bind/Url : java/lang/annotation/Annotation {
+}
+
+public abstract interface annotation class org/dexpace/kuri/bind/UserInfo : java/lang/annotation/Annotation {
+}
+
+public abstract interface annotation class org/dexpace/kuri/bind/Username : java/lang/annotation/Annotation {
+}
+
