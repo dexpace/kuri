@@ -27,3 +27,10 @@ Supporting models live in the sibling packages: the sealed host model in
 [org.dexpace.kuri.host], the query-string model in [org.dexpace.kuri.query], and the
 [ParseResult][org.dexpace.kuri.error.ParseResult] outcome plus the structured error model in
 [org.dexpace.kuri.error].
+
+For working with one component rather than a whole reference, the engine's building blocks are also
+exposed as standalone facades: [Percent][org.dexpace.kuri.percent.Percent] for component
+percent-coding, [Idn][org.dexpace.kuri.idna.Idn] for UTS-46 host conversion, and
+[Schemes][org.dexpace.kuri.scheme.Schemes] for scheme facts (default port, special-ness, validity).
+There is no single facade type — start from [Uri] or [Url]; [Kuri.VERSION] reports the running
+release.

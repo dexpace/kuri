@@ -23,6 +23,8 @@
 [Two models](#two-models-one-engine) ·
 [Parsing and errors](#parsing-and-errors) ·
 [Building and resolving](#building-and-resolving) ·
+[Utilities](#utilities) ·
+[Recipes](#recipes) ·
 [Standards](#standards) ·
 [Conformance](#conformance) ·
 [Platforms](#platforms) ·
@@ -100,25 +102,20 @@ url.queryParameters.get("q")   // "1"
 url.toString()                 // "https://example.com/b?q=1#frag"
 ```
 
-From Java:
+The same read from Java — static factories, `()` accessors, no Kotlin-only syntax:
 
 ```java
 import org.dexpace.kuri.Url;
-import org.dexpace.kuri.error.ParseResult;
 
-// Happy path: unwrap the value, or throw UriSyntaxException on a bad input.
-Url url = Url.parse("https://example.com/a?b=1").getOrThrow();
-url.scheme();    // "https"
-url.hostName();  // "example.com"
+Url url = Url.parseOrThrow("https://Example.com:443/a/../b?q=1#frag");
 
-// Null-returning form, ergonomic from Java — no exception, no ParseResult branch.
-Url maybe = Url.parseOrNull("https://example.com/");   // a Url, or null on failure
-
-// Inspect the failure without throwing: read the human-readable message off the error.
-ParseResult<Url> result = Url.parse("://no-scheme");
-if (result instanceof ParseResult.Err) {
-    String reason = ((ParseResult.Err) result).getError().getMessage();
-}
+url.scheme();                    // "https"
+url.hostName();                  // "example.com"
+url.port();                      // null (Integer)  — the default :443 is elided
+url.effectivePort();             // 443
+url.pathSegments();              // ["b"]
+url.queryParameters().get("q");  // "1"
+url.toString();                  // "https://example.com/b?q=1#frag"
 ```
 
 ## Two models, one engine
@@ -132,6 +129,25 @@ if (result instanceof ParseResult.Err) {
 | Equality | structural, plus `normalizedEquals()` for RFC §6.2 | on the canonical serialization        |
 
 `Url.toUri()` is near-lossless; `Uri.toUrl()` may fail when a generic URI is not a valid web URL.
+
+**Which do I use?**
+
+- **`Url`** for WHATWG web URLs — `http` / `https` / `ws` / `wss` / `file`, the input a browser or
+  HTTP client hands you. It canonicalizes eagerly and always carries a scheme (and, for a special
+  scheme, a host).
+- **`Uri`** for RFC 3986 generic identifiers — `urn:`, `mailto:`, custom schemes, and relative
+  references. It preserves the input exactly and normalizes only when you ask, via `uri.normalized()`.
+
+A few accessors differ between the profiles by design; getting them wrong is a common trap:
+
+| Reading                    | `Uri` (RFC 3986)                     | `Url` (WHATWG)                                          |
+|----------------------------|--------------------------------------|--------------------------------------------------------|
+| `port`                     | preserved verbatim                   | `null` when elided **or** equal to the scheme default  |
+| port with no scheme default | `effectivePort()` → `null`          | `effectivePort` → `-1`                                 |
+| opaque origin              | —                                    | `origin` is the literal string `"null"`; test `hasOpaqueOrigin()` |
+
+Across both, `host` is the structured `Host` ADT and `hostName` is its serialized text; to render a
+`Host` you hold, call `host.asText()`.
 
 **Zone identifiers (RFC 6874).** IPv6 zone identifiers are off by default and opt-in on the `Uri` profile
 only — the `Url` (WHATWG) profile always rejects them. Enable them with a `ParseOptions`:
@@ -156,61 +172,217 @@ Iri.toUnicode(uri)      // "http://bücher.example/qué" — best-effort Unicode
 
 ## Parsing and errors
 
-Parsing returns a `ParseResult<T>` — errors are values, not exceptions — and you choose how to consume it:
+Parsing never throws: every `parse` returns a `ParseResult<T>` — errors are values — and you choose
+how to consume it.
 
 ```kotlin
-Url.parse(input)                 // ParseResult<Url>  (Ok / Err)
+Url.parse(input)                 // ParseResult<Url>  (Ok or Err)
+Url.parseOrNull(input)           // Url?
 Url.parseOrThrow(input)          // Url, or throws UriSyntaxException
-Url.parse(input).getOrNull()     // Url?
-Url.parse(input).getOrThrow()    // Url, or throws UriSyntaxException
 Url.canParse(input)              // Boolean
-Url.parse(input).fold(onOk = { it.host }, onErr = { it })
 ```
 
-`Err` carries a structured `UriParseError` with the offending offset and reason. Read
-`error.message` (Java `error.getMessage()`) for a human-readable rendering of the failure without
-throwing.
+`ParseResult` is a sealed type, so a `when` over it is exhaustive without an `else`, and the `Err`
+branch hands you the structured `UriParseError`:
+
+```kotlin
+import org.dexpace.kuri.error.ParseResult
+
+when (val result = Url.parse("https://example.com/")) {
+    is ParseResult.Ok -> result.value.hostName    // "example.com"
+    is ParseResult.Err -> result.error.message     // human-readable reason
+}
+```
+
+From Java, let the throwing factory raise `UriSyntaxException` and read the structured `error` off it
+(or branch on `result instanceof ParseResult.Err`):
+
+```java
+import org.dexpace.kuri.Url;
+import org.dexpace.kuri.error.UriSyntaxException;
+
+try {
+    Url.parseOrThrow("://no-scheme");   // throws on a malformed input
+} catch (UriSyntaxException e) {
+    e.getError();     // the structured UriParseError
+    e.getMessage();   // its human-readable rendering
+}
+```
+
+`getOrNull()` punts a failure to `null` from either language when you don't need the reason.
+
+Separately from fatal errors, `Url.validationErrors()` lists the non-fatal WHATWG anomalies a lenient
+parse silently repaired — a `\` read as `/`, a stripped tab — for linting or telemetry, never for
+control flow (a validation error never downgrades a successful parse).
 
 ## Building and resolving
 
-Values are immutable; builders produce new ones, and `newBuilder()` copies an existing value.
+Values are immutable. A `Builder` produces new ones, and `newBuilder()` returns a builder pre-filled
+from an existing value, so a **parse → modify → build** round-trip is clean:
 
 ```kotlin
-val url = Url.Builder()
+val url = Url.parseOrThrow("https://example.com/v1/users?page=1")
+    .newBuilder()
+    .addPathSegment("42")
+    .setQueryParameter("page", "2")
+    .build()                                  // https://example.com/v1/users/42?page=2
+```
+
+`build()` **throws** (`UriSyntaxException` or `IllegalArgumentException`) when the assembled components
+can't form a valid value — a special-scheme `Url` with no host, say. `buildOrNull()` is the
+non-throwing sibling for untrusted input:
+
+```kotlin
+Url.Builder().scheme("https").host("example.com").buildOrNull()  // https://example.com/  (a Url)
+Url.Builder().scheme("https").buildOrNull()                      // null — a special scheme needs a host
+```
+
+The same from Java — construct the builder with `new`, chain setters, and call `build()`:
+
+```java
+Url url = new Url.Builder()
     .scheme("https")
     .host("example.com")
     .addPathSegment("v1")
     .addPathSegment("users")
     .setQueryParameter("page", "2")
-    .build()                                  // https://example.com/v1/users?page=2
-
-val next = url.resolve("orgs").getOrThrow()   // https://example.com/v1/orgs
+    .build();                                 // https://example.com/v1/users?page=2
 ```
+
+`resolve` applies a reference to a base (RFC 3986 §5.2 / WHATWG); `resolveOrThrow` and `resolveOrNull`
+are the throwing and punning variants. `Uri.relativize` is the inverse (see [Recipes](#recipes)).
+
+```kotlin
+val base = Url.parseOrThrow("https://example.com/a/b")
+base.resolveOrThrow("../c")                   // https://example.com/c
+```
+
+For a single-component edit without a builder, both profiles offer copy-with helpers — `withPort`,
+`withFragment`, and `withoutFragment` — and predicates round out the surface: `Uri.isAbsolute()` /
+`Uri.isOpaquePath()` and `Url.isSpecial()`.
 
 The generic `Uri` preserves what you parsed and normalizes only when asked:
 
 ```kotlin
-val uri = Uri.parse("HTTP://Example.com/a/../b").getOrThrow()
+val uri = Uri.parseOrThrow("HTTP://Example.com/a/../b")
 uri.toString()                 // "HTTP://Example.com/a/../b"  — verbatim
 uri.normalized().toString()    // "http://example.com/b"       — RFC 3986 §6.2
 ```
 
-Query strings have their own immutable, duplicate-preserving model. `QueryParameters` reads decoded
-pairs; iterate them, look them up, or project to a map — and build a new query from a map or straight
-into a `Url`.
+## Utilities
+
+The parsing engine's building blocks are public as small facades, for when you need one component
+rather than a whole reference. All are `object`/`static` methods that read the same from Kotlin and
+Java.
+
+**Percent-coding.** `Percent.encode` escapes for a chosen component; `Percent.decode` is lenient (a
+malformed `%` is left verbatim) and total. `Component.COMPONENT` is the strict `encodeURIComponent`
+set; `PATH_SEGMENT` leaves `/` unescaped.
 
 ```kotlin
+import org.dexpace.kuri.percent.Percent
+
+Percent.encode("a b/c", Percent.Component.COMPONENT)    // "a%20b%2Fc"
+Percent.encode("/", Percent.Component.PATH_SEGMENT)     // "/"       — a slash is data in one segment
+Percent.decode("a%2Fb")                                 // "a/b"
+```
+
+**IDNA (UTS-46).** `Idn.toAscii` is fallible — it returns a `ParseResult` — while `Idn.toUnicode` is
+best-effort and total.
+
+```kotlin
+import org.dexpace.kuri.idna.Idn
+
+Idn.toAscii("bücher.example").getOrNull()   // "xn--bcher-kva.example"
+Idn.toUnicode("xn--bcher-kva.example")      // "bücher.example"
+```
+
+**Scheme facts.** Profile-independent, case-insensitive, and total.
+
+```kotlin
+import org.dexpace.kuri.scheme.Schemes
+
+Schemes.defaultPort("https")   // 443
+Schemes.defaultPort("file")    // null   — special, but portless
+Schemes.isSpecial("http2")     // false
+Schemes.isValid("mailto")      // true
+```
+
+The same three facades from Java are plain statics; `Kuri.VERSION` reports the running release (kuri
+has no facade type — start from `Url` or `Uri`):
+
+```java
+Percent.encode("a b/c", Percent.Component.COMPONENT);  // "a%20b%2Fc"
+Idn.toAscii("bücher.example").getOrNull();             // "xn--bcher-kva.example"
+Schemes.defaultPort("https");                          // 443 (Integer)
+String version = Kuri.VERSION;                          // e.g. "0.1.0-alpha.1"
+```
+
+## Recipes
+
+**Edit query parameters.** The builder edits follow `URLSearchParams`: `setQueryParameter` replaces,
+`addQueryParameter` appends (keeping duplicates), `removeAllQueryParameters` drops every match.
+
+```kotlin
+val url = Url.parseOrThrow("https://example.com/?a=1&a=2&b=3")
+    .newBuilder()
+    .setQueryParameter("a", "9")     // a=1, a=2  ->  a=9
+    .removeAllQueryParameters("b")
+    .build()                          // https://example.com/?a=9
+```
+
+Read the decoded pairs off a parsed value. `queryParameters` is duplicate-preserving; `get` returns
+the first value, and **`null` for both an absent name and a present name with no `=`** — use `has` or
+`getAll` to tell those apart.
+
+```kotlin
+val params = Url.parseOrThrow("https://h/?q=kotlin&q=jvm&flag").queryParameters
+params["q"]          // "kotlin"            — first value wins
+params.getAll("q")   // ["kotlin", "jvm"]
+params["flag"]       // null               — present, but has no '='...
+params.has("flag")   // true               — ...so check has()
+```
+
+The `Uri` profile computes its query on demand, so there it is a method — `uri.queryParameters()` —
+rather than a property.
+
+**Form encoding.** `toQueryString()` emits the generic `%20` dialect; `toFormUrlEncoded()` emits the
+HTML form dialect (space as `+`). `parse` reads a URL query; `parseForm` reads a form body. `of(Map)`
+collapses duplicate names, while `of(vararg QueryParameter)` preserves them.
+
+```kotlin
+import org.dexpace.kuri.query.QueryParameter
 import org.dexpace.kuri.query.QueryParameters
 
-val params = QueryParameters.parse("q=kotlin&page=2&q=jvm")
-params["q"]                     // "kotlin"          — first value wins
-params.has("page")              // true
-params.toMap()                  // {q=kotlin, page=2}  — first value per name
-for ((name, value) in params) { /* q→kotlin, page→2, q→jvm — duplicates preserved */ }
+val q = QueryParameters.of(QueryParameter("full name", "Ada Lovelace"))
+q.toQueryString()                                    // "full%20name=Ada%20Lovelace"
+q.toFormUrlEncoded()                                 // "full+name=Ada+Lovelace"
+QueryParameters.parseForm("a=b+c&a=d").getAll("a")   // ["b c", "d"]   — '+' decodes to space
+```
 
-// Build a query from a map, or set it straight onto a Url.
-QueryParameters.of(linkedMapOf("q" to "kotlin", "page" to "2")).toQueryString()  // "q=kotlin&page=2"
-Url.Builder().scheme("https").host("example.com").setQueryParameter("q", "kotlin").build()
+**Edit the path.** Add or replace decoded segments — each is percent-encoded for you. `path` is the
+decoded path; `encodedPath` is the raw one.
+
+```kotlin
+val uri = Uri.parseOrThrow("http://h/a/b/c")
+    .newBuilder()
+    .setPathSegment(1, "x y")        // the space is encoded
+    .build()
+uri.encodedPath      // "/a/x%20y/c"
+uri.path             // "/a/x y/c"          — decoded
+uri.fileName()       // "c"
+```
+
+**Relativize.** `Uri.relativize` inverts `resolve`: it returns a reference that resolves back to the
+target against the same base, or `null` when there is no relative form (a differing scheme or
+authority, or an opaque path on either side). `Url.relativize` is the same, returning a `String?`.
+
+```kotlin
+val base = Uri.parseOrThrow("http://h/a/b/")
+val rel = base.relativize(Uri.parseOrThrow("http://h/a/b/c/d"))
+    ?: error("no relative form")     // a relative Uri, or null when none resolves back
+rel.uriString                        // "c/d"
+base.resolveOrThrow(rel.uriString)   // http://h/a/b/c/d  — round-trips to the target
 ```
 
 ## Standards
@@ -353,8 +525,9 @@ After an intentional public-API change, regenerate and commit the API snapshot i
   percent-encoding matrix, the host pipeline, the parsing algorithm, reference resolution, the query model,
   normalization and equivalence semantics, and the error model that a conforming implementation must exhibit for each
   profile.
-- **API reference** — generated by [Dokka](https://kotlinlang.org/docs/dokka-introduction.html). Build the HTML site
-  with `./gradlew :kuri:dokkaGeneratePublicationHtml`; the output is written under `kuri/build/dokka/`.
+- **API reference** — once published, the full KDoc reference will be hosted at
+  [javadoc.io/doc/org.dexpace/kuri](https://javadoc.io/doc/org.dexpace/kuri). To browse it locally, build the
+  HTML site with `./gradlew :kuri:dokkaGeneratePublicationHtml` (output under `kuri/build/dokka/`).
 - [`CHANGELOG.md`](CHANGELOG.md) — notable changes per release, in Keep a Changelog format.
 - [`SECURITY.md`](SECURITY.md) — supported versions and how to report a vulnerability privately.
 

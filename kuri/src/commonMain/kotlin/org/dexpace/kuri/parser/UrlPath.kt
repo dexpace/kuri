@@ -130,3 +130,60 @@ internal fun splitUriPath(path: String): UrlPath.Segments =
         path.startsWith(URI_PATH_SEPARATOR) -> UrlPath.Segments(path.substring(1).split('/'), rooted = true)
         else -> UrlPath.Segments(path.split('/'), rooted = false)
     }
+
+/**
+ * The "file name" of decoded path [segments]: the last non-empty segment, or `""` when there is
+ * none (SPEC §3.3). Shared by the `Uri`/`Url` `fileName()` projections.
+ *
+ * A trailing empty segment (a trailing `/`, e.g. `["a", ""]`) is skipped, so both `["a", "b"]` and
+ * `["a", "b", ""]` yield `"b"`; an empty, root-only, or all-empty segment list yields `""`.
+ */
+internal fun fileNameOf(segments: List<String>): String = segments.lastOrNull { it.isNotEmpty() } ?: ""
+
+/**
+ * The extension of a decoded file [name]: the text after its last interior `.`, or `""` when it has
+ * none (SPEC §3.3). Shared by the `Uri`/`Url` `fileExtension()` projections.
+ *
+ * A leading dot marks a dotfile (`".bashrc"` → `""`, `"..gz"` → `""`) and a trailing dot leaves
+ * nothing after it (`"file."` → `""`); `"archive.tar.gz"` yields `"gz"`.
+ */
+internal fun fileExtensionOf(name: String): String {
+    val dot = name.lastIndexOf('.')
+    if (dot <= 0 || dot >= name.length - 1) return ""
+    // A name whose entire stem before the last dot is itself dots (e.g. "..gz") is a dotfile with no
+    // real base name, so it has no extension — the same rule as the single leading dot in ".gz".
+    val hasNonDotStem = (0 until dot).any { name[it] != '.' }
+    return if (hasNonDotStem) name.substring(dot + 1) else ""
+}
+
+/**
+ * Appends the '/'-separated [input] onto [current] as decoded path segments (OkHttp
+ * `HttpUrl.Builder.addPathSegments` semantics), encoding each piece with [encode].
+ *
+ * Every '/' delimits a segment, so an interior or doubled '/' is preserved as a genuine empty
+ * segment (`"a//b"` -> `["a", "", "b"]`) rather than collapsed, and a trailing '/' opens a slot the
+ * next appended segment fills — so appending onto a directory-style path (`["x", ""]`) fills the
+ * slot (`+"a"` -> `["x", "a"]`) instead of doubling it. A leading empty on a from-scratch path is
+ * dropped by the caller, since a rootless path cannot begin with an empty segment.
+ */
+internal fun appendPathSegments(
+    current: List<String>,
+    input: String,
+    encode: (String) -> String,
+): List<String> {
+    val result = current.toMutableList()
+    var offset = 0
+    while (offset <= input.length) {
+        val slash = input.indexOf('/', offset)
+        val end = if (slash < 0) input.length else slash
+        val piece = encode(input.substring(offset, end))
+        if (result.isNotEmpty() && result.last().isEmpty()) {
+            result[result.lastIndex] = piece
+        } else {
+            result.add(piece)
+        }
+        if (end < input.length) result.add("")
+        offset = end + 1
+    }
+    return result
+}

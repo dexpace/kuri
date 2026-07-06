@@ -43,10 +43,16 @@ internal object FormUrlEncoded {
      * Joins pairs with `&`, emits `name=value`, and encodes each octet over UTF-8: space becomes
      * `+`, ASCII alphanumerics and `* - . _` pass through, and every other octet becomes `%XX`.
      * Thus literal `+` -> `%2B`, `&` -> `%26`, `=` -> `%3D`.
+     *
+     * The value is `String?` so this bridges the generic query model, whose no-`=` sentinel is `null`.
+     * The `=` is always emitted, matching the WHATWG form serializer, which joins name and value with
+     * `=` unconditionally: a `null` value serializes as an empty value (`name=`), which the form parser
+     * reads back as that same empty value, so the round-trip is stable. Only the generic query
+     * serializer (`toQueryString`) preserves the no-`=` sentinel.
      */
-    internal fun serialize(pairs: List<Pair<String, String>>): String =
+    internal fun serialize(pairs: List<Pair<String, String?>>): String =
         pairs.joinToString(PAIR_DELIMITER) { (name, value) ->
-            encodeComponent(name) + NAME_VALUE_DELIMITER + encodeComponent(value)
+            encodeComponent(name) + NAME_VALUE_DELIMITER + encodeComponent(value.orEmpty())
         }
 
     /** Splits a non-empty segment on its first `=` and decodes both sides ([QUERY-21]). */

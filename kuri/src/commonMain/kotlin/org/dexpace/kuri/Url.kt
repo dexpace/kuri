@@ -6,17 +6,23 @@ package org.dexpace.kuri
 
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriSyntaxException
-import org.dexpace.kuri.error.fold
+import org.dexpace.kuri.error.ValidationError
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.host.serialize
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.UrlParser
 import org.dexpace.kuri.parser.UrlPath
+import org.dexpace.kuri.parser.appendPathSegments
+import org.dexpace.kuri.parser.fileExtensionOf
+import org.dexpace.kuri.parser.fileNameOf
+import org.dexpace.kuri.parser.splitUriPath
+import org.dexpace.kuri.parser.toUriPathString
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSet
 import org.dexpace.kuri.percent.PercentEncodeSets
 import org.dexpace.kuri.query.QueryParameters
+import org.dexpace.kuri.query.editQuery
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.serialize.Serializer
 import kotlin.jvm.JvmName
@@ -67,6 +73,11 @@ private val BLOB_INNER_ORIGIN_SCHEMES: Set<String> = setOf("http", "https", FILE
  * Equality and hashing are defined over the canonical [href]; no DNS resolution or other
  * I/O occurs, so a `Url` is a safe `Map`/`Set` key.
  *
+ * Because a `Url` is eager-canonical, [equals] over the already-normalized [href] is the
+ * `Url`-profile analogue of [Uri.normalizedEquals]: there is no separate `normalized()` step to
+ * apply. IPv6 zone identifiers are a `Uri`-profile feature only — the WHATWG host parser rejects
+ * them — so `Url` exposes no `allowIpv6ZoneId` option.
+ *
  * @sample org.dexpace.kuri.Url.Companion.parse
  */
 @Suppress("TooManyFunctions") // Mirrors the WHATWG/okhttp accessor surface; each member is a thin projection.
@@ -103,7 +114,13 @@ public class Url internal constructor(
     public val hostName: String?
         get() = components.host?.serialize()
 
-    /** The explicit port, or `null` when elided or equal to the scheme default. */
+    /**
+     * The explicit port, or `null` when the port was elided or equals the scheme default.
+     *
+     * A `null` here collapses two cases the WHATWG parser treats alike: no port was written, and a
+     * port written but equal to the scheme's default (which canonicalization drops). Use
+     * [effectivePort] for the port a consumer should actually connect to.
+     */
     @get:JvmName("port")
     public val port: Int?
         get() = components.port
@@ -111,8 +128,8 @@ public class Url internal constructor(
     /**
      * The port a consumer should connect to: the explicit [port], else the scheme default.
      *
-     * @return the stated or default port, or [NO_DEFAULT_PORT] (`-1`) when the scheme has no default
-     *   (a non-special scheme, or `file`); the only case the caller must treat as "no port".
+     * @return the stated or default port, or `-1` when the scheme has no default (a non-special
+     *   scheme, or `file`); `-1` is the only value the caller must treat as "no port".
      */
     @get:JvmName("effectivePort")
     public val effectivePort: Int
@@ -132,7 +149,12 @@ public class Url internal constructor(
     public val encodedPath: String
         get() = serializeEncodedPath()
 
-    /** The raw encoded query without its leading `?`, or `null` when no `?` was present. */
+    /**
+     * The raw encoded query without its leading `?`, or `null` when no `?` was present.
+     *
+     * `null` (no `?`) stays distinct from `""` (a `?` with nothing after it): `http://h/` has a
+     * `null` query, `http://h/?` an empty one.
+     */
     @get:JvmName("query")
     public val query: String?
         get() = components.query
@@ -140,9 +162,14 @@ public class Url internal constructor(
     /** A decoded, immutable snapshot of the query's `name=value` pairs; never live. */
     @get:JvmName("queryParameters")
     public val queryParameters: QueryParameters
-        get() = components.query?.let { QueryParameters.parse(it) } ?: QueryParameters(emptyList())
+        get() = QueryParameters.parseOrEmpty(components.query)
 
-    /** The raw encoded fragment without its leading `#`, or `null` when no `#` was present. */
+    /**
+     * The raw encoded fragment without its leading `#`, or `null` when no `#` was present.
+     *
+     * `null` (no `#`) stays distinct from `""` (a `#` with nothing after it): `http://h/` has a
+     * `null` fragment, `http://h/#` an empty one.
+     */
     @get:JvmName("fragment")
     public val fragment: String?
         get() = components.fragment
@@ -160,10 +187,13 @@ public class Url internal constructor(
     /**
      * The ASCII serialization of this URL's WHATWG origin (§11.6).
      *
-     * Three cases apply: a **tuple origin** `scheme://host[:port]` (port only when non-null, userinfo
-     * never included) for a special scheme other than `file`; for a `blob:` URL, the origin of the URL
-     * parsed from its path when that inner scheme is `http`/`https`/`file`, otherwise opaque; and an
-     * **opaque origin** for `file:` and every non-special scheme, serialized as the literal `"null"`.
+     * **Trap:** for an opaque origin this returns the literal string `"null"` — the four characters
+     * `n`, `u`, `l`, `l`, not a `null` reference. An opaque origin arises for `file:` and every
+     * non-special scheme; test [hasOpaqueOrigin] rather than comparing against `null`.
+     *
+     * Otherwise it is a **tuple origin** `scheme://host[:port]` (the port only when non-null; userinfo
+     * is never included) for a special scheme other than `file`; and, for a `blob:` URL, the origin of
+     * the URL parsed from its path when that inner scheme is `http`/`https`/`file`, otherwise opaque.
      * The origin is a derived projection, not stored, and is not guaranteed to round-trip.
      */
     @get:JvmName("origin")
@@ -175,17 +205,45 @@ public class Url internal constructor(
                 else -> OPAQUE_ORIGIN
             }
 
+    /**
+     * True when this URL's [origin] is opaque — i.e. [origin] is the literal string `"null"`.
+     *
+     * The reliable opaque-origin test: [origin] is the four-character string `"null"` (not a `null`
+     * reference) for a `file:` URL and every non-special scheme, so this predicate detects that case
+     * without a caller comparing [origin] against that sentinel by hand. Its answer is derived from
+     * [origin] directly — the single classification source — so the two can never drift apart.
+     *
+     * @return `true` iff [origin] serializes to the opaque `"null"`.
+     */
+    public fun hasOpaqueOrigin(): Boolean = origin == OPAQUE_ORIGIN
+
     /** Cached canonical serialization, computed once (permits caching an immutable value). */
     private val canonicalHref: String by lazy { Serializer.serialize(components, ParseProfile.URL) }
 
     /**
      * The canonical serialized URL; the basis of [toString], [equals], and [hashCode].
      *
-     * Equal to [toString].
+     * Equal to [toString]. This is the `Url`-profile counterpart of [Uri.uriString]; because a `Url`
+     * is eager-canonical, [href] is already normalized, so no separate normalized form is exposed.
+     *
+     * @see Uri.uriString
      */
     @get:JvmName("href")
     public val href: String
         get() = canonicalHref
+
+    /**
+     * The WHATWG non-fatal validation warnings recorded while parsing this URL (§12.3).
+     *
+     * WHATWG parsing is a lenient repair process: it accepts and silently corrects inputs a strict
+     * reader would reject (a `\` read as `/`, a missing authority slash, an out-of-set code point),
+     * and records each correction as a [ValidationError] without failing the parse. The list is
+     * ordered by first occurrence and empty for a fully conformant input; it is useful for linting or
+     * telemetry, never for control flow (a validation error never downgrades a successful parse).
+     *
+     * @return a read-only, ordered copy of the validation warnings; empty for a clean parse.
+     */
+    public fun validationErrors(): List<ValidationError> = components.validationErrors.toList()
 
     /**
      * Returns a [Builder] pre-filled with this URL's components, for producing a modified copy.
@@ -198,10 +256,36 @@ public class Url internal constructor(
     /**
      * Resolves [reference] against this URL as its base (SPEC §9; WHATWG basic URL parser with base).
      *
+     * `url.resolve(ref)` is exactly `Url.parse(ref, base = url)`; `resolve` is the canonical spelling
+     * for the base-relative operation. Use [resolveOrNull]/[resolveOrThrow] for the punned/throwing
+     * variants.
+     *
      * @param reference the (possibly relative) reference to resolve.
      * @return [ParseResult.Ok] with the resolved [Url], or [ParseResult.Err] when resolution fails.
      */
     public fun resolve(reference: String): ParseResult<Url> = parse(reference, this)
+
+    /**
+     * Resolves [reference] against this URL, punning a resolution failure to `null` (SPEC §9).
+     *
+     * The `null`-returning counterpart of [resolve], equivalent to `resolve(reference).getOrNull()`.
+     *
+     * @param reference the (possibly relative) reference to resolve.
+     * @return the resolved [Url], or `null` when [reference] does not resolve to a valid URL.
+     */
+    public fun resolveOrNull(reference: String): Url? = resolve(reference).getOrNull()
+
+    /**
+     * Resolves [reference] against this URL, throwing when resolution fails (SPEC §9).
+     *
+     * The throwing counterpart of [resolve], equivalent to `resolve(reference).getOrThrow()`; the
+     * thrown [UriSyntaxException.error] is the same structured error [resolve] would report.
+     *
+     * @param reference the (possibly relative) reference to resolve.
+     * @return the resolved [Url].
+     * @throws UriSyntaxException when [reference] does not resolve to a valid URL.
+     */
+    public fun resolveOrThrow(reference: String): Url = resolve(reference).getOrThrow()
 
     /**
      * Converts this WHATWG URL to a generic RFC 3986 [Uri] (SPEC §11.5; profile bridge).
@@ -214,6 +298,106 @@ public class Url internal constructor(
      * @return the equivalent generic [Uri].
      */
     public fun toUri(): Uri = Uri.parse(href).getOrThrow()
+
+    /**
+     * Computes a relative reference that [resolve]s back to [target], or `null` when the two share no
+     * origin — the inverse of [resolve] (SPEC §9; RFC 3986 §5.3).
+     *
+     * Relativization only succeeds within a single origin: when [target] has the same scheme and
+     * authority as this URL, the result is the shortest relative-reference string (path, query, and
+     * fragment) for which `this.resolve(result)` yields [target]. When they differ in scheme or
+     * authority — or [target] is otherwise not reachable as a relative suffix of this URL's path —
+     * there is no relative form and the result is `null` (mirroring the Rust `url` crate's
+     * `make_relative`). Delegates to [Uri.relativize] over the profile-bridged [toUri] values, so the
+     * RFC 3986 dot-segment semantics apply, then re-verifies the candidate under this profile's own
+     * (WHATWG) [resolve] — returning `null` rather than a reference that would not reproduce [target]
+     * where the two resolution algorithms differ.
+     *
+     * @param target the absolute URL to express relative to this one.
+     * @return the relative-reference string that resolves to [target], or `null` when none does.
+     */
+    public fun relativize(target: Url): String? {
+        val relative = toUri().relativize(target.toUri()) ?: return null
+        val reference = relative.toString()
+        return if (resolveOrNull(reference) == target) reference else null
+    }
+
+    /**
+     * True when this URL's [scheme] is one of the six WHATWG special schemes (SPEC §6.1.1).
+     *
+     * The special schemes are `http`, `https`, `ws`, `wss`, `ftp`, and `file`; special-ness governs
+     * host parsing, the `\`-as-`/` rule, and default-port handling. `file` is special yet portless, so
+     * [effectivePort] can still be `-1` for a special URL.
+     *
+     * @return `true` iff [scheme] is a special scheme.
+     */
+    public fun isSpecial(): Boolean = Scheme.isSpecial(scheme)
+
+    /**
+     * The last non-empty decoded path segment, or `""` when the path has none (SPEC §3.3).
+     *
+     * The "file name" of the path: `http://h/a/b.txt` yields `b.txt`, and a directory-style path
+     * ending in `/` (`http://h/a/`) skips the trailing empty segment to yield `a`. Empty for a path
+     * that is empty, `/`, or made only of empty segments. An opaque path (a non-special scheme such
+     * as `mailto:` or `foo:bar/baz`) has no hierarchical file name, so it too returns `""`.
+     *
+     * Because the segment is percent-decoded, a source segment holding an encoded `/` (`%2F`) yields
+     * a name containing a literal `/` — e.g. `http://h/docs/a%2Fb.txt` returns `"a/b.txt"` — so a
+     * caller must not use the result directly as a filesystem name without its own sanitization.
+     *
+     * @return the last non-empty decoded segment, or `""` when there is none or the path is opaque.
+     */
+    public fun fileName(): String = if (components.path is UrlPath.Opaque) "" else fileNameOf(pathSegments)
+
+    /**
+     * The extension of [fileName]: the text after its last `.`, or `""` when it has none (SPEC §3.3).
+     *
+     * Derived purely from [fileName]: `photo.jpeg` yields `jpeg` and `archive.tar.gz` yields `gz`. A
+     * name with no interior dot has no extension — a leading dot marks a dotfile (`.bashrc` -> `""`)
+     * and a trailing dot leaves nothing after it (`file.` -> `""`).
+     *
+     * @return the decoded extension without its leading `.`, or `""` when [fileName] has none.
+     */
+    public fun fileExtension(): String = fileExtensionOf(fileName())
+
+    /**
+     * Returns a copy of this URL with its explicit [port] set (or elided when `null`).
+     *
+     * A convenience for `newBuilder().port(port).build()`. Only the port changes, so a value obtained
+     * from [parse] always rebuilds; a port outside `0..65535` is a programmer error, not a parse
+     * failure. When a port cannot attach — a URL with no host, an empty host, or the `file` scheme
+     * (which never carries a port) — the receiver is returned unchanged, matching WHATWG's port setter.
+     *
+     * @param port a port in `0..65535`, or `null` to elide it (so [effectivePort] falls back to the default).
+     * @return a new [Url] identical to this one but for its port, or this URL unchanged when a port
+     *   cannot attach.
+     * @throws IllegalArgumentException when [port] is outside `0..65535` and a port can attach.
+     */
+    public fun withPort(port: Int?): Url {
+        if (host == null || host == Host.Empty || scheme.equals(FILE_SCHEME, ignoreCase = true)) return this
+        return newBuilder().port(port).build()
+    }
+
+    /**
+     * Returns a copy of this URL with its [fragment] set (or removed when `null`).
+     *
+     * A convenience for `newBuilder().fragment(fragment).build()`. A non-`null` `""` keeps a present-
+     * but-empty fragment (a trailing `#`); `null` drops the `#` entirely. Only the fragment changes,
+     * so a value obtained from [parse] always rebuilds and this never throws.
+     *
+     * @param fragment the encoded fragment without its leading `#`, or `null` to remove it.
+     * @return a new [Url] identical to this one but for its fragment.
+     */
+    public fun withFragment(fragment: String?): Url = newBuilder().fragment(fragment).build()
+
+    /**
+     * Returns a copy of this URL with its fragment removed (the `#` dropped entirely).
+     *
+     * Shorthand for `withFragment(null)`; a URL that already had no fragment is unchanged in value.
+     *
+     * @return a new [Url] with no fragment.
+     */
+    public fun withoutFragment(): Url = withFragment(null)
 
     /** The canonical [href]; a parsed `Url` round-trips through `toString` then [parse]. */
     override fun toString(): String = href
@@ -349,6 +533,9 @@ public class Url internal constructor(
 
         /** True while [encodedPath] was assembled from empty by segment appends; its rooting is decided at [build]. */
         private var isSegmentBuiltPath: Boolean = false
+
+        /** True when a segment edit emptied a rootless path's first segment, which would re-root it. */
+        private var rootlessPathReRooted: Boolean = false
         private var encodedQuery: String? = null
         private var encodedFragment: String? = null
 
@@ -410,6 +597,18 @@ public class Url internal constructor(
         }
 
         /**
+         * Sets the host from a structured [Host], rendering it to its canonical authority text.
+         *
+         * A convenience over [host] (`String`): the [Host] is serialized with [Host.asText] and then
+         * re-validated and re-canonicalized by the host pipeline at [build], so a host taken from one
+         * URL transfers to another without a manual round-trip through text.
+         *
+         * @param host the structured host to set.
+         * @return this builder, for chaining.
+         */
+        public fun host(host: Host): Builder = host(host.asText())
+
+        /**
          * Sets or clears the explicit port.
          *
          * @param port a port in `0..65535`, or `null` to elide it.
@@ -429,6 +628,7 @@ public class Url internal constructor(
         public fun encodedPath(encodedPath: String): Builder {
             this.encodedPath = encodedPath
             isSegmentBuiltPath = false // a verbatim path owns its own (root or rootless) shape.
+            rootlessPathReRooted = false
             return this
         }
 
@@ -481,6 +681,80 @@ public class Url internal constructor(
         public fun addEncodedPathSegment(segment: String): Builder = pushSegment(segment)
 
         /**
+         * Appends each `/`-separated piece of [path] as one decoded segment (OkHttp
+         * `HttpUrl.Builder.addPathSegments`).
+         *
+         * Every `/` delimits a segment, so each piece is percent-encoded (a `/` only ever separates
+         * segments and never appears inside one; only `/` separates here — a `\` is treated as data and
+         * encoded, unlike the parser's special-scheme `\`-as-`/` handling) and every empty piece is
+         * preserved as a genuine empty segment: an interior or doubled `/` yields one
+         * (`"a//b"` -> `["a", "", "b"]`) and a trailing `/` yields a trailing empty
+         * (`"a/b/"` -> `["a", "b", ""]`). Appending onto a directory-style path (one ending in `/`)
+         * fills that trailing slot rather than doubling it, so `newBuilder()` of `https://h/x/` plus
+         * `"a"` builds `https://h/x/a`. When a path is built from scratch a leading `/` is ignored, since
+         * a rootless path cannot begin with an empty segment; the root `/` is still added at [build] iff
+         * the value has a [host].
+         *
+         * @param path the `/`-separated decoded path to append.
+         * @return this builder, for chaining.
+         */
+        public fun addPathSegments(path: String): Builder {
+            val startedEmpty = encodedPath.isEmpty()
+            val current = splitUriPath(encodedPath)
+            var merged =
+                appendPathSegments(current.segments, path) {
+                    PercentCodec.encode(it, URL_PATH_SEGMENT_ENCODE_SET)
+                }
+            val rooted: Boolean
+            if (startedEmpty) {
+                // A path built from scratch is stored rootless (rooted at build under a host); a rootless
+                // path cannot begin with an empty segment, so a leading '/' in the input is dropped.
+                merged = merged.dropWhile { it.isEmpty() }
+                isSegmentBuiltPath = true
+                rooted = false
+            } else {
+                rooted = current.rooted
+            }
+            rootlessPathReRooted = false
+            encodedPath = UrlPath.Segments(merged, rooted).toUriPathString()
+            return this
+        }
+
+        /**
+         * Replaces the decoded path segment at [index] with [segment], percent-encoding it.
+         *
+         * Segment positions are those of [Url.pathSegments]: for `http://h/a/b/c`, index `0` is `a`.
+         * [segment] is encoded like [addPathSegment] (any `/`, `\`, or `%` escaped) so it stays a
+         * single segment, and the path keeps its existing rooted/rootless shape: an edit that would
+         * empty a rootless path's first segment — re-rooting it into an unrepresentable shape — is
+         * rejected at [build] ([build] throws, [buildOrNull] returns `null`) rather than silently
+         * changing the path.
+         *
+         * @param index the zero-based segment position to replace.
+         * @param segment the decoded replacement segment.
+         * @return this builder, for chaining.
+         * @throws IndexOutOfBoundsException when [index] is negative or `>=` the current segment count.
+         */
+        public fun setPathSegment(
+            index: Int,
+            segment: String,
+        ): Builder = replaceSegments(index) { it[index] = PercentCodec.encode(segment, URL_PATH_SEGMENT_ENCODE_SET) }
+
+        /**
+         * Removes the path segment at [index], preserving the order of the rest.
+         *
+         * Segment positions are those of [Url.pathSegments]. Removing the only segment of a rooted path
+         * leaves the root `/`; the path keeps its existing rooted/rootless shape otherwise. As with
+         * [setPathSegment], an edit that would empty a rootless path's first segment (re-rooting it) is
+         * rejected at [build] ([build] throws, [buildOrNull] returns `null`).
+         *
+         * @param index the zero-based segment position to remove.
+         * @return this builder, for chaining.
+         * @throws IndexOutOfBoundsException when [index] is negative or `>=` the current segment count.
+         */
+        public fun removePathSegment(index: Int): Builder = replaceSegments(index) { it.removeAt(index) }
+
+        /**
          * Sets or clears the raw encoded query (without its leading `?`).
          *
          * @param query the encoded query, or `null` to drop the `?` entirely.
@@ -493,22 +767,46 @@ public class Url internal constructor(
         /**
          * Replace-first/remove-rest sets the query parameter [name] to [value].
          *
+         * The first pair named [name] takes [value] in place, every later pair named [name] is
+         * removed, and a pair is appended when none had the name; use [addQueryParameter] to keep
+         * duplicates instead. The re-serialized query is written back through [query].
+         *
          * @param name the decoded parameter name.
          * @param value the decoded parameter value, or `null` for a name with no `=`.
+         * @return this builder, for chaining.
          */
         public fun setQueryParameter(
             name: String,
             value: String?,
-        ): Builder {
-            val current = encodedQuery?.let { QueryParameters.parse(it) } ?: QueryParameters(emptyList())
-            encodedQuery =
-                current
-                    .newBuilder()
-                    .set(name, value)
-                    .build()
-                    .toQueryString()
-            return this
-        }
+        ): Builder = query(editQuery(encodedQuery, emptyBecomesNull = true) { it.set(name, value) })
+
+        /**
+         * Appends the query parameter [name] = [value] after any existing pairs, preserving duplicates.
+         *
+         * Unlike [setQueryParameter], this never replaces or removes a same-named pair, so it can build
+         * a multi-valued query (`?a=1&a=2`). The re-serialized query is written back through [query].
+         *
+         * @param name the decoded parameter name.
+         * @param value the decoded parameter value, or `null` for a name with no `=`.
+         * @return this builder, for chaining.
+         */
+        public fun addQueryParameter(
+            name: String,
+            value: String?,
+        ): Builder = query(editQuery(encodedQuery, emptyBecomesNull = true) { it.add(name, value) })
+
+        /**
+         * Removes every query parameter named [name], keeping the order of the rest (SPEC §10.3.2).
+         *
+         * A no-op when no pair carries [name]. When the last pair is removed the query becomes absent
+         * (the `?` is dropped), matching a builder that never set a query; call `query("")` to keep a
+         * present-but-empty query instead.
+         *
+         * @param name the decoded parameter name to remove, matched case-sensitively.
+         * @return this builder, for chaining.
+         */
+        public fun removeAllQueryParameters(name: String): Builder =
+            query(editQuery(encodedQuery, emptyBecomesNull = true) { it.removeAll(name) })
 
         /**
          * Sets or clears the raw encoded fragment (without its leading `#`).
@@ -532,17 +830,48 @@ public class Url internal constructor(
          */
         public fun build(): Url {
             val path = effectivePath()
-            require(host != null || !Scheme.isSpecial(scheme) || scheme.equals(FILE_SCHEME, ignoreCase = true)) {
+            require(hasRequiredHost()) {
                 "a special scheme requires a host: set host(...) before build(): $scheme"
             }
-            require(host == null || path.isEmpty() || path.startsWith(SLASH)) {
+            require(pathMatchesAuthority(path)) {
                 "a path with an authority must be empty or start with '/': $path"
             }
-            return UrlParser.parse(recompose(path)).fold(
-                onOk = { Url(it) },
-                onErr = { throw UriSyntaxException(it) },
-            )
+            require(pathAllowedWithoutAuthority(path)) {
+                "an authority-less path cannot begin with '//': $path"
+            }
+            require(segmentPathWellFormed()) {
+                "a rootless path cannot begin with an empty segment; the edit would re-root it: $encodedPath"
+            }
+            return buildResult(path).getOrThrow()
         }
+
+        /**
+         * Recomposes the accumulated components into a canonical [Url], or `null` when they cannot
+         * form one.
+         *
+         * The non-throwing counterpart of [build]: every condition [build] would signal with an
+         * exception — a special (non-`file`) scheme with no [host], an authority paired with a
+         * rootless path, or a recomposed string the engine rejects — instead yields `null`. It never
+         * throws.
+         *
+         * @return the canonical [Url] for the assembled components, or `null` when they do not form a
+         *   valid URL.
+         */
+        public fun buildOrNull(): Url? {
+            val path = effectivePath()
+            if (!isComposable(path)) return null
+            return buildResult(path).getOrNull()
+        }
+
+        /**
+         * Recomposes [path] with the accumulated components and re-parses it through the `Url` engine.
+         *
+         * The single recompose→parse projection [build] and [buildOrNull] share. Given a [path] it is
+         * total — it never throws — so [buildOrNull] projecting it with [ParseResult.getOrNull] cannot
+         * throw once the host/authority gate has passed, while [build] projects it with
+         * [ParseResult.getOrThrow] to surface a parse failure as [UriSyntaxException].
+         */
+        private fun buildResult(path: String): ParseResult<Url> = UrlParser.parse(recompose(path)).map { Url(it) }
 
         /**
          * Appends [encodedSegment] at the path's segment boundary; rooting is deferred to
@@ -560,6 +889,7 @@ public class Url internal constructor(
                     "(found '${encodedSegment[delimiter]}' at index $delimiter): $encodedSegment"
             }
             if (encodedPath.isEmpty()) isSegmentBuiltPath = true
+            rootlessPathReRooted = false // appending fresh content supersedes any prior re-root flag.
             if (encodedPath.isNotEmpty() && !encodedPath.endsWith(SLASH)) encodedPath += SLASH
             encodedPath += encodedSegment
             check(encodedPath.endsWith(encodedSegment)) { "the pushed segment must terminate the path" }
@@ -573,9 +903,21 @@ public class Url internal constructor(
          */
         private fun effectivePath(): String {
             if (!isSegmentBuiltPath || host == null) return encodedPath
-            check(!encodedPath.startsWith(SLASH)) { "a segment-built path is stored rootless: $encodedPath" }
             return SLASH + encodedPath
         }
+
+        /**
+         * True unless a rootless path has been corrupted into a rooted shape.
+         *
+         * Two edits can do this. A path assembled from [addPathSegment]/[setPathSegment] is stored
+         * rootless (rooting is added at [effectivePath] only under a host); setting its segment `0` to
+         * `""` re-serializes it with a leading `/`, the [isSegmentBuiltPath] case. Independently, a
+         * *parsed* rootless path (from [newBuilder]) whose first segment a segment edit empties is
+         * caught by [rootlessPathReRooted]. Either way the result re-parses as a *rooted* path — an
+         * unrepresentable rootless shape — so this rejects both.
+         */
+        private fun segmentPathWellFormed(): Boolean =
+            !rootlessPathReRooted && (!isSegmentBuiltPath || !encodedPath.startsWith(SLASH))
 
         /** Recomposes a parseable URL string from the accumulated components. */
         private fun recompose(path: String): String {
@@ -599,6 +941,51 @@ public class Url internal constructor(
             }
             sb.append(authorityHost)
             if (port != null) sb.append(':').append(port)
+        }
+
+        /** True when a host is present or the scheme does not require one (`file`, or any non-special scheme). */
+        private fun hasRequiredHost(): Boolean =
+            host != null || !Scheme.isSpecial(scheme) || scheme.equals(FILE_SCHEME, ignoreCase = true)
+
+        /** True when [path] is compatible with the authority state: empty or rooted whenever a host is set. */
+        private fun pathMatchesAuthority(path: String): Boolean =
+            host == null || path.isEmpty() || path.startsWith(SLASH)
+
+        /**
+         * True unless an authority-less path begins with `//` (RFC 3986 §3.3): a host-less `//`-leading
+         * path would re-parse with its `//` read as an authority, so it cannot be represented.
+         */
+        private fun pathAllowedWithoutAuthority(path: String): Boolean = host != null || !path.startsWith("//")
+
+        /** True iff [build] would pass its composability requires for [path] without throwing; for [buildOrNull]. */
+        private fun isComposable(path: String): Boolean =
+            hasRequiredHost() &&
+                pathMatchesAuthority(path) &&
+                pathAllowedWithoutAuthority(path) &&
+                segmentPathWellFormed()
+
+        /**
+         * Splits the current path into segments, applies [edit] to the mutable list at the
+         * bounds-checked [index], and rewrites [encodedPath] from the result; the rooted-vs-rootless
+         * shape is preserved (a rootless segment-built path stays rootless, still rooted at [build]
+         * under a host).
+         */
+        private fun replaceSegments(
+            index: Int,
+            edit: (MutableList<String>) -> Unit,
+        ): Builder {
+            val current = splitUriPath(encodedPath)
+            val segments = current.segments.toMutableList()
+            if (index !in segments.indices) {
+                throw IndexOutOfBoundsException("path segment index $index out of bounds for size ${segments.size}")
+            }
+            edit(segments)
+            // A rootless path whose first segment becomes empty serializes with a leading '/', which re-parses
+            // as a rooted path — the same unrepresentable shape the from-scratch builder rejects. Flag it so
+            // build() throws and buildOrNull() returns null instead of silently re-rooting the path.
+            rootlessPathReRooted = !current.rooted && segments.firstOrNull()?.isEmpty() == true
+            encodedPath = UrlPath.Segments(segments, current.rooted).toUriPathString()
+            return this
         }
     }
 }

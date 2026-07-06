@@ -151,24 +151,25 @@ class UriBuilderTest {
     }
 
     @Test
-    fun `a leading double slash is guarded when there is no authority`() {
-        val uri = Uri.Builder().encodedPath("//not-authority").build()
+    fun `a leading double slash without an authority is rejected`() {
+        // An authority-less absolute path may not begin with '//' (RFC 3986 §3.3): the leading '//'
+        // would re-parse as an authority, so the builder rejects it rather than silently guarding it.
+        val builder = Uri.Builder().encodedPath("//not-authority")
 
-        assertNull(uri.host)
-        assertEquals("/.//not-authority", uri.uriString)
+        assertNull(builder.buildOrNull())
+        assertFailsWith<IllegalArgumentException> { builder.build() }
     }
 
     @Test
-    fun `a leading double slash is guarded even with a scheme present`() {
-        val uri =
+    fun `a leading double slash without an authority is rejected even with a scheme present`() {
+        val builder =
             Uri
                 .Builder()
                 .scheme("foo")
                 .encodedPath("//bar")
-                .build()
 
-        assertNull(uri.host)
-        assertEquals("foo:/.//bar", uri.uriString)
+        assertNull(builder.buildOrNull())
+        assertFailsWith<IllegalArgumentException> { builder.build() }
     }
 
     @Test
@@ -256,14 +257,9 @@ class UriBuilderTest {
 
     @Test
     fun `normalizing a double-slash path re-applies the guard so no phantom authority returns`() {
-        // The builder guards "//x/y" to "/.//x/y"; normalized() strips the "/." dot-segment, which
-        // would leave a "//"-leading stored path re-parsing with an authority — reguard on output.
-        val u =
-            Uri
-                .Builder()
-                .encodedPath("//x/y")
-                .build()
-                .normalized()
+        // Normalizing "/.//x/y" strips the "." dot-segment, which would leave a "//"-leading stored
+        // path re-parsing with an authority — the serializer must re-apply the "/." guard on output.
+        val u = parseOk("/.//x/y").normalized()
 
         assertTrue(u.uriString.startsWith("/."), "the serialized normalized value keeps the /. guard")
         assertNull(Uri.parse(u.uriString).getOrThrow().host, "no phantom authority is reintroduced")
@@ -345,10 +341,10 @@ class UriBuilderTest {
     }
 
     @Test
-    fun `encodedPath is an alias of path`() {
+    fun `path is decoded while encodedPath is verbatim`() {
         val uri = parseOk("http://h/a/b%20c")
 
-        assertEquals(uri.path, uri.encodedPath)
+        assertEquals("/a/b c", uri.path)
         assertEquals("/a/b%20c", uri.encodedPath)
     }
 

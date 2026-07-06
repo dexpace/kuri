@@ -22,21 +22,73 @@ public sealed interface ParseResult<out T> {
     /**
      * A successful outcome carrying the produced [value].
      *
+     * Two [Ok]s are equal exactly when their [value]s are equal. Equality, hashing, and rendering are
+     * defined explicitly rather than derived: this is deliberately **not** a `data class`, so it exposes
+     * no `copy`/`componentN` that would let a caller fabricate a variant or destructure the result.
+     *
      * @property value the value produced on success; present exactly when the parse succeeded.
      */
-    public data class Ok<out T>(
+    public class Ok<out T>(
         public val value: T,
-    ) : ParseResult<T>
+    ) : ParseResult<T> {
+        /**
+         * Value equality over [value], consistent with [hashCode].
+         *
+         * @param other the value to compare against.
+         * @return `true` iff [other] is an [Ok] whose [value] equals this one's.
+         */
+        override fun equals(other: Any?): Boolean = other is Ok<*> && other.value == value
+
+        /**
+         * The hash of [value], consistent with [equals].
+         *
+         * @return the hash of [value], or `0` when it is `null`.
+         */
+        override fun hashCode(): Int = value?.hashCode() ?: 0
+
+        /**
+         * A readable rendering of the success case for diagnostics.
+         *
+         * @return `"Ok(<value>)"`.
+         */
+        override fun toString(): String = "Ok($value)"
+    }
 
     /**
      * A failed outcome carrying the single fatal [error] describing the first
      * fatal condition encountered, in input order.
      *
+     * Two [Err]s are equal exactly when their [error]s are equal. Equality, hashing, and rendering are
+     * defined explicitly rather than derived: this is deliberately **not** a `data class`, so it exposes
+     * no `copy`/`componentN` that would let a caller fabricate a variant or destructure the result.
+     *
      * @property error the fatal cause of the failure.
      */
-    public data class Err(
+    public class Err(
         public val error: UriParseError,
-    ) : ParseResult<Nothing>
+    ) : ParseResult<Nothing> {
+        /**
+         * Value equality over [error], consistent with [hashCode].
+         *
+         * @param other the value to compare against.
+         * @return `true` iff [other] is an [Err] whose [error] equals this one's.
+         */
+        override fun equals(other: Any?): Boolean = other is Err && other.error == error
+
+        /**
+         * The hash of [error], consistent with [equals].
+         *
+         * @return the hash of [error].
+         */
+        override fun hashCode(): Int = error.hashCode()
+
+        /**
+         * A readable rendering of the failure case for diagnostics.
+         *
+         * @return `"Err(<error>)"`.
+         */
+        override fun toString(): String = "Err($error)"
+    }
 
     /**
      * Reports whether this is an [Ok] (i.e. the parse succeeded).

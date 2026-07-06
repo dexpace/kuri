@@ -27,6 +27,36 @@ tasks.withType<JavaCompile>().configureEach {
     targetCompatibility = JavaVersion.VERSION_1_8.toString()
 }
 
+// Generate the library version constant from `project.version` (the release-please-managed `version=`
+// in gradle.properties) so `Kuri.VERSION` always matches the published Maven coordinate and can never
+// drift the way a hand-maintained literal did. The file is regenerated whenever the version changes and
+// compiled into commonMain; it is kept out of ktlint below and stays `internal`, so detekt (which scans
+// only `src/`), BCV (public API only) and Dokka (suppresses build-dir files) all ignore it.
+val generatedKuriVersionDir: Provider<Directory> = layout.buildDirectory.dir("generated/kuriVersion")
+
+val generateKuriVersion: TaskProvider<Task> =
+    tasks.register("generateKuriVersion") {
+        val kuriVersion: String = project.version.toString()
+        val outputDir: Provider<Directory> = generatedKuriVersionDir
+        inputs.property("kuriVersion", kuriVersion)
+        outputs.dir(outputDir)
+        doLast {
+            val packageDir: java.io.File = outputDir.get().dir("org/dexpace/kuri").asFile
+            packageDir.mkdirs()
+            packageDir.resolve("KuriVersion.kt").writeText(
+                buildString {
+                    appendLine("/*")
+                    appendLine(" * Copyright (c) 2026 dexpace and Omar Aljarrah")
+                    appendLine(" * SPDX-License-Identifier: MIT")
+                    appendLine(" */")
+                    appendLine("package org.dexpace.kuri")
+                    appendLine()
+                    appendLine("internal const val KURI_VERSION: String = \"$kuriVersion\"")
+                },
+            )
+        }
+    }
+
 kotlin {
     jvmToolchain(21)
     explicitApi()
@@ -110,6 +140,12 @@ kotlin {
     applyDefaultHierarchyTemplate()
 
     sourceSets {
+        commonMain {
+            // Compile the build-generated KURI_VERSION constant into the library. Passing the task
+            // provider both registers its output dir as a source root and wires the compile dependency,
+            // so every target (jvm/js/wasmJs/native/android/metadata) regenerates it before compiling.
+            kotlin.srcDir(generateKuriVersion)
+        }
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
@@ -142,6 +178,14 @@ dokka {
             "src/commonMain/kotlin/org/dexpace/kuri/host/package.md",
             "src/commonMain/kotlin/org/dexpace/kuri/query/package.md",
         )
+    }
+}
+
+// Keep the code-generated version constant out of the ktlint set: it is machine-written, carries its
+// own license header, and is compiled but never hand-edited, so formatting rules should not gate on it.
+ktlint {
+    filter {
+        exclude { element -> element.file.invariantSeparatorsPath.contains("/generated/kuriVersion/") }
     }
 }
 
