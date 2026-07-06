@@ -10,7 +10,6 @@ import org.dexpace.kuri.bind.KuriBindException
 import org.dexpace.kuri.bind.Password
 import org.dexpace.kuri.bind.Path
 import org.dexpace.kuri.bind.Port
-import org.dexpace.kuri.bind.Profile
 import org.dexpace.kuri.bind.Query
 import org.dexpace.kuri.bind.QueryMap
 import org.dexpace.kuri.bind.Scheme
@@ -50,19 +49,19 @@ class PlanCompilerFlatTest {
 
     @Test
     fun `compiles leaf steps in constructor order`() {
-        val plan = compiler.compile(Flat::class, Profile.URL)
+        val plan = compiler.compile(Flat::class)
         val ops = plan.steps.filterIsInstance<BindStep.Leaf>().map { it.op }
         assertEquals(listOf(LeafOp.SCHEME, LeafOp.HOST, LeafOp.PORT), ops)
     }
 
     @Test
     fun `rejects more than one component annotation on a member`() {
-        assertFailsWith<KuriBindException> { compiler.compile(TwoAnnotations::class, Profile.URL) }
+        assertFailsWith<KuriBindException> { compiler.compile(TwoAnnotations::class) }
     }
 
     @Test
     fun `compiles a step for every component annotation`() {
-        val plan = compiler.compile(AllComponents::class, Profile.URL)
+        val plan = compiler.compile(AllComponents::class)
         val leafOps = plan.steps.filterIsInstance<BindStep.Leaf>().map { it.op }
         assertEquals(
             listOf(
