@@ -9,20 +9,21 @@ import org.dexpace.kuri.error.UriSyntaxException
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.host.serialize
+import org.dexpace.kuri.parser.BuilderPath
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.Resolver
 import org.dexpace.kuri.parser.UriParser
 import org.dexpace.kuri.parser.UrlPath
-import org.dexpace.kuri.parser.appendPathSegments
 import org.dexpace.kuri.parser.fileExtensionOf
 import org.dexpace.kuri.parser.fileNameOf
-import org.dexpace.kuri.parser.splitUriPath
 import org.dexpace.kuri.parser.toUriPathString
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSet
 import org.dexpace.kuri.percent.PercentEncodeSets
 import org.dexpace.kuri.query.QueryParameters
-import org.dexpace.kuri.query.editQuery
+import org.dexpace.kuri.query.QueryParametersBuilder
+import org.dexpace.kuri.query.QueryState
+import org.dexpace.kuri.query.applyParameterEdit
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.serialize.Serializer
 import org.dexpace.kuri.serialize.UriNormalizer
@@ -33,9 +34,6 @@ import kotlin.jvm.JvmStatic
 
 /** The path-segment separator shared by the encoded-path projection (RFC 3986 §3.3). */
 private const val SLASH: String = "/"
-
-/** The raw code points a single encoded path segment must not carry; each would re-split it. */
-private const val SEGMENT_DELIMITERS: String = "/\\?#"
 
 /**
  * The encode set applied to a decoded segment added via [Uri.Builder.addPathSegment]
@@ -639,14 +637,16 @@ public class Uri internal constructor(
         private var userInfo: String? = null
         private var host: String? = null
         private var port: Int? = null
-        private var encodedPath: String = ""
 
-        /** True while [encodedPath] was assembled from empty by segment appends; its rooting is decided at [build]. */
-        private var isSegmentBuiltPath: Boolean = false
+        /**
+         * The structured path — decoded segments plus their rooting — held as one immutable [BuilderPath]
+         * that every path edit replaces wholesale. A segment-built path defers its rooting to [build]; the
+         * "would re-root" condition is recomputed there by [BuilderPath.wellFormed], not tracked across edits.
+         */
+        private var path: BuilderPath = BuilderPath()
 
-        /** True when a segment edit emptied a rootless path's first segment, which would re-root it. */
-        private var rootlessPathReRooted: Boolean = false
-        private var query: String? = null
+        /** The query: a verbatim [QueryState.Raw] string, or a structured [QueryState.Params] edit. */
+        private var queryState: QueryState = QueryState.Raw(null)
         private var fragment: String? = null
         private var options: ParseOptions = ParseOptions.DEFAULT
 
@@ -659,8 +659,8 @@ public class Uri internal constructor(
             userInfo = source.userInfo
             host = source.hostName
             port = source.port
-            encodedPath = source.encodedPath
-            query = source.query
+            path = BuilderPath.verbatim(source.encodedPath)
+            queryState = QueryState.Raw(source.query)
             fragment = source.fragment
             options = roundTripOptions(source.components.host)
         }
@@ -756,9 +756,7 @@ public class Uri internal constructor(
          * @return this builder, for chaining.
          */
         public fun encodedPath(encodedPath: String): Builder {
-            this.encodedPath = encodedPath
-            isSegmentBuiltPath = false // a verbatim path owns its own (root or rootless) shape.
-            rootlessPathReRooted = false
+            path = BuilderPath.verbatim(encodedPath)
             return this
         }
 
@@ -782,8 +780,10 @@ public class Uri internal constructor(
          * @param segment the decoded segment to append.
          * @return this builder, for chaining.
          */
-        public fun addPathSegment(segment: String): Builder =
-            pushSegment(PercentCodec.encode(segment, URI_PATH_SEGMENT_ENCODE_SET))
+        public fun addPathSegment(segment: String): Builder {
+            path = path.pushSegment(PercentCodec.encode(segment, URI_PATH_SEGMENT_ENCODE_SET))
+            return this
+        }
 
         /**
          * Appends one already-encoded path segment verbatim (RFC 3986 §3.3).
@@ -800,7 +800,10 @@ public class Uri internal constructor(
          * @return this builder, for chaining.
          * @throws IllegalArgumentException when [segment] contains a raw `/`, `\`, `?`, or `#`.
          */
-        public fun addEncodedPathSegment(segment: String): Builder = pushSegment(segment)
+        public fun addEncodedPathSegment(segment: String): Builder {
+            path = path.pushSegment(segment)
+            return this
+        }
 
         /**
          * Appends each `/`-separated part of [pathSegments] as a decoded segment (OkHttp
@@ -819,24 +822,7 @@ public class Uri internal constructor(
          * @return this builder, for chaining.
          */
         public fun addPathSegments(pathSegments: String): Builder {
-            val startedEmpty = encodedPath.isEmpty()
-            val current = splitUriPath(encodedPath)
-            var merged =
-                appendPathSegments(current.segments, pathSegments) {
-                    PercentCodec.encode(it, URI_PATH_SEGMENT_ENCODE_SET)
-                }
-            val rooted: Boolean
-            if (startedEmpty) {
-                // A path built from scratch is stored rootless (rooted at build under a host); a rootless
-                // path cannot begin with an empty segment, so a leading '/' in the input is dropped.
-                merged = merged.dropWhile { it.isEmpty() }
-                isSegmentBuiltPath = true
-                rooted = false
-            } else {
-                rooted = current.rooted
-            }
-            rootlessPathReRooted = false
-            encodedPath = UrlPath.Segments(merged, rooted).toUriPathString()
+            path = path.addSegments(pathSegments) { PercentCodec.encode(it, URI_PATH_SEGMENT_ENCODE_SET) }
             return this
         }
 
@@ -858,7 +844,10 @@ public class Uri internal constructor(
         public fun setPathSegment(
             index: Int,
             segment: String,
-        ): Builder = replaceSegments(index) { it[index] = PercentCodec.encode(segment, URI_PATH_SEGMENT_ENCODE_SET) }
+        ): Builder {
+            path = path.setSegment(index, PercentCodec.encode(segment, URI_PATH_SEGMENT_ENCODE_SET))
+            return this
+        }
 
         /**
          * Removes the path segment at [index], preserving the path's absolute versus rootless shape
@@ -871,7 +860,10 @@ public class Uri internal constructor(
          * @return this builder, for chaining.
          * @throws IndexOutOfBoundsException when [index] is negative or `>=` the current segment count.
          */
-        public fun removePathSegment(index: Int): Builder = replaceSegments(index) { it.removeAt(index) }
+        public fun removePathSegment(index: Int): Builder {
+            path = path.removeSegment(index)
+            return this
+        }
 
         /**
          * Sets or clears the raw encoded query (without its leading `?`).
@@ -879,7 +871,7 @@ public class Uri internal constructor(
          * @param query the encoded query, or `null` to drop the `?` entirely.
          */
         public fun query(query: String?): Builder {
-            this.query = query
+            queryState = QueryState.Raw(query)
             return this
         }
 
@@ -897,7 +889,7 @@ public class Uri internal constructor(
         public fun setQueryParameter(
             name: String,
             value: String?,
-        ): Builder = query(editQuery(query, emptyBecomesNull = false) { it.set(name, value) })
+        ): Builder = editQueryParameters { it.set(name, value) }
 
         /**
          * Appends the query parameter [name]=[value] without deduplicating (SPEC §10.3.2).
@@ -912,7 +904,7 @@ public class Uri internal constructor(
         public fun addQueryParameter(
             name: String,
             value: String?,
-        ): Builder = query(editQuery(query, emptyBecomesNull = false) { it.add(name, value) })
+        ): Builder = editQueryParameters { it.add(name, value) }
 
         /**
          * Removes every query parameter named [name], preserving the order of the rest (SPEC §10.3.2).
@@ -923,8 +915,17 @@ public class Uri internal constructor(
          * @param name the decoded parameter name whose pairs are removed.
          * @return this builder, for chaining.
          */
-        public fun removeAllQueryParameters(name: String): Builder =
-            query(editQuery(query, emptyBecomesNull = false) { it.removeAll(name) })
+        public fun removeAllQueryParameters(name: String): Builder = editQueryParameters { it.removeAll(name) }
+
+        /**
+         * Applies [edit] to the query parameters and stores the collapsed [QueryState], parsing a
+         * verbatim query to a builder once (the `Uri` profile keeps a present-but-empty `?` unless the
+         * query was already absent — `emptyBecomesNull = false`).
+         */
+        private fun editQueryParameters(edit: (QueryParametersBuilder) -> Unit): Builder {
+            queryState = queryState.applyParameterEdit(emptyBecomesNull = false, edit)
+            return this
+        }
 
         /**
          * Sets or clears the raw encoded fragment (without its leading `#`).
@@ -998,8 +999,8 @@ public class Uri internal constructor(
             require(host != null || !path.startsWith("//")) {
                 "an authority-less path cannot begin with '//': $path"
             }
-            require(segmentPathWellFormed()) {
-                "a rootless path cannot begin with an empty segment; the edit would re-root it: $encodedPath"
+            require(this.path.wellFormed()) {
+                "a rootless path cannot begin with an empty segment; the edit would re-root it: $path"
             }
         }
 
@@ -1008,20 +1009,7 @@ public class Uri internal constructor(
             authorityHasHost() &&
                 pathFitsAuthority(path) &&
                 (host != null || !path.startsWith("//")) &&
-                segmentPathWellFormed()
-
-        /**
-         * True unless a rootless path has been corrupted into a rooted shape.
-         *
-         * Two edits can do this. A path assembled from [addPathSegment]/[setPathSegment] is stored
-         * rootless (rooting is added at [effectivePath] only under a host); setting its segment `0` to
-         * `""` re-serializes it with a leading `/`, the [isSegmentBuiltPath] case. Independently, a
-         * *parsed* rootless path (from [newBuilder]) whose first segment a segment edit empties is
-         * caught by [rootlessPathReRooted]. Either way the result re-parses as a *rooted* path — an
-         * unrepresentable rootless shape — so this rejects both.
-         */
-        private fun segmentPathWellFormed(): Boolean =
-            !rootlessPathReRooted && (!isSegmentBuiltPath || !encodedPath.startsWith(SLASH))
+                this.path.wellFormed()
 
         /** True when a [host] is present, or neither [userInfo] nor [port] (which require one) is set. */
         private fun authorityHasHost(): Boolean = host != null || (userInfo.isNullOrEmpty() && port == null)
@@ -1029,65 +1017,13 @@ public class Uri internal constructor(
         /** True when [path] fits beside the current authority: no host, or an empty or rooted path. */
         private fun pathFitsAuthority(path: String): Boolean = host == null || path.isEmpty() || path.startsWith(SLASH)
 
-        /**
-         * Appends [encodedSegment] at the path's segment boundary; rooting is deferred to
-         * [effectivePath].
-         *
-         * The path takes the segment directly when it is empty (a rootless first segment) or already
-         * ends in `/` (an open final slot); otherwise a separating `/` is inserted first. A segment
-         * must already be exactly one segment, so a raw `/`, `\`, `?`, or `#` is rejected rather than
-         * silently re-split (RFC 3986 §3.3; SPEC [MODEL-39]).
-         */
-        private fun pushSegment(encodedSegment: String): Builder {
-            val delimiter = encodedSegment.indexOfFirst { it in SEGMENT_DELIMITERS }
-            require(delimiter < 0) {
-                "a path segment must not contain '/', '\\', '?', or '#' " +
-                    "(found '${encodedSegment[delimiter]}' at index $delimiter): $encodedSegment"
-            }
-            if (encodedPath.isEmpty()) isSegmentBuiltPath = true
-            rootlessPathReRooted = false // appending fresh content supersedes any prior re-root flag.
-            if (encodedPath.isNotEmpty() && !encodedPath.endsWith(SLASH)) encodedPath += SLASH
-            encodedPath += encodedSegment
-            check(encodedPath.endsWith(encodedSegment)) { "the pushed segment must terminate the path" }
-            return this
-        }
-
-        /**
-         * Splits [encodedPath] into segments, applies [edit] to the mutable list at the bounds-checked
-         * [index], and stores the re-joined path; the absolute versus rootless shape is preserved so a
-         * segment-built rootless path stays rootless (and is still rooted at [build] under a host).
-         */
-        private fun replaceSegments(
-            index: Int,
-            edit: (MutableList<String>) -> Unit,
-        ): Builder {
-            val current = splitUriPath(encodedPath)
-            val segments = current.segments.toMutableList()
-            if (index !in segments.indices) {
-                throw IndexOutOfBoundsException("path segment index $index out of bounds for size ${segments.size}")
-            }
-            edit(segments)
-            // A rootless path whose first segment becomes empty serializes with a leading '/', which re-parses
-            // as a rooted path — the same unrepresentable shape the from-scratch builder rejects. Flag it so
-            // build() throws and buildOrNull() returns null instead of silently re-rooting the path.
-            rootlessPathReRooted = !current.rooted && segments.firstOrNull()?.isEmpty() == true
-            encodedPath = UrlPath.Segments(segments, current.rooted).toUriPathString()
-            return this
-        }
-
-        /**
-         * The path [recompose] serializes: a segment-built path gains its root `/` exactly when an
-         * authority is present, because RFC 3986 §3.3 forbids a rootless path after an authority while
-         * the rootless form is the only one an authority-less `urn:`-style value can carry.
-         */
-        private fun effectivePath(): String {
-            if (!isSegmentBuiltPath || host == null) return encodedPath
-            return SLASH + encodedPath
-        }
+        /** The path [recompose] serializes, resolving the [BuilderPath] rooting against the current authority. */
+        private fun effectivePath(): String = path.effectivePath(host != null)
 
         /** Recomposes a parseable URI string from the accumulated components (RFC 3986 §5.3). */
         private fun recompose(path: String): String {
             val sb = StringBuilder()
+            val query = queryState.resolve()
             if (scheme != null) sb.append(scheme).append(':')
             if (host != null) appendAuthority(sb)
             sb.append(guardRecomposedUriPath(scheme, host != null, path))

@@ -146,6 +146,9 @@ public class QueryParametersBuilder internal constructor(
      */
     public fun build(): QueryParameters = QueryParameters(pairs.toList())
 
+    /** True when no pairs are accumulated; the O(1) check the `Uri`/`Url` builders use to collapse an emptied query. */
+    internal fun isEmpty(): Boolean = pairs.isEmpty()
+
     /** Removes pairs named [name] strictly after [firstIndex], scanning back to front. */
     private fun removeAfter(
         firstIndex: Int,
@@ -161,23 +164,57 @@ public class QueryParametersBuilder internal constructor(
 }
 
 /**
- * Applies [edit] to the decoded pairs of the raw query [current] and re-serializes the result, the
- * shared query-parameter edit used by the `Uri`/`Url` builders. [emptyBecomesNull] selects the empty
- * policy: `true` (the `Url` rule) drops the `?` whenever no pairs remain; `false` (the `Uri` rule)
- * drops it only when [current] was already absent, so a present-but-empty `""` query survives an edit.
+ * The query a `Uri`/`Url` builder holds: a verbatim [Raw] string exactly as passed to
+ * `query(String?)`, or a structured [Params] parameter edit in progress. Keeping the raw form verbatim
+ * means a non-canonically-encoded query (e.g. `query("a=%41")`) survives to `build()` byte-for-byte
+ * rather than being folded to its canonical form, while the structured form makes a chain of parameter
+ * edits O(parse + N) instead of re-serializing on every call.
  */
-internal fun editQuery(
-    current: String?,
+internal sealed interface QueryState {
+    /** A verbatim query string exactly as supplied; `null` denotes an absent query (no `?`). */
+    data class Raw(
+        val query: String?,
+    ) : QueryState
+
+    /** A structured, in-progress parameter edit; always denotes a present query. */
+    data class Params(
+        val builder: QueryParametersBuilder,
+    ) : QueryState
+
+    /** The raw query string this state contributes to a recomposed URI/URL, or `null` when absent. */
+    fun resolve(): String? =
+        when (this) {
+            is Raw -> query
+            is Params -> builder.build().toQueryString()
+        }
+}
+
+/**
+ * Applies [edit] to this query state's parameters and collapses the result per [emptyBecomesNull],
+ * without re-serializing the query on every call. A [QueryState.Raw] state is parsed to a builder
+ * exactly once; a subsequent edit reuses the [QueryState.Params] builder in place.
+ *
+ * [emptyBecomesNull] selects the empty policy: `true` (the `Url` rule) drops the `?` whenever no pairs
+ * remain; `false` (the `Uri` rule) drops it only when the query was already absent, so a
+ * present-but-empty `""` query survives an edit. A `set`/`add` never empties, so it always yields a
+ * present [QueryState.Params].
+ */
+internal fun QueryState.applyParameterEdit(
     emptyBecomesNull: Boolean,
     edit: (QueryParametersBuilder) -> Unit,
-): String? {
-    val params =
-        QueryParameters
-            .parseOrEmpty(current)
-            .newBuilder()
-            .apply(edit)
-            .build()
-    return if (params.isEmpty() && (emptyBecomesNull || current == null)) null else params.toQueryString()
+): QueryState {
+    val currentAbsent = this is QueryState.Raw && query == null
+    val builder =
+        when (this) {
+            is QueryState.Params -> builder
+            is QueryState.Raw -> QueryParameters.parseOrEmpty(query).newBuilder()
+        }
+    edit(builder)
+    return if (builder.isEmpty() && (emptyBecomesNull || currentAbsent)) {
+        QueryState.Raw(null)
+    } else {
+        QueryState.Params(builder)
+    }
 }
 
 /**

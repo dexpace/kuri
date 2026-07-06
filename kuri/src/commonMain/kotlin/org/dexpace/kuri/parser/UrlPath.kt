@@ -187,3 +187,184 @@ internal fun appendPathSegments(
     }
     return result
 }
+
+/** The raw code points a single builder path segment must not carry; each would re-split the path. */
+private const val PATH_SEGMENT_DELIMITERS: String = "/\\?#"
+
+/**
+ * Whether a builder's structured path is rooted, rootless, or defers that choice to build time
+ * (RFC 3986 §3.3; SPEC §3.7). The `Uri`/`Url` builders hold this alongside the decoded path segments
+ * in place of a serialized string, so a path's absolute-vs-rootless shape stays explicit rather than
+ * being re-derived from a re-split string on every edit.
+ *
+ * - [ROOTED] — a verbatim absolute path (`/a/b`, from `encodedPath("/a/b")` or a parsed rooted path);
+ *   it always serializes with a leading `/`.
+ * - [ROOTLESS] — a verbatim rootless path (`a/b`, the `Uri` profile's `path-rootless`, or an opaque
+ *   path seeded through the builder); it always serializes without a leading `/`, so pairing it with an
+ *   authority is rejected at build.
+ * - [DEFERRED] — a path assembled from empty via [BuilderPath.pushSegment] or [BuilderPath.addSegments];
+ *   it is stored rootless and gains its leading `/` at build iff a host is present, so setter order is
+ *   irrelevant (`addPathSegment("a").host("h")` builds the same value as `host("h").addPathSegment("a")`).
+ */
+internal enum class PathRooting {
+    ROOTED,
+    ROOTLESS,
+    DEFERRED,
+}
+
+/**
+ * A builder's structured path: its decoded [segments] plus their [rooting] ([PathRooting]), bundled into
+ * one immutable value the `Uri`/`Url` builders swap in wholesale on each path edit (the path counterpart
+ * of the builders' query state).
+ *
+ * Bundling the two together keeps every path transform total: [pushSegment], [addSegments], [setSegment],
+ * and [removeSegment] each return a NEW `BuilderPath` with both fields updated in step, rather than
+ * mutating a segment list while separately threading the rooting back out. Path lengths are small, so
+ * copying the segment list on each transform is cheap.
+ *
+ * See [UrlPath] for the empty-path (`emptyList()`) versus root-only (`listOf("")`) segment convention, and
+ * [PathRooting] for how [rooting] resolves to a leading `/` at build time.
+ *
+ * @property segments the decoded path segments in order; `emptyList()` is the empty path and every empty
+ *   segment is preserved.
+ * @property rooting whether the path is absolute, rootless, or defers that choice to build ([PathRooting]).
+ */
+internal data class BuilderPath(
+    val segments: List<String> = emptyList(),
+    val rooting: PathRooting = PathRooting.ROOTED,
+) {
+    /**
+     * Appends [encodedSegment] at the path's segment boundary, returning the new path (RFC 3986 §3.3;
+     * SPEC [MODEL-39]).
+     *
+     * A segment must already be exactly one segment, so a raw `/`, `\`, `?`, or `#` is rejected rather than
+     * silently re-split. On an empty path the push switches to [DEFERRED][PathRooting.DEFERRED] rooting and
+     * a pushed `""` is dropped (an empty path stays empty); otherwise an open trailing slot (a trailing
+     * empty segment, e.g. from a trailing `/`) is filled rather than doubled, any other push extends the
+     * list, and a non-empty path keeps its [rooting].
+     */
+    fun pushSegment(encodedSegment: String): BuilderPath {
+        val delimiter = encodedSegment.indexOfFirst { it in PATH_SEGMENT_DELIMITERS }
+        require(delimiter < 0) {
+            "a path segment must not contain '/', '\\', '?', or '#' " +
+                "(found '${encodedSegment[delimiter]}' at index $delimiter): $encodedSegment"
+        }
+        if (segments.isEmpty()) {
+            val seeded = if (encodedSegment.isEmpty()) emptyList() else listOf(encodedSegment)
+            return BuilderPath(seeded, PathRooting.DEFERRED)
+        }
+        val next = segments.toMutableList()
+        if (next.last().isEmpty()) next[next.lastIndex] = encodedSegment else next.add(encodedSegment)
+        check(encodedSegment.isEmpty() || next.last() == encodedSegment) {
+            "a non-empty pushed segment must terminate the path"
+        }
+        return copy(segments = next)
+    }
+
+    /**
+     * Appends the `/`-separated [input] with [encode], returning the new path (OkHttp
+     * `HttpUrl.Builder.addPathSegments`).
+     *
+     * A from-scratch append (onto an empty path) switches to [DEFERRED][PathRooting.DEFERRED] rooting and
+     * drops a leading empty, since a rootless path cannot begin with an empty segment; an append onto
+     * existing content keeps [rooting]. Every other empty piece is preserved and a trailing slot is filled
+     * rather than doubled, per [appendPathSegments].
+     */
+    fun addSegments(
+        input: String,
+        encode: (String) -> String,
+    ): BuilderPath {
+        val startedEmpty = segments.isEmpty()
+        val merged = appendPathSegments(segments, input, encode)
+        val result = if (startedEmpty) merged.dropWhile { it.isEmpty() } else merged
+        check(!startedEmpty || result.firstOrNull()?.isEmpty() != true) {
+            "a from-scratch append must not leave a leading empty segment"
+        }
+        return BuilderPath(result, if (startedEmpty) PathRooting.DEFERRED else rooting)
+    }
+
+    /**
+     * Replaces the segment at [index] with [encodedSegment], keeping the path's [rooting] (RFC 3986 §3.3).
+     *
+     * The absolute-versus-rootless shape is preserved; the "would re-root" condition an emptied first
+     * segment creates is recomputed at build time by [wellFormed], not decided here.
+     *
+     * @throws IndexOutOfBoundsException when [index] is negative or `>=` the current segment count.
+     */
+    fun setSegment(
+        index: Int,
+        encodedSegment: String,
+    ): BuilderPath {
+        if (index !in segments.indices) {
+            throw IndexOutOfBoundsException("path segment index $index out of bounds for size ${segments.size}")
+        }
+        val next = segments.toMutableList()
+        next[index] = encodedSegment
+        check(next.size == segments.size) { "setSegment must not change the segment count" }
+        return copy(segments = next)
+    }
+
+    /**
+     * Removes the segment at [index], keeping the path's [rooting] (RFC 3986 §3.3).
+     *
+     * As with [setSegment] the absolute-versus-rootless shape is preserved, and the "would re-root"
+     * condition an emptied first segment creates is recomputed at build time by [wellFormed].
+     *
+     * @throws IndexOutOfBoundsException when [index] is negative or `>=` the current segment count.
+     */
+    fun removeSegment(index: Int): BuilderPath {
+        if (index !in segments.indices) {
+            throw IndexOutOfBoundsException("path segment index $index out of bounds for size ${segments.size}")
+        }
+        val next = segments.toMutableList()
+        next.removeAt(index)
+        check(next.size == segments.size - 1) { "removeSegment must drop exactly one segment" }
+        return copy(segments = next)
+    }
+
+    /**
+     * The RFC 3986 §5.3 path string this value recomposes to, given whether an authority is present
+     * ([hasHost]).
+     *
+     * A [ROOTED][PathRooting.ROOTED] path serializes absolute and a [ROOTLESS][PathRooting.ROOTLESS] one
+     * rootless regardless of the authority; a [DEFERRED][PathRooting.DEFERRED] segment-built path gains a
+     * leading `/` exactly when [hasHost] (RFC 3986 §3.3 forbids a rootless path after an authority, while
+     * the rootless form is the only shape a host-less `urn:`/`mailto:` value can carry). A deferred path
+     * with no segments therefore serializes to a lone `/` under a host — matching a from-scratch
+     * `addPathSegment("")` that stands for the root under an authority — but to `""` without one.
+     */
+    fun effectivePath(hasHost: Boolean): String =
+        when (rooting) {
+            PathRooting.ROOTED -> UrlPath.Segments(segments, rooted = true).toUriPathString()
+            PathRooting.ROOTLESS -> UrlPath.Segments(segments, rooted = false).toUriPathString()
+            PathRooting.DEFERRED -> {
+                val rootless = UrlPath.Segments(segments, rooted = false).toUriPathString()
+                if (hasHost) URI_PATH_SEPARATOR + rootless else rootless
+            }
+        }
+
+    /**
+     * Whether this path can be recomposed without silently changing its absolute-vs-rootless shape
+     * (RFC 3986 §3.3).
+     *
+     * A rootless-stored path — [ROOTLESS][PathRooting.ROOTLESS] or a still-[DEFERRED][PathRooting.DEFERRED]
+     * one — must not begin with an empty segment: it would serialize with a leading `/` and re-parse as a
+     * rooted path, the unrepresentable shape a from-scratch rootless build rejects. A
+     * [ROOTED][PathRooting.ROOTED] path may begin with an empty segment (it serializes `//…`, guarded
+     * separately against a missing authority). This recomputes the old builder's "would re-root" flag from
+     * the current state instead of tracking it across edits.
+     */
+    fun wellFormed(): Boolean = rooting == PathRooting.ROOTED || segments.firstOrNull()?.isEmpty() != true
+
+    internal companion object {
+        /**
+         * The structured path for a verbatim encoded [encodedPath] (from `encodedPath("/a/b")` or a parsed
+         * path): split into [segments] and marked [ROOTED][PathRooting.ROOTED] or
+         * [ROOTLESS][PathRooting.ROOTLESS] by its leading `/`, never [DEFERRED][PathRooting.DEFERRED].
+         */
+        fun verbatim(encodedPath: String): BuilderPath {
+            val split = splitUriPath(encodedPath)
+            return BuilderPath(split.segments, if (split.rooted) PathRooting.ROOTED else PathRooting.ROOTLESS)
+        }
+    }
+}

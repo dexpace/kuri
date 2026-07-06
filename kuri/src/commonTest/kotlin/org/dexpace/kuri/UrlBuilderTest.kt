@@ -332,4 +332,82 @@ class UrlBuilderTest {
         assertEquals("v0", params.get("k0"))
         assertEquals("v1499", params.get("k1499"))
     }
+
+    @Test
+    fun `interior empty segments survive a setPathSegment edit of another segment`() {
+        val url =
+            Url
+                .Builder()
+                .scheme("https")
+                .host("h")
+                .encodedPath("/a//b/c")
+                .setPathSegment(0, "z")
+                .build()
+
+        assertEquals("https://h/z//b/c", url.href)
+        assertEquals(listOf("z", "", "b", "c"), url.pathSegments)
+    }
+
+    @Test
+    fun `a trailing empty segment survives a removePathSegment edit`() {
+        val url =
+            Url
+                .Builder()
+                .scheme("https")
+                .host("h")
+                .addPathSegment("a")
+                .addPathSegment("b")
+                .addPathSegment("")
+                .removePathSegment(0)
+                .build()
+
+        assertEquals("https://h/b/", url.href)
+        assertEquals(listOf("b", ""), url.pathSegments)
+    }
+
+    @Test
+    fun `addPathSegments after a segment append preserves interior empties`() {
+        val url =
+            Url
+                .Builder()
+                .scheme("https")
+                .host("h")
+                .addPathSegment("a")
+                .addPathSegments("b//c")
+                .build()
+
+        assertEquals("https://h/a/b//c", url.href)
+        assertEquals(listOf("a", "b", "", "c"), url.pathSegments)
+    }
+
+    @Test
+    fun `a verbatim query is not canonically re-encoded`() {
+        val url =
+            Url
+                .Builder()
+                .scheme("https")
+                .host("h")
+                .query("a=%41")
+                .build()
+
+        assertEquals("a=%41", url.query)
+        assertEquals("https://h/?a=%41", url.href)
+    }
+
+    @Test
+    fun `a chain of query parameter edits stays correct`() {
+        val url =
+            Url
+                .Builder()
+                .scheme("https")
+                .host("h")
+                .query("a=1&b=2&a=3")
+                .addQueryParameter("c", "4")
+                .setQueryParameter("a", "9")
+                .removeAllQueryParameters("b")
+                .build()
+
+        assertEquals("a=9&c=4", url.query)
+        assertEquals("https://h/?a=9&c=4", url.href)
+    }
 }
