@@ -374,11 +374,13 @@ uri.fileName()       // "c"
 ```
 
 **Relativize.** `Uri.relativize` inverts `resolve`: it returns a reference that resolves back to the
-target against the same base.
+target against the same base, or `null` when there is no relative form (a differing scheme or
+authority, or an opaque path on either side). `Url.relativize` is the same, returning a `String?`.
 
 ```kotlin
 val base = Uri.parseOrThrow("http://h/a/b/")
 val rel = base.relativize(Uri.parseOrThrow("http://h/a/b/c/d"))
+    ?: error("no relative form")     // a relative Uri, or null when none resolves back
 rel.uriString                        // "c/d"
 base.resolveOrThrow(rel.uriString)   // http://h/a/b/c/d  — round-trips to the target
 ```
