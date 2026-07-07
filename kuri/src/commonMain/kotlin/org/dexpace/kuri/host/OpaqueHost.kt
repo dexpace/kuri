@@ -60,18 +60,6 @@ internal object OpaqueHost {
      * `%` is excluded from the scan because it is permitted in an opaque host ([HOST-33]); all
      * forbidden host code points are in the Basic Multilingual Plane, so a per-`Char` scan is exact.
      */
-    private fun firstForbiddenHostIndex(input: String): Int {
-        var index = 0
-        var found = NOT_FOUND
-        while (index < input.length && found == NOT_FOUND) {
-            val cp = input[index]
-            if (cp != '%' && isForbiddenHostCodePoint(cp)) {
-                found = index
-            }
-            index++
-        }
-        check(found == NOT_FOUND || found in input.indices) { "found index out of bounds: $found" }
-        check(found == NOT_FOUND || input[found] != '%') { "'%' must not be flagged forbidden" }
-        return found
-    }
+    private fun firstForbiddenHostIndex(input: String): Int =
+        input.indexOfFirst { it != '%' && isForbiddenHostCodePoint(it) }
 }

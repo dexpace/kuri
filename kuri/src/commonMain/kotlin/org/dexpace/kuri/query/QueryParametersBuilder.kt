@@ -135,7 +135,7 @@ public class QueryParametersBuilder internal constructor(
      *
      * @return a snapshot of the accumulated pairs; later mutation of this builder does not affect it.
      */
-    public fun build(): QueryParameters = QueryParameters(pairs.toList())
+    public fun build(): QueryParameters = QueryParameters(pairs)
 
     /** True when no pairs are accumulated; the O(1) check the `Uri`/`Url` builders use to collapse an emptied query. */
     internal fun isEmpty(): Boolean = pairs.isEmpty()

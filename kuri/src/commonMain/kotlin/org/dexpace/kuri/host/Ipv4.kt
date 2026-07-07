@@ -164,21 +164,11 @@ internal object Ipv4 {
         require(part.isNotEmpty()) { "empty part reached parsePart" }
         val hex = isHexPrefixed(part)
         val octal = !hex && part.length > 1 && part[0] == '0'
-        val radix =
-            if (hex) {
-                RADIX_HEX
-            } else if (octal) {
-                RADIX_OCTAL
-            } else {
-                RADIX_DECIMAL
-            }
-        val digits =
-            if (hex) {
-                part.substring(2)
-            } else if (octal) {
-                part.substring(1)
-            } else {
-                part
+        val (digits, radix) =
+            when {
+                hex -> part.substring(2) to RADIX_HEX
+                octal -> part.substring(1) to RADIX_OCTAL
+                else -> part to RADIX_DECIMAL
             }
         return parseInRadix(digits, radix)
     }
