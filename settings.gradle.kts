@@ -18,3 +18,4 @@ dependencyResolutionManagement {
 rootProject.name = "kuri"
 
 include(":kuri")
+include(":kuri-bind")

@@ -385,6 +385,70 @@ rel.uriString                        // "c/d"
 base.resolveOrThrow(rel.uriString)   // http://h/a/b/c/d  — round-trips to the target
 ```
 
+## Annotation binding (kuri-bind)
+
+The optional **`kuri-bind`** module maps an annotated object onto a `Url`/`Uri` builder — declare the
+mapping once, then turn any request object into a URL. It is a JVM add-on (it uses Kotlin reflection);
+the core `kuri` artifact stays dependency-free.
+
+```kotlin
+@Url                                           // bind this class as a URL
+@PathTemplate("/search/{category}/{tags...}")  // {name} = one segment, {name...} = catch-all tail
+data class SearchRequest(
+    @Path("category") val category: String,
+    @Path("tags")     val tags: List<String>,
+    @Query("q")       val term: String,
+    @QueryMap         val extra: Map<String, String>,
+)
+
+val base = Url.parseOrThrow("https://api.example.com")
+val url = KuriBind.bindInto(
+    base.newBuilder(),
+    SearchRequest("shoes", listOf("a", "b"), "x y", mapOf("page" to "2")),
+).build()
+// https://api.example.com/search/shoes/a/b?q=x%20y&page=2
+```
+
+**Annotations** (on properties, fields, getters, or constructor parameters): `@Scheme`, `@Host`,
+`@Port`, `@Username`/`@Password`/`@UserInfo`, `@Path`, `@Query`, `@QueryMap`, `@Fragment`, plus the
+class-level `@Url`/`@Uri` (profile selector) and `@PathTemplate`. Unannotated members are ignored.
+Values are the *decoded* form — the builder percent-encodes them.
+
+**Entry points** — the `KuriBind` facade, ergonomic from Kotlin and Java:
+
+```kotlin
+val builder: Url.Builder = KuriBind.toUrlBuilder(request)   // populated builder — edit before build()
+val url:     Url         = KuriBind.toUrl(request)          // build() convenience
+KuriBind.bindInto(clientBase.newBuilder(), request)         // bind onto a client base URL
+KuriBind.toUrlOrNull(request)                               // null instead of throwing
+// …and toUri / toUriBuilder / *OrNull for the RFC 3986 profile.
+```
+
+`bindInto` targets the common SDK shape: a base URL that already carries a scheme and host, onto which a
+request object appends its path and query. Single-valued components the object carries (scheme, host,
+port, userinfo, fragment) override the base; a component the object leaves out keeps the base's value.
+`BindOptions.strict` governs conflicts within the bound object graph — for example a merged `@Url`
+sub-object that disagrees with its parent — rather than the object against the base. Nested objects are
+supported: mark a complex member `@Url`/`@Uri` to merge all of its components into the parent, or
+`@Query`/`@Path` to fold just that component. Binding is bounded (`BindOptions.maxDepth`, cycle-detected)
+and fails fast on misconfiguration with a `KuriBindException`; pass `BindOptions(strict = true)` to reject
+a conflicting single-valued write within the object graph.
+
+Members bind in Kotlin primary-constructor order (or Java record component order). Other shapes — plain
+Java beans and body-declared properties — have no reliable order through reflection and bind in a stable
+order sorted by name, so prefer a `data class`, a record, or a `@PathTemplate` when positional path order
+matters. Within the object graph, single-valued components are first-writer-wins in that declaration
+order: a parent's own leaf overrides the same component from an `@Url`/`@Uri`-merged child only when it
+is declared before the merge member, so declare the component first when the parent's value must win. A
+leading `/` in a template is decorative for an authority-less URI, where a segment path roots only under
+an authority.
+
+### Reflection and Java support
+
+`kuri-bind` uses Kotlin reflection (`kotlin-reflect`). Kotlin classes are first-class; Java classes
+(POJOs, records) are supported through Kotlin reflection's interop views (getters and fields). A
+dedicated `java.lang.reflect`-native backend is not shipped — if you need one, please open an issue.
+
 ## Standards
 
 kuri implements the standards below; per-standard conformance is measured in [Conformance](#conformance).
