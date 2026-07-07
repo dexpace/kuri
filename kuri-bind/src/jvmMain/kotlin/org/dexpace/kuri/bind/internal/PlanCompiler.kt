@@ -15,6 +15,7 @@ import org.dexpace.kuri.bind.QueryMap
 import org.dexpace.kuri.bind.Scheme
 import org.dexpace.kuri.bind.UserInfo
 import org.dexpace.kuri.bind.Username
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 import kotlin.reflect.full.findAnnotation
 import org.dexpace.kuri.bind.PathTemplate as PathTemplateAnn
@@ -22,10 +23,33 @@ import org.dexpace.kuri.bind.Uri as UriMarker
 import org.dexpace.kuri.bind.Url as UrlMarker
 import org.dexpace.kuri.host.Host as KuriHost
 
-/** Compiles a type into a validated [TypePlan], resolving any root `@PathTemplate` against its holes. */
+/**
+ * Compiles a type into a validated [TypePlan], resolving any root `@PathTemplate` against its holes,
+ * and caches the result so each type compiles at most once.
+ *
+ * The cache is profile-agnostic: a plan describes both a `Url` and a `Uri` binding, since the profile
+ * only narrows which components project later. One [PlanCompiler] therefore backs every bind through
+ * both profiles, and a type compiled for a URL bind is reused verbatim for a URI bind. Concurrent binds
+ * are safe: [planFor] memoizes through a [ConcurrentHashMap], and a rare double-compile under a race is
+ * harmless because compilation is pure and both racers produce an equal plan.
+ */
 internal class PlanCompiler(
     private val scanner: MemberScanner,
 ) {
+    private val plans = ConcurrentHashMap<KClass<*>, TypePlan>()
+
+    /**
+     * The compiled plan for [type], computing and caching it on first use (compile-once per type).
+     *
+     * @throws KuriBindException when [type] cannot be compiled into a valid plan (delegated to
+     *   [compile]).
+     */
+    fun planFor(type: KClass<*>): TypePlan {
+        val plan = plans.getOrPut(type) { compile(type) }
+        check(plan.type == type) { "plan cache returned a plan for ${plan.type} under key $type" }
+        return plan
+    }
+
     // The plan is profile-agnostic: the same steps describe a `Url` and a `Uri` binding, since the
     // profile only narrows which components project later. So `compile` takes just the type.
     //
@@ -178,18 +202,6 @@ internal class PlanCompiler(
 
     private fun hasBindingMembers(type: KClass<*>): Boolean =
         scanner.scan(type).any { member -> member.annotations.any { it.isBindingMarker() } }
-
-    private fun bindingAnnotation(member: ScannedMember): Annotation? {
-        val markers = member.annotations.filter { it.isBindingMarker() }
-        if (markers.size > 1) {
-            throw KuriBindException(
-                "member '${member.name}' has more than one binding annotation: " +
-                    markers.joinToString { it.annotationClass.simpleName ?: "?" },
-                member.name,
-            )
-        }
-        return markers.singleOrNull()
-    }
 }
 
 // Enforces a bijection between the template's holes and the named-`@Path` providers reachable through
@@ -240,6 +252,20 @@ private fun mergeStep(member: ScannedMember): BindStep {
         throw KuriBindException("a @Url/@Uri merge member must not declare @PathTemplate", member.name)
     }
     return BindStep.Recurse(member, Scope.MERGE)
+}
+
+// The single binding marker on [member], or `null` when it carries none; more than one is a
+// misconfiguration rejected at compile. Pure (it only inspects the member's annotations), so top-level.
+private fun bindingAnnotation(member: ScannedMember): Annotation? {
+    val markers = member.annotations.filter { it.isBindingMarker() }
+    if (markers.size > 1) {
+        throw KuriBindException(
+            "member '${member.name}' has more than one binding annotation: " +
+                markers.joinToString { it.annotationClass.simpleName ?: "?" },
+            member.name,
+        )
+    }
+    return markers.singleOrNull()
 }
 
 private fun Annotation.isBindingMarker(): Boolean =

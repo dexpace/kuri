@@ -6,11 +6,11 @@ package org.dexpace.kuri.bind
 
 import org.dexpace.kuri.Uri
 import org.dexpace.kuri.Url
+import org.dexpace.kuri.bind.internal.BindingExecutor
 import org.dexpace.kuri.bind.internal.KotlinReflectMemberScanner
-import org.dexpace.kuri.bind.internal.PlanCache
 import org.dexpace.kuri.bind.internal.PlanCompiler
-import org.dexpace.kuri.bind.internal.ReflectiveUriBinder
-import org.dexpace.kuri.bind.internal.ReflectiveUrlBinder
+import org.dexpace.kuri.bind.internal.UriBuilderSink
+import org.dexpace.kuri.bind.internal.UrlBuilderSink
 import kotlin.reflect.full.hasAnnotation
 import org.dexpace.kuri.bind.Uri as UriMarker
 import org.dexpace.kuri.bind.Url as UrlMarker
@@ -43,11 +43,11 @@ import org.dexpace.kuri.bind.Url as UrlMarker
  * All methods are stateless and safe to call concurrently.
  */
 public object KuriBind {
-    // One profile-agnostic plan cache backs both binders: a plan describes a `Url` and a `Uri` bind
-    // alike, so sharing it means each root type is compiled exactly once (see PlanCache).
-    private val cache = PlanCache(PlanCompiler(KotlinReflectMemberScanner()))
-    private val urlBinder = ReflectiveUrlBinder(cache)
-    private val uriBinder = ReflectiveUriBinder(cache)
+    // One shared executor backs every bind through either profile: its [PlanCompiler] caches a compiled
+    // plan per root type, and a plan describes a `Url` and a `Uri` bind alike, so each root type is
+    // compiled exactly once regardless of profile. The executor is stateless; each `bindInto` overload
+    // projects its accumulated result through the sink for the profile it targets.
+    private val executor = BindingExecutor(PlanCompiler(KotlinReflectMemberScanner()))
 
     /**
      * Binds [target] onto [base], returning the same builder so calls can chain.
@@ -73,9 +73,8 @@ public object KuriBind {
         options: BindOptions = BindOptions.DEFAULT,
     ): Url.Builder {
         requireRoot(target, Profile.URL)
-        val bound = urlBinder.bind(base, target, options)
-        check(bound === base) { "url binder must return the same base builder it was given" }
-        return bound
+        executor.execute(target, options).projectInto(UrlBuilderSink(base))
+        return base
     }
 
     /**
@@ -96,9 +95,8 @@ public object KuriBind {
         options: BindOptions = BindOptions.DEFAULT,
     ): Uri.Builder {
         requireRoot(target, Profile.URI)
-        val bound = uriBinder.bind(base, target, options)
-        check(bound === base) { "uri binder must return the same base builder it was given" }
-        return bound
+        executor.execute(target, options).projectInto(UriBuilderSink(base))
+        return base
     }
 
     /**

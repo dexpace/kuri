@@ -4,12 +4,8 @@
  */
 package org.dexpace.kuri.bind.internal
 
-import org.dexpace.kuri.Uri
-import org.dexpace.kuri.Url
 import org.dexpace.kuri.bind.BindOptions
 import org.dexpace.kuri.bind.KuriBindException
-import org.dexpace.kuri.bind.UriBinder
-import org.dexpace.kuri.bind.UrlBinder
 import java.util.Collections
 import java.util.IdentityHashMap
 
@@ -24,7 +20,7 @@ import java.util.IdentityHashMap
  * the graph traversal itself.
  */
 internal class BindingExecutor(
-    private val cache: PlanCache,
+    private val compiler: PlanCompiler,
 ) {
     /** Executes [target]'s plan into a fresh [ComponentSink], honoring [options]. */
     fun execute(
@@ -37,7 +33,7 @@ internal class BindingExecutor(
         // merge scope are suppressed for the entire walk; the flag rides along in [WalkContext]. The
         // root plan is fetched once here and threaded into [walk] (each merge step re-fetches its own
         // child plan), so the root type is not looked up twice.
-        val rootPlan = cache.planFor(target::class)
+        val rootPlan = compiler.planFor(target::class)
         val ctx = WalkContext(sink, options, active, depth = 0, pathTemplated = rootPlan.template != null)
         walk(target, rootPlan, ctx)
         return sink
@@ -95,7 +91,7 @@ internal class BindingExecutor(
         value: Any,
         ctx: WalkContext,
     ) {
-        if ((step.op == LeafOp.QUERY || step.op == LeafOp.PATH) && runtimeValueIsBindable(value, cache)) {
+        if ((step.op == LeafOp.QUERY || step.op == LeafOp.PATH) && runtimeValueIsBindable(value, compiler)) {
             applyRecurse(BindStep.Recurse(step.member, scopeFor(step.op)), value, ctx)
         } else {
             LeafBinder.apply(step, value, ctx.sink)
@@ -117,7 +113,7 @@ internal class BindingExecutor(
         ctx: WalkContext,
     ) {
         when (step.scope) {
-            Scope.MERGE -> walk(value, cache.planFor(value::class), ctx.deeper())
+            Scope.MERGE -> walk(value, compiler.planFor(value::class), ctx.deeper())
             Scope.QUERY -> recurseScoped(value, ctx, LeafOp.QUERY)
             // A templated root owns the path (see [applyLeafStep]); skip scoped path recursion too.
             Scope.PATH -> if (!ctx.pathTemplated) recurseScoped(value, ctx, LeafOp.PATH)
@@ -142,7 +138,7 @@ internal class BindingExecutor(
         op: LeafOp,
     ) {
         require(op == LeafOp.QUERY || op == LeafOp.PATH) { "scoped op must be QUERY or PATH: $op" }
-        val plan = cache.planFor(nested::class)
+        val plan = compiler.planFor(nested::class)
         // A scoped `@Query` object contributes every query leaf it declares — both its `@Query`
         // params and its `@QueryMap` entries; a scoped `@Path` object contributes its path segments.
         val leaves =
@@ -178,38 +174,6 @@ private class WalkContext(
     val pathTemplated: Boolean,
 ) {
     fun deeper(): WalkContext = WalkContext(sink, options, active, depth + 1, pathTemplated)
-}
-
-/** Binds an annotated object onto a `Url.Builder` by reflection. */
-internal class ReflectiveUrlBinder(
-    cache: PlanCache,
-) : UrlBinder {
-    private val executor = BindingExecutor(cache)
-
-    override fun bind(
-        base: Url.Builder,
-        target: Any,
-        options: BindOptions,
-    ): Url.Builder {
-        executor.execute(target, options).projectInto(UrlBuilderSink(base))
-        return base
-    }
-}
-
-/** Binds an annotated object onto a `Uri.Builder` by reflection. */
-internal class ReflectiveUriBinder(
-    cache: PlanCache,
-) : UriBinder {
-    private val executor = BindingExecutor(cache)
-
-    override fun bind(
-        base: Uri.Builder,
-        target: Any,
-        options: BindOptions,
-    ): Uri.Builder {
-        executor.execute(target, options).projectInto(UriBuilderSink(base))
-        return base
-    }
 }
 
 /**
@@ -255,7 +219,7 @@ private object LeafBinder {
             LeafOp.PORT -> sink.setPort(convertPort(value, path), path)
             LeafOp.FRAGMENT -> sink.setFragment(scalarText(value), path)
             LeafOp.PATH -> applyPath(value, sink)
-            LeafOp.QUERY -> applyQuery(step.queryName ?: path, value, sink)
+            LeafOp.QUERY -> addQueryValues(step.queryName ?: path, value, sink)
             LeafOp.QUERY_MAP -> applyQueryMap(value, sink, path)
             // Userinfo leaves are paired into one contribution by UserInfoBinder, never applied here.
             LeafOp.USERINFO, LeafOp.USERNAME, LeafOp.PASSWORD -> Unit
@@ -276,19 +240,6 @@ private object LeafBinder {
         sink: ComponentSink,
     ) = forEachScoped(value) { sink.addPathSegment(scalarText(it)) }
 
-    private fun applyQuery(
-        name: String,
-        value: Any,
-        sink: ComponentSink,
-    ) {
-        val iterable = asIterableOrNull(value)
-        if (iterable != null) {
-            iterable.forEach { sink.addQueryParameter(name, it?.let(::scalarText)) }
-        } else {
-            sink.addQueryParameter(name, scalarText(value))
-        }
-    }
-
     private fun applyQueryMapEntry(
         key: Any?,
         value: Any?,
@@ -297,6 +248,18 @@ private object LeafBinder {
     ) {
         val name = key?.let(::scalarText) ?: return
         if (name.isEmpty()) throw KuriBindException("query parameter name must not be empty", path)
+        addQueryValues(name, value, sink)
+    }
+
+    // Contributes a `@Query` value under [name]: a collection fans out into one parameter per element
+    // (a null element yields a valueless parameter), any other value becomes a single scalar parameter.
+    // The direct `@Query` leaf and each `@QueryMap` entry share this; they differ only in how [name] is
+    // derived. A non-null [value] takes the same paths (`value?.let(::x)` collapses to `x(value)`).
+    private fun addQueryValues(
+        name: String,
+        value: Any?,
+        sink: ComponentSink,
+    ) {
         val iterable = value?.let(::asIterableOrNull)
         if (iterable != null) {
             iterable.forEach { sink.addQueryParameter(name, it?.let(::scalarText)) }
@@ -393,11 +356,11 @@ private fun forEachScoped(
  */
 private fun runtimeValueIsBindable(
     value: Any,
-    cache: PlanCache,
+    compiler: PlanCompiler,
 ): Boolean {
     val scalarLike = value is CharSequence || value is Number || value is Char || value is Boolean || value is Enum<*>
     if (scalarLike || asIterableOrNull(value) != null || asMapOrNull(value) != null) return false
-    return cache.planFor(value::class).steps.isNotEmpty()
+    return compiler.planFor(value::class).steps.isNotEmpty()
 }
 
 /** The recursion scope matching a scalar-scoped leaf op. */
