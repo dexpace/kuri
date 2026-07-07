@@ -12,7 +12,6 @@ import org.dexpace.kuri.bind.UriBinder
 import org.dexpace.kuri.bind.UrlBinder
 import java.util.Collections
 import java.util.IdentityHashMap
-import kotlin.reflect.KClass
 
 /**
  * Walks a compiled [TypePlan] against a live instance, accumulating decoded contributions in a
@@ -27,8 +26,6 @@ import kotlin.reflect.KClass
 internal class BindingExecutor(
     private val cache: PlanCache,
 ) {
-    private val templateBinder = TemplateBinder(cache)
-
     /** Executes [target]'s plan into a fresh [ComponentSink], honoring [options]. */
     fun execute(
         target: Any,
@@ -36,7 +33,10 @@ internal class BindingExecutor(
     ): ComponentSink {
         val sink = ComponentSink(options.strict)
         val active: MutableSet<Any> = Collections.newSetFromMap(IdentityHashMap<Any, Boolean>())
-        walk(target, WalkContext(sink, options, active, depth = 0))
+        // A root `@PathTemplate` owns the whole path, so positional `@Path` contributions from the
+        // merge scope are suppressed for the entire walk; the flag rides along in [WalkContext].
+        val pathTemplated = cache.planFor(target::class).template != null
+        walk(target, WalkContext(sink, options, active, depth = 0, pathTemplated = pathTemplated))
         return sink
     }
 
@@ -49,7 +49,7 @@ internal class BindingExecutor(
         if (!ctx.active.add(target)) throw KuriBindException("cycle detected at ${target::class.simpleName}")
         try {
             val plan = cache.planFor(target::class)
-            plan.template?.let { templateBinder.emit(it, plan, target, ctx.sink) }
+            plan.template?.let { template -> TemplateBinder.emit(template, plan.holeProviders, target, ctx.sink) }
             UserInfoBinder.apply(plan, target, ctx.sink)
             for (step in plan.steps) applyStep(step, target, ctx)
         } finally {
@@ -64,7 +64,7 @@ internal class BindingExecutor(
     ) {
         when (step) {
             is BindStep.Hole -> Unit // Holes are consumed by TemplateBinder, not applied as steps.
-            is BindStep.Leaf -> applyLeafStep(step, target, ctx.sink)
+            is BindStep.Leaf -> applyLeafStep(step, target, ctx)
             is BindStep.Recurse -> applyRecurseStep(step, target, ctx)
         }
     }
@@ -72,11 +72,14 @@ internal class BindingExecutor(
     private fun applyLeafStep(
         step: BindStep.Leaf,
         target: Any,
-        sink: ComponentSink,
+        ctx: WalkContext,
     ) {
-        if (step.op.isUserInfo()) return // Userinfo leaves are paired once per object by UserInfoBinder.
+        // Skip a leaf that this walk must not apply: userinfo leaves are paired once per object by
+        // UserInfoBinder, and under a templated root the path is owned entirely by the template, so a
+        // merge member's own `@Path` value (already emitted as a hole) must not double as a segment.
+        if (step.op.isUserInfo() || (step.op == LeafOp.PATH && ctx.pathTemplated)) return
         val value = step.member.read(target) ?: return
-        LeafBinder.apply(step, value, sink)
+        LeafBinder.apply(step, value, ctx.sink)
     }
 
     private fun applyRecurseStep(
@@ -96,8 +99,8 @@ internal class BindingExecutor(
         when (step.scope) {
             Scope.MERGE -> walk(value, ctx.deeper())
             Scope.QUERY -> recurseScoped(value, ctx, LeafOp.QUERY)
-            Scope.PATH -> recurseScoped(value, ctx, LeafOp.PATH)
-            Scope.QUERY_MAP -> LeafBinder.applyQueryMap(value, ctx.sink, step.member.name)
+            // A templated root owns the path (see [applyLeafStep]); skip scoped path recursion too.
+            Scope.PATH -> if (!ctx.pathTemplated) recurseScoped(value, ctx, LeafOp.PATH)
         }
     }
 
@@ -147,8 +150,9 @@ private class WalkContext(
     val options: BindOptions,
     val active: MutableSet<Any>,
     val depth: Int,
+    val pathTemplated: Boolean,
 ) {
-    fun deeper(): WalkContext = WalkContext(sink, options, active, depth + 1)
+    fun deeper(): WalkContext = WalkContext(sink, options, active, depth + 1, pathTemplated)
 }
 
 /** Binds an annotated object onto a `Url.Builder` by reflection. */
@@ -186,61 +190,31 @@ internal class ReflectiveUriBinder(
 /**
  * Resolves a root `@PathTemplate` against its holes and emits the filled path in template order.
  *
- * Holes are gathered from the root object plus every `@Url`/`@Uri` MERGE member reachable from it
- * (bounded by a per-type `seen` set), matching the provider set the compiler validated. The template
- * is then flattened to whole decoded segments — literals split on `/`, a `{name}` hole is one segment,
- * a `{name...}` catch-all expands a collection or a slash-string — and each is pushed as one segment,
+ * Each hole's value is read through the composed accessor the compiler recorded on
+ * [TypePlan.holeProviders], so a value supplied by an `@Url`/`@Uri`-merged child resolves straight
+ * from the root without consulting that child's own (non-template) plan. The template is then
+ * flattened to whole decoded segments — literals split on `/`, a `{name}` hole is one segment, a
+ * `{name...}` catch-all expands a collection or a slash-string — and each is pushed as one segment,
  * so an interior `/` separator never injects an empty segment.
  */
-private class TemplateBinder(
-    private val cache: PlanCache,
-) {
+private object TemplateBinder {
     fun emit(
         template: PathTemplate,
-        plan: TypePlan,
+        holeProviders: Map<String, HoleProvider>,
         target: Any,
         sink: ComponentSink,
     ) {
-        val providers = holeValues(plan, target, HashMap(), HashSet())
-        val segments = templateSegments(template.tokens, providers)
-        for (segment in segments) sink.addPathSegment(segment)
-    }
-
-    private fun holeValues(
-        plan: TypePlan,
-        target: Any,
-        into: MutableMap<String, Any?>,
-        seen: MutableSet<KClass<*>>,
-    ): Map<String, Any?> {
-        if (!seen.add(plan.type)) return into
-        for (step in plan.steps) collectHoleValue(step, target, into, seen)
-        return into
-    }
-
-    private fun collectHoleValue(
-        step: BindStep,
-        target: Any,
-        into: MutableMap<String, Any?>,
-        seen: MutableSet<KClass<*>>,
-    ) {
-        when (step) {
-            is BindStep.Hole -> into[step.name] = step.member.read(target)
-            is BindStep.Recurse -> mergeHoleValues(step, target, into, seen)
-            is BindStep.Leaf -> Unit
-        }
-    }
-
-    private fun mergeHoleValues(
-        step: BindStep.Recurse,
-        target: Any,
-        into: MutableMap<String, Any?>,
-        seen: MutableSet<KClass<*>>,
-    ) {
-        if (step.scope != Scope.MERGE) return
-        val nested = step.member.read(target) ?: return
-        holeValues(cache.planFor(nested::class), nested, into, seen)
+        val resolved =
+            holeProviders.mapValues { (_, provider) -> ResolvedHole(provider.accessor(target), provider.catchAll) }
+        for (segment in templateSegments(template.tokens, resolved)) sink.addPathSegment(segment)
     }
 }
+
+/** A template hole resolved for one bind: its [value] read from the root, plus whether it is catch-all. */
+private class ResolvedHole(
+    val value: Any?,
+    val catchAll: Boolean,
+)
 
 /** Applies a single [BindStep.Leaf] to the sink; stateless, so the same routines serve scoped leaves. */
 private object LeafBinder {
@@ -395,34 +369,43 @@ private fun forEachScoped(
 /** Whether this op feeds the single userinfo slot and is therefore paired by [UserInfoBinder]. */
 private fun LeafOp.isUserInfo(): Boolean = this == LeafOp.USERINFO || this == LeafOp.USERNAME || this == LeafOp.PASSWORD
 
-/** Flattens template [tokens] against resolved hole [providers] into whole decoded path segments. */
+/** Flattens template [tokens] against the [resolved] hole values into whole decoded path segments. */
 private fun templateSegments(
     tokens: List<PathToken>,
-    providers: Map<String, Any?>,
+    resolved: Map<String, ResolvedHole>,
 ): List<String> {
     val segments = ArrayList<String>()
-    for (token in tokens) appendTokenSegments(token, providers, segments)
+    for (token in tokens) appendTokenSegments(token, resolved, segments)
     return segments
 }
 
 private fun appendTokenSegments(
     token: PathToken,
-    providers: Map<String, Any?>,
+    resolved: Map<String, ResolvedHole>,
     into: MutableList<String>,
 ) {
     when (token) {
         is PathToken.Literal -> into.addAll(splitPathSegments(token.raw))
-        is PathToken.Hole -> appendHoleSegments(token, providers, into)
+        is PathToken.Hole -> appendHoleSegments(token, resolved, into)
     }
 }
 
 private fun appendHoleSegments(
-    hole: PathToken.Hole,
-    providers: Map<String, Any?>,
+    token: PathToken.Hole,
+    resolved: Map<String, ResolvedHole>,
     into: MutableList<String>,
 ) {
-    val value = providers[hole.name] ?: throw KuriBindException("template hole '{${hole.name}}' resolved to null")
-    if (hole.catchAll) appendCatchAllSegments(value, into) else into.add(scalarText(value))
+    val hole = checkNotNull(resolved[token.name]) { "template hole '{${token.name}}' has no resolved provider" }
+    val value = hole.value ?: throw KuriBindException("template hole '{${token.name}}' resolved to null")
+    if (hole.catchAll) {
+        appendCatchAllSegments(value, into)
+    } else {
+        // A single-segment `{name}` hole must be scalar; a collection cannot become one segment.
+        if (asIterableOrNull(value) != null) {
+            throw KuriBindException("template hole '{${token.name}}' is single-segment but was given a collection")
+        }
+        into.add(scalarText(value))
+    }
 }
 
 private fun appendCatchAllSegments(

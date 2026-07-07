@@ -28,7 +28,13 @@ public annotation class Url
 )
 public annotation class Uri
 
-/** A Go-style path skeleton on the root: `{name}` single segment, `{name...}` catch-all tail. */
+/**
+ * A Go-style path skeleton on the root: `{name}` single segment, `{name...}` catch-all tail.
+ *
+ * A leading `/` is decorative for an authority-less URI: with no authority a segment path roots only
+ * under one, so `@PathTemplate("/a/{id}")` renders as `a/7` (not `/a/7`); once an authority is present
+ * the path re-roots regardless.
+ */
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.CLASS)
 public annotation class PathTemplate(

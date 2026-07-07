@@ -19,6 +19,7 @@ import org.dexpace.kuri.bind.Username
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 private class Flat(
     @Scheme val s: String,
@@ -28,6 +29,12 @@ private class Flat(
 
 private class TwoAnnotations(
     @Host @Port val x: String,
+)
+
+// A complex merge target: `@Url` requires a complex object, so the AllComponents fixture merges this
+// rather than a scalar.
+private class SubMerge(
+    @Host val h: String,
 )
 
 // Exercises every remaining component annotation (all leaf ops plus a sub-URL recurse) so the
@@ -41,7 +48,17 @@ private data class AllComponents(
     @Path val seg: String,
     @Query val q: String,
     @QueryMap val qm: Map<String, String>,
+    @Url val base: SubMerge,
+)
+
+// `@Url` on a scalar member: rejected at compile since a scalar has no components to merge.
+private class ScalarMerge(
     @Url val base: String,
+)
+
+// `@QueryMap` on a non-map member: rejected at compile, mirroring `@Query` on a Map.
+private class NonMapQueryMap(
+    @QueryMap val notAMap: String,
 )
 
 class PlanCompilerFlatTest {
@@ -77,5 +94,17 @@ class PlanCompilerFlatTest {
         )
         val recurse = plan.steps.filterIsInstance<BindStep.Recurse>().single()
         assertEquals(Scope.MERGE, recurse.scope)
+    }
+
+    @Test
+    fun `rejects @Url on a scalar member`() {
+        val failure = assertFailsWith<KuriBindException> { compiler.compile(ScalarMerge::class) }
+        assertTrue(failure.message.orEmpty().contains("complex object"))
+    }
+
+    @Test
+    fun `rejects @QueryMap on a non-map member at compile`() {
+        val failure = assertFailsWith<KuriBindException> { compiler.compile(NonMapQueryMap::class) }
+        assertTrue(failure.message.orEmpty().contains("@QueryMap requires a Map"))
     }
 }

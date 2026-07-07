@@ -4,6 +4,9 @@
  */
 package org.dexpace.kuri.bind
 
+import java.math.BigDecimal
+import java.time.Instant
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -138,6 +141,82 @@ private class BadQuery(
     @Scheme val scheme: String = "https",
     @Host val host: String = "h",
     @Query("m") val m: Map<String, String>,
+)
+
+// A merge sub-object supplying a single-segment template hole.
+@Url
+private class IdCarrier(
+    @Path("id") val id: String,
+)
+
+// A merge sub-object supplying a catch-all template hole.
+@Url
+private class FilesCarrier(
+    @Path("path") val files: List<String>,
+)
+
+// A templated root whose `{id}` and `{path...}` holes are BOTH provided by `@Url`-merged
+// sub-objects. The template owns the path, so the merge members contribute no positional segments.
+@Url
+@PathTemplate("/users/{id}/files/{path...}")
+private class TemplatedMerge(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Url val ids: IdCarrier,
+    @Url val paths: FilesCarrier,
+)
+
+// A templated root mixing a root-declared `{id}` hole with a catch-all `{path...}` from a merge.
+@Url
+@PathTemplate("/users/{id}/files/{path...}")
+private class TemplatedMixedMerge(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Path("id") val id: String,
+    @Url val paths: FilesCarrier,
+)
+
+// A fully-specified object bound onto a base: its own scheme/host override the base's values.
+@Url
+private class OverridingRequest(
+    @Scheme val scheme: String = "http",
+    @Host val host: String = "object.example",
+)
+
+// Leaf-like `@Path`/`@Query` members whose types carry no binding annotations: they stringify as one
+// segment/parameter (toString) rather than recursing into nothing.
+@Url
+private class LeafLikeMembers(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Path val since: Instant,
+    @Query("id") val id: UUID,
+    @Query("amount") val amount: BigDecimal,
+)
+
+// A complex `@Query` member whose type DOES carry binding annotations: it must still recurse.
+@Url
+private class NestedQuery(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Query val filter: PriceFilter,
+)
+
+// A primitive array under `@Query`: each element becomes a repeated parameter.
+@Url
+private class ArrayQuery(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Query("b") val bytes: ByteArray,
+)
+
+// A single-segment `{id}` hole fed by a collection value: rejected fail-fast (it cannot be one segment).
+@Url
+@PathTemplate("/x/{id}")
+private class SingleHoleFedCollection(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Path("id") val id: List<String>,
 )
 
 /**
@@ -277,5 +356,66 @@ class IntegrationTest {
                 KuriBind.toUrl(BadQuery(m = mapOf("a" to "b")))
             }
         assertTrue(failure.message.orEmpty().contains("@QueryMap"))
+    }
+
+    @Test
+    fun `resolves template holes supplied across an @Url merge`() {
+        val url = KuriBind.toUrl(TemplatedMerge(ids = IdCarrier("42"), paths = FilesCarrier(listOf("a", "b"))))
+        assertEquals("https://h/users/42/files/a/b", url.toString())
+        assertEquals(listOf("users", "42", "files", "a", "b"), url.pathSegments)
+    }
+
+    @Test
+    fun `resolves a template hole from the root and a catch-all from a merge`() {
+        val url = KuriBind.toUrl(TemplatedMixedMerge(id = "42", paths = FilesCarrier(listOf("a", "b"))))
+        assertEquals("https://h/users/42/files/a/b", url.toString())
+        assertEquals(listOf("users", "42", "files", "a", "b"), url.pathSegments)
+    }
+
+    @Test
+    fun `object single-valued components override the base builder`() {
+        val base = KuriUrl.parseOrThrow("https://base.example/v1")
+        val url = KuriBind.bindInto(base.newBuilder(), OverridingRequest()).build()
+        assertEquals("http", url.scheme)
+        assertEquals("object.example", url.host?.asText())
+        assertEquals("http://object.example/v1", url.toString())
+    }
+
+    @Test
+    fun `renders leaf-like query and path members via toString`() {
+        val id = UUID.fromString("00000000-0000-0000-0000-00000000002a")
+        val since = Instant.parse("2020-01-02T03:04:05Z")
+        val url = KuriBind.toUrl(LeafLikeMembers(since = since, id = id, amount = BigDecimal("12.50")))
+        assertEquals(listOf(since.toString()), url.pathSegments)
+        assertEquals("id=$id&amount=12.50", url.query)
+    }
+
+    @Test
+    fun `a complex query member with annotated members still recurses`() {
+        val url = KuriBind.toUrl(NestedQuery(filter = PriceFilter(min = 1, max = 2)))
+        assertEquals("https://h/?min=1&max=2", url.toString())
+    }
+
+    @Test
+    fun `expands a primitive byte array query into repeated parameters`() {
+        val url = KuriBind.toUrl(ArrayQuery(bytes = byteArrayOf(1, 2, 3)))
+        assertEquals("https://h/?b=1&b=2&b=3", url.toString())
+    }
+
+    @Test
+    fun `rejects a single-segment template hole fed by a collection`() {
+        val failure =
+            assertFailsWith<KuriBindException> {
+                KuriBind.toUrl(SingleHoleFedCollection(id = listOf("a", "b")))
+            }
+        assertTrue(failure.message.orEmpty().contains("single-segment"))
+    }
+
+    @Test
+    fun `getter-only bean binds path members in a stable name-sorted order`() {
+        val url = KuriBind.toUrl(OrderedBean())
+        // Getters have no reliable reflective order, so the @Path segments sort by name.
+        assertEquals(listOf("a", "m", "z"), url.pathSegments)
+        assertEquals("https://h/a/m/z", url.toString())
     }
 }

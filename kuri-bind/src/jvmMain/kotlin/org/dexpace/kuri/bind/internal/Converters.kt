@@ -38,13 +38,23 @@ internal fun splitUserInfo(token: String): UserInfoValue {
 internal fun hostValueOf(value: Any): HostValue =
     if (value is Host) HostValue.Structured(value) else HostValue.Text(scalarText(value))
 
-/** Views arrays and `Iterable`s as `Iterable<Any?>`; returns null for non-collections. */
+/**
+ * Views arrays and `Iterable`s as `Iterable<Any?>`; returns null for non-collections. Every array
+ * kind is covered so the view stays aligned with `isCollectionType` (which treats all arrays as
+ * collections) — otherwise a primitive array would slip through and render as a single `"[B@…"`.
+ */
 internal fun asIterableOrNull(value: Any): Iterable<Any?>? =
     when (value) {
         is Iterable<*> -> value
         is Array<*> -> value.asList()
         is IntArray -> value.asList()
         is LongArray -> value.asList()
+        is ByteArray -> value.asList()
+        is ShortArray -> value.asList()
+        is CharArray -> value.asList()
+        is BooleanArray -> value.asList()
+        is FloatArray -> value.asList()
+        is DoubleArray -> value.asList()
         else -> null
     }
 

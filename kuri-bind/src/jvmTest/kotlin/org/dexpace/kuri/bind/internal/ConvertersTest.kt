@@ -74,6 +74,12 @@ class ConvertersTest {
     fun `asIterableOrNull views primitive arrays`() {
         assertEquals(listOf(1, 2), asIterableOrNull(intArrayOf(1, 2))?.toList())
         assertEquals(listOf(1L, 2L), asIterableOrNull(longArrayOf(1L, 2L))?.toList())
+        assertEquals(listOf<Byte>(1, 2), asIterableOrNull(byteArrayOf(1, 2))?.toList())
+        assertEquals(listOf<Short>(1, 2), asIterableOrNull(shortArrayOf(1, 2))?.toList())
+        assertEquals(listOf('a', 'b'), asIterableOrNull(charArrayOf('a', 'b'))?.toList())
+        assertEquals(listOf(true, false), asIterableOrNull(booleanArrayOf(true, false))?.toList())
+        assertEquals(listOf(1.5f, 2.5f), asIterableOrNull(floatArrayOf(1.5f, 2.5f))?.toList())
+        assertEquals(listOf(1.5, 2.5), asIterableOrNull(doubleArrayOf(1.5, 2.5))?.toList())
     }
 
     @Test

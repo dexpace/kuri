@@ -48,14 +48,6 @@ internal interface BuilderSink {
     /** Appends a single decoded path segment. The implementation percent-encodes it. */
     fun addPathSegment(decoded: String)
 
-    /**
-     * Appends all decoded path segments derived from splitting [decodedSlashPath] on `/`.
-     *
-     * Equivalent to calling [addPathSegment] for each slash-delimited token; the builder
-     * normalises the result according to its profile.
-     */
-    fun addPathSegmentsRaw(decodedSlashPath: String)
-
     /** Appends a query parameter from decoded [name] and optional decoded [value]. */
     fun addQueryParameter(
         name: String,
@@ -110,10 +102,6 @@ internal class UrlBuilderSink(
 
     override fun addPathSegment(decoded: String) {
         builder.addPathSegment(decoded)
-    }
-
-    override fun addPathSegmentsRaw(decodedSlashPath: String) {
-        builder.addPathSegments(decodedSlashPath)
     }
 
     override fun addQueryParameter(
@@ -191,10 +179,6 @@ internal class UriBuilderSink(
 
     override fun addPathSegment(decoded: String) {
         builder.addPathSegment(decoded)
-    }
-
-    override fun addPathSegmentsRaw(decodedSlashPath: String) {
-        builder.addPathSegments(decodedSlashPath)
     }
 
     override fun addQueryParameter(

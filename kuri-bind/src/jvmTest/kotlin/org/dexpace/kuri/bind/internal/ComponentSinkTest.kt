@@ -80,19 +80,6 @@ class ComponentSinkTest {
     }
 
     @Test
-    fun `raw path segments split and accumulate before later single segments`() {
-        val url =
-            urlOf {
-                setScheme("https", "s")
-                setHost(HostValue.Text("h"), "h")
-                addPathSegmentsRaw("a/b")
-                addPathSegment("c")
-            }
-        assertEquals("/a/b/c", url.encodedPath)
-        assertEquals("h", url.host?.asText())
-    }
-
-    @Test
     fun `structured host projects onto the builder`() {
         val url =
             urlOf {

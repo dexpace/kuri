@@ -24,17 +24,6 @@ internal data class UserInfoValue(
     val password: String?,
 )
 
-/** A queued multi-valued path operation. */
-private sealed interface PathOp {
-    data class Segment(
-        val decoded: String,
-    ) : PathOp
-
-    data class Segments(
-        val raw: String,
-    ) : PathOp
-}
-
 /**
  * Accumulates decoded component contributions under the collision policy, then projects once onto a
  * [BuilderSink]. Single-valued slots are first-writer-wins; a conflicting later write is ignored,
@@ -48,7 +37,7 @@ internal class ComponentSink(
     private var host: HostValue? = null
     private var port: Int? = null
     private var fragment: String? = null
-    private val pathOps: MutableList<PathOp> = ArrayList()
+    private val pathSegments: MutableList<String> = ArrayList()
     private val queryParams: MutableList<Pair<String, String?>> = ArrayList()
 
     fun setScheme(
@@ -88,11 +77,7 @@ internal class ComponentSink(
     }
 
     fun addPathSegment(decoded: String) {
-        pathOps.add(PathOp.Segment(decoded))
-    }
-
-    fun addPathSegmentsRaw(raw: String) {
-        pathOps.add(PathOp.Segments(raw))
+        pathSegments.add(decoded)
     }
 
     fun addQueryParameter(
@@ -112,12 +97,7 @@ internal class ComponentSink(
             null -> Unit
         }
         port?.let(sink::port)
-        for (op in pathOps) {
-            when (op) {
-                is PathOp.Segment -> sink.addPathSegment(op.decoded)
-                is PathOp.Segments -> sink.addPathSegmentsRaw(op.raw)
-            }
-        }
+        for (segment in pathSegments) sink.addPathSegment(segment)
         for ((name, value) in queryParams) sink.addQueryParameter(name, value)
         fragment?.let(sink::fragmentDecoded)
     }

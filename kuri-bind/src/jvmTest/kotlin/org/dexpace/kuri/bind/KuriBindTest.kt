@@ -6,8 +6,10 @@ package org.dexpace.kuri.bind
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import org.dexpace.kuri.Url as KuriUrl
 
 @Url
@@ -15,6 +17,13 @@ import org.dexpace.kuri.Url as KuriUrl
 private class ItemLookup(
     @Path("id") val id: String,
 )
+
+// A root whose host getter throws a non-argument exception: `...OrNull` must let it propagate rather
+// than swallow it into `null` (only an `IllegalArgumentException` maps to `null`).
+@Url
+private class ThrowingHost {
+    @Host val host: String get() = error("boom")
+}
 
 @Url
 private class Absolute(
@@ -77,5 +86,11 @@ class KuriBindTest {
     fun `toUriOrNull returns null when the root lacks the uri marker`() {
         val result = KuriBind.toUriOrNull(NoRootMarker("x"))
         assertNull(result)
+    }
+
+    @Test
+    fun `toUrlOrNull rethrows a non-argument failure instead of swallowing it`() {
+        val error = assertFails { KuriBind.toUrlOrNull(ThrowingHost()) }
+        assertTrue(error !is IllegalArgumentException)
     }
 }

@@ -21,7 +21,14 @@ import org.dexpace.kuri.bind.Url as UrlMarker
  * Annotate the root class with [Url] or [Uri], mark its members with the component annotations
  * ([Scheme], [Host], [Path], [Query], ...), then call one of these methods. URL entry points require an
  * `@Url` root and URI entry points require a `@Uri` root; a missing or mismatched marker raises
- * [KuriBindException]. The `...OrNull` variants translate any binding or build failure into `null`.
+ * [KuriBindException]. The `...OrNull` variants translate a binding or build failure into `null`.
+ *
+ * **Member order.** Source-order fidelity is guaranteed only for Kotlin classes with a primary
+ * constructor — members bind in constructor-parameter order. Every other shape (Java beans, and
+ * body-declared or non-constructor properties) has no reliable declaration order through reflection,
+ * so those members bind in a stable, deterministic order sorted by name. Where positional order
+ * matters — repeated `@Path` segments especially — use a Kotlin primary-constructor class (a `data
+ * class`) or pin the order explicitly with [PathTemplate].
  *
  * A single compiled-plan cache backs every call and is shared across both profiles, so a root type is
  * scanned and validated exactly once regardless of how often — or through which profile — it is bound.
@@ -37,8 +44,11 @@ public object KuriBind {
     /**
      * Binds [target] onto [base], returning the same builder so calls can chain.
      *
-     * [base] wins for single-valued components (first-writer-wins); [target] appends path segments and
-     * query parameters on top of whatever [base] already holds.
+     * [target]'s single-valued components ([Scheme], [Host], [Port], userinfo, [Fragment]) **override**
+     * whatever [base] already holds for that slot; a component [target] does not carry leaves [base]'s
+     * value untouched. [target]'s path segments and query parameters are **appended** on top of [base].
+     * [BindOptions.strict] governs conflicts **within** [target]'s own object graph (e.g. a merged
+     * sub-object disagreeing with its parent) — it does not compare [target] against [base].
      *
      * @param base the builder to bind into; the returned instance is always this same object.
      * @param target the `@Url`-annotated root object to read component values from.
@@ -126,7 +136,7 @@ public object KuriBind {
     public fun toUrlBuilderOrNull(
         target: Any,
         options: BindOptions = BindOptions.DEFAULT,
-    ): Url.Builder? = runCatching { toUrlBuilder(target, options) }.getOrNull()
+    ): Url.Builder? = nullOnInvalid { toUrlBuilder(target, options) }
 
     /**
      * Like [toUrl], but returns `null` instead of throwing on any binding or build failure.
@@ -185,7 +195,7 @@ public object KuriBind {
     public fun toUriBuilderOrNull(
         target: Any,
         options: BindOptions = BindOptions.DEFAULT,
-    ): Uri.Builder? = runCatching { toUriBuilder(target, options) }.getOrNull()
+    ): Uri.Builder? = nullOnInvalid { toUriBuilder(target, options) }
 
     /**
      * Like [toUri], but returns `null` instead of throwing on any binding or build failure.
@@ -223,3 +233,15 @@ private fun requireRoot(
         throw KuriBindException("root ${target::class.simpleName} is not annotated @${profile.name.lowercase()}")
     }
 }
+
+/**
+ * Runs [block], returning `null` when it fails with an [IllegalArgumentException] and rethrowing
+ * anything else.
+ *
+ * Every expected binding failure is an [IllegalArgumentException] — [KuriBindException] extends it,
+ * and the builders' range checks throw it — so narrowing to that type keeps the `null`-on-failure
+ * contract while letting an [Error] or an unexpected programmer fault propagate instead of being
+ * silently swallowed.
+ */
+private inline fun <T> nullOnInvalid(block: () -> T): T? =
+    runCatching(block).getOrElse { cause -> if (cause is IllegalArgumentException) null else throw cause }

@@ -37,9 +37,11 @@ internal interface MemberScanner {
 /**
  * kotlin-reflect member discovery covering both Kotlin and Java bean types.
  *
- * **Ordering:** primary-constructor parameter order when a `primaryConstructor` exists; otherwise
- * `memberProperties` iteration order. Getter-derived members that have no corresponding property
- * are appended after the property-derived members.
+ * **Ordering:** primary-constructor parameter order when a `primaryConstructor` exists. Members
+ * with no constructor position — body-declared properties, getter-derived members, and every
+ * member of a Java bean (no primary constructor) — carry no reliable declaration order through
+ * kotlin-reflect, so they are sorted by name for determinism across JVM builds. Getter-derived
+ * members that have no corresponding property are appended after the property-derived members.
  *
  * **Annotation sites:** for each property — the property itself, its backing `javaField`, its
  * getter, and the matching primary-constructor parameter — deduped by `annotationClass`. This
@@ -67,13 +69,19 @@ internal class KotlinReflectMemberScanner : MemberScanner {
         for (prop in ordered) {
             @Suppress("UNCHECKED_CAST")
             val p = prop as KProperty1<Any, *>
-            p.isAccessible = true
+            // Accessibility is forced lazily, at read time, not here. Scanning a type only inspects
+            // annotations (e.g. deciding whether a `@Query`/`@Path` value is a leaf-like `UUID`/
+            // `Instant` or a nested object), and `setAccessible` on a JDK type's module-encapsulated
+            // field throws `InaccessibleObjectException` — which a mere shape probe must not trigger.
             result[p.name] =
                 ScannedMember(
                     name = p.name,
                     annotations = annotationSites(type, p),
                     declaredType = (p.returnType.classifier as? KClass<*>) ?: Any::class,
-                    read = { instance -> p.get(instance) },
+                    read = { instance ->
+                        p.isAccessible = true
+                        p.get(instance)
+                    },
                 )
         }
         return result
@@ -83,20 +91,25 @@ internal class KotlinReflectMemberScanner : MemberScanner {
      * Scans for annotated `get*`/`is*` zero-argument member functions.
      * Only includes functions that carry at least one annotation — bare Object/Any methods
      * (getClass, hashCode…) are skipped by the empty-annotation guard.
+     *
+     * `memberFunctions` iteration order is unspecified (it derives from `Class.getDeclaredMethods`),
+     * so the result is sorted by logical name to make Java-bean member order deterministic across
+     * JVM builds.
      */
     private fun buildGetterMembers(type: KClass<*>): List<ScannedMember> =
-        type.memberFunctions.mapNotNull { func ->
-            val logicalName = deriveGetterName(func) ?: return@mapNotNull null
-            val annotations = func.annotations.distinctBy { it.annotationClass }
-            if (annotations.isEmpty()) return@mapNotNull null
-            func.isAccessible = true
-            ScannedMember(
-                name = logicalName,
-                annotations = annotations,
-                declaredType = (func.returnType.classifier as? KClass<*>) ?: Any::class,
-                read = { instance -> func.call(instance) },
-            )
-        }
+        type.memberFunctions
+            .mapNotNull { func ->
+                val logicalName = deriveGetterName(func) ?: return@mapNotNull null
+                val annotations = func.annotations.distinctBy { it.annotationClass }
+                if (annotations.isEmpty()) return@mapNotNull null
+                func.isAccessible = true
+                ScannedMember(
+                    name = logicalName,
+                    annotations = annotations,
+                    declaredType = (func.returnType.classifier as? KClass<*>) ?: Any::class,
+                    read = { instance -> func.call(instance) },
+                )
+            }.sortedBy { it.name }
 
     /**
      * Derives the logical property name from a getter function name, or returns null if the
@@ -137,18 +150,23 @@ internal class KotlinReflectMemberScanner : MemberScanner {
     }
 
     /**
-     * Orders properties by primary-constructor parameter position, appending any properties that
-     * do not appear in the constructor (e.g., body-declared properties) in iteration order.
+     * Orders properties by primary-constructor parameter position, appending any properties that do
+     * not appear in the constructor (e.g., body-declared properties) afterwards.
+     *
+     * Primary-constructor position is the source order Kotlin authors expect. Everything else —
+     * body-declared properties, and every property of a type with no primary constructor (Java
+     * beans) — has no reliable declaration order through kotlin-reflect, so it is sorted by name to
+     * stay deterministic across JVM builds rather than following `memberProperties` iteration order.
      */
     private fun orderProperties(
         type: KClass<*>,
         properties: Map<String, KProperty1<out Any, *>>,
     ): List<KProperty1<out Any, *>> {
-        val ctor = type.primaryConstructor ?: return properties.values.toList()
+        val ctor = type.primaryConstructor ?: return properties.values.sortedBy { it.name }
         val ctorParamNames = ctor.parameters.mapNotNull { it.name }
         val byCtor = ctorParamNames.mapNotNull { properties[it] }
         val ctorNameSet = ctorParamNames.toSet()
-        val rest = properties.values.filter { it.name !in ctorNameSet }
+        val rest = properties.values.filter { it.name !in ctorNameSet }.sortedBy { it.name }
 
         return byCtor + rest
     }
