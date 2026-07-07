@@ -4,27 +4,15 @@
  */
 package org.dexpace.kuri.scheme
 
+import org.dexpace.kuri.text.asciiLowercased
 import org.dexpace.kuri.text.isAsciiAlpha
-import org.dexpace.kuri.text.isAsciiDigit
-
-/** ASCII distance from an upper-case letter to its lower-case counterpart (`'a' - 'A'`, 32). */
-private const val ASCII_CASE_OFFSET: Int = 'a' - 'A'
+import org.dexpace.kuri.text.isAsciiAlphanumeric
 
 /**
- * Lower-cases a single ASCII letter, leaving every other code point untouched (SPEC §6.3).
- *
- * Mapping is by exact numeric range so it is locale-invariant: no Unicode case folding and
- * no Turkish dotless-`i` mapping can occur ([SCH-16]). A valid scheme is ASCII-only, so this
- * is total over every code point a scheme can contain.
- */
-private fun Char.asciiLowercasedChar(): Char = if (this in 'A'..'Z') this + ASCII_CASE_OFFSET else this
-
-/**
- * True when [c] may appear after the first code point of a scheme: ASCII alpha, ASCII digit,
+ * True when [c] may appear after the first code point of a scheme: ASCII alphanumeric,
  * `+`, `-`, or `.` (SPEC §6.2, Table 6-2; [SCH-8]).
  */
-private fun isSchemeTailChar(c: Char): Boolean =
-    c.isAsciiAlpha() || c.isAsciiDigit() || c == '+' || c == '-' || c == '.'
+internal fun isSchemeContinuationChar(c: Char): Boolean = c.isAsciiAlphanumeric() || c == '+' || c == '-' || c == '.'
 
 /**
  * The index of the `:` in [text] that would introduce a `scheme:` prefix — the first `:` when it
@@ -64,7 +52,7 @@ internal object Scheme {
             return false
         }
         val firstIsAlpha = value[0].isAsciiAlpha()
-        val tailIsValid = (1 until value.length).all { isSchemeTailChar(value[it]) }
+        val tailIsValid = (1 until value.length).all { isSchemeContinuationChar(value[it]) }
         return firstIsAlpha && tailIsValid
     }
 
@@ -79,7 +67,7 @@ internal object Scheme {
      * @return [value] with every ASCII `A`–`Z` mapped to `a`–`z`.
      */
     fun normalize(value: String): String {
-        val normalized = buildString(value.length) { value.forEach { append(it.asciiLowercasedChar()) } }
+        val normalized = buildString(value.length) { value.forEach { append(it.asciiLowercased()) } }
         check(normalized.length == value.length) { "scheme normalization changed length: $value" }
         check(normalized.none { it in 'A'..'Z' }) { "scheme normalization left upper-case: $normalized" }
         return normalized

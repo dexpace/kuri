@@ -12,9 +12,7 @@ import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSets
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.scheme.schemeColonIndex
-
-/** First non-ASCII code point; a host carrying any point `>=` this is routed through IDNA. */
-private const val NON_ASCII_MIN: Int = 0x80
+import org.dexpace.kuri.text.isAllAscii
 
 /** The authority-introducing `//` and the number of code units it spans (RFC 3986 §3.2). */
 private const val DOUBLE_SLASH: String = "//"
@@ -67,7 +65,7 @@ internal object IriMapping {
      * UTS-46 [Idna.domainToAscii], whose failure becomes the conversion failure.
      */
     private fun mapHost(host: String): ParseResult<String> {
-        val verbatim = host.startsWith('[') || isAllAscii(host)
+        val verbatim = host.startsWith('[') || host.isAllAscii()
         return when {
             verbatim -> ParseResult.Ok(host)
             else -> Idna.domainToAscii(host)
@@ -189,9 +187,6 @@ internal object IriMapping {
         val port = if (rest.startsWith(':')) rest.substring(1) else null
         return Authority(userInfo, host, port)
     }
-
-    /** True when every UTF-16 unit of [value] is ASCII (`< 0x80`); an ASCII host skips IDNA ToASCII. */
-    private fun isAllAscii(value: String): Boolean = value.all { it.code < NON_ASCII_MIN }
 
     /** The located structural components of an IRI, each carried raw (pre-transform). */
     private data class IriParts(

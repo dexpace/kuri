@@ -9,8 +9,11 @@ import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.text.MAX_CODE_POINT
+import org.dexpace.kuri.text.NON_ASCII_MIN
 import org.dexpace.kuri.text.appendCodePoint
+import org.dexpace.kuri.text.asciiLowercased
 import org.dexpace.kuri.text.codePointsOf
+import org.dexpace.kuri.text.isAllAscii
 
 /** ACE prefix marking a Punycode-encoded (`xn--`) label (RFC 5890 §2.3.2.1). */
 private const val ACE_PREFIX: String = "xn--"
@@ -20,12 +23,6 @@ private const val ACE_PREFIX_LENGTH: Int = 4
 
 /** Label separator inside a domain (U+002E FULL STOP); also the join separator. */
 private const val LABEL_SEPARATOR: String = "."
-
-/** First non-ASCII code point; a label with any point `>=` this needs ACE encoding. */
-private const val NON_ASCII_MIN: Int = 0x80
-
-/** Distance from an uppercase ASCII letter to its lowercase counterpart (`'A'` -> `'a'`). */
-private const val ASCII_CASE_OFFSET: Int = 0x20
 
 /**
  * UTS-46 ToASCII / ToUnicode for IDNA domains (SPEC §7.4, [HOST-26]) under the `Url`-profile
@@ -88,7 +85,7 @@ internal object Idna {
      */
     internal fun domainToAsciiForUrl(domain: String): ParseResult<String> {
         val result =
-            if (isAsciiString(domain)) {
+            if (domain.isAllAscii()) {
                 asciiLowercase(domain)
             } else {
                 when (val ascii = domainToAscii(domain)) {
@@ -240,7 +237,7 @@ internal object Idna {
         label: String,
         domain: String,
     ): ParseResult<String> {
-        if (label.all { it.code < NON_ASCII_MIN }) {
+        if (label.isAllAscii()) {
             return ParseResult.Ok(label)
         }
         return when (val encoded = Punycode.encode(label)) {
@@ -264,12 +261,9 @@ internal object Idna {
     private fun idnaError(domain: String): ParseResult.Err =
         ParseResult.Err(UriParseError.InvalidHost(domain, HostError.IdnaFailed))
 
-    /** True when every UTF-16 unit of [s] is ASCII (`< 0x80`); an ASCII domain skips UTS-46 ToASCII. */
-    private fun isAsciiString(s: String): Boolean = s.all { it.code < NON_ASCII_MIN }
-
     /** ASCII-lowercases [s] (`A`–`Z` -> `a`–`z`), leaving every other code unit unchanged. */
     private fun asciiLowercase(s: String): String =
         buildString(s.length) {
-            for (c in s) append(if (c in 'A'..'Z') c + ASCII_CASE_OFFSET else c)
+            for (c in s) append(c.asciiLowercased())
         }
 }

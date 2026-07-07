@@ -4,25 +4,20 @@
  */
 package org.dexpace.kuri.percent
 
-import org.dexpace.kuri.text.hexDigitToInt
-import org.dexpace.kuri.text.isAsciiHexDigit
+import org.dexpace.kuri.text.NON_ASCII_MIN
+import org.dexpace.kuri.text.hasPercentHexPairAt
 import org.dexpace.kuri.text.isSurrogatePairAt
+import org.dexpace.kuri.text.percentByteAt
 import org.dexpace.kuri.text.toPercentEncodedByte
 
 /** Mask isolating the low eight bits of an `Int`, turning a signed `Byte` into an octet `0..255`. */
 private const val BYTE_MASK: Int = 0xFF
-
-/** Bit width of one hex nibble; shifting the high hex digit left by this composes a triplet octet. */
-private const val HEX_SHIFT: Int = 4
 
 /** Length of a percent-encoded triplet, `%XX` (SPEC §5). */
 private const val TRIPLET_LENGTH: Int = 3
 
 /** U+FFFD, substituted for a lone surrogate that cannot be UTF-8 encoded ([PCT-21]). */
 private const val REPLACEMENT_CHARACTER: String = "\uFFFD"
-
-/** First non-ASCII octet value; a triplet run decodes to display text only when every octet is `>=` this. */
-private const val NON_ASCII_MIN: Int = 0x80
 
 /**
  * Percent-encoding ([encode], SPEC §5.2) and percent-decoding ([decode], SPEC §5.3).
@@ -99,7 +94,7 @@ internal object PercentCodec {
             val c = input[i]
             i =
                 when {
-                    c == '%' && hasHexPairAt(input, i) -> appendTripletRun(out, input, i)
+                    c == '%' && hasPercentHexPairAt(input, i) -> appendTripletRun(out, input, i)
                     plusAsSpace && c == '+' -> appendLiteral(out, ' ', i)
                     else -> appendLiteral(out, c, i)
                 }
@@ -129,7 +124,7 @@ internal object PercentCodec {
             val c = input[i]
             i =
                 when {
-                    c == '%' && hasHexPairAt(input, i) -> appendNonAsciiRun(out, input, i)
+                    c == '%' && hasPercentHexPairAt(input, i) -> appendNonAsciiRun(out, input, i)
                     else -> appendLiteral(out, c, i)
                 }
         }
@@ -165,7 +160,7 @@ internal object PercentCodec {
         var source = start
         var target = 0
         while (target < count) {
-            bytes[target] = tripletByte(input, source).toByte()
+            bytes[target] = percentByteAt(input, source).toByte()
             source += TRIPLET_LENGTH
             target++
         }
@@ -185,7 +180,7 @@ internal object PercentCodec {
     private fun isNonAsciiTripletAt(
         input: String,
         i: Int,
-    ): Boolean = input[i] == '%' && hasHexPairAt(input, i) && tripletByte(input, i) >= NON_ASCII_MIN
+    ): Boolean = input[i] == '%' && hasPercentHexPairAt(input, i) && percentByteAt(input, i) >= NON_ASCII_MIN
 
     /**
      * Returns the index of the first code unit that requires encoding under [set], or `-1` when
@@ -256,7 +251,7 @@ internal object PercentCodec {
     ): Int {
         require(input[start] == '%') { "triplet run must start at a percent sign" }
         var end = start
-        while (end < input.length && input[end] == '%' && hasHexPairAt(input, end)) {
+        while (end < input.length && input[end] == '%' && hasPercentHexPairAt(input, end)) {
             end += TRIPLET_LENGTH
         }
         val count = (end - start) / TRIPLET_LENGTH
@@ -265,32 +260,11 @@ internal object PercentCodec {
         var source = start
         var target = 0
         while (target < count) {
-            bytes[target] = tripletByte(input, source).toByte()
+            bytes[target] = percentByteAt(input, source).toByte()
             source += TRIPLET_LENGTH
             target++
         }
         out.append(bytes.decodeToString())
         return end
-    }
-
-    /** True when [i] holds a `%` followed by two ASCII hex digits ([PCT-22], [PCT-24]). */
-    private fun hasHexPairAt(
-        input: String,
-        i: Int,
-    ): Boolean {
-        val high = i + 1
-        val low = i + 2
-        return low < input.length && input[high].isAsciiHexDigit() && input[low].isAsciiHexDigit()
-    }
-
-    /** Decodes the two hex digits following the `%` at [i] into one octet `0..255`. */
-    private fun tripletByte(
-        input: String,
-        i: Int,
-    ): Int {
-        val high = hexDigitToInt(input[i + 1])
-        val low = hexDigitToInt(input[i + 2])
-        check(high >= 0 && low >= 0) { "triplet bytes must follow a verified hex pair" }
-        return (high shl HEX_SHIFT) or low
     }
 }
