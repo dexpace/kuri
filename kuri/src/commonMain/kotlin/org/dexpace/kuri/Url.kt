@@ -13,6 +13,7 @@ import org.dexpace.kuri.parser.BuilderPath
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.UrlParser
 import org.dexpace.kuri.parser.UrlPath
+import org.dexpace.kuri.parser.decodedSegments
 import org.dexpace.kuri.parser.fileExtensionOf
 import org.dexpace.kuri.parser.fileNameOf
 import org.dexpace.kuri.percent.PercentCodec
@@ -136,11 +137,7 @@ public class Url internal constructor(
     /** The decoded path segments in order (read-only); an opaque path yields its single decoded value. */
     @get:JvmName("pathSegments")
     public val pathSegments: List<String>
-        get() =
-            when (val path = components.path) {
-                is UrlPath.Opaque -> listOf(PercentCodec.decode(path.path))
-                is UrlPath.Segments -> path.segments.map { PercentCodec.decode(it) }
-            }
+        get() = decodedSegments(components.path) { PercentCodec.decode(it) }
 
     /** The canonical encoded path string (e.g. `/a/b`, or the opaque path verbatim). */
     @get:JvmName("encodedPath")
@@ -806,18 +803,7 @@ public class Url internal constructor(
          */
         public fun build(): Url {
             val path = effectivePath()
-            require(hasRequiredHost()) {
-                "a special scheme requires a host: set host(...) before build(): $scheme"
-            }
-            require(pathMatchesAuthority(path)) {
-                "a path with an authority must be empty or start with '/': $path"
-            }
-            require(pathAllowedWithoutAuthority(path)) {
-                "an authority-less path cannot begin with '//': $path"
-            }
-            require(this.path.wellFormed()) {
-                "a rootless path cannot begin with an empty segment; the edit would re-root it: $path"
-            }
+            composabilityError(path)?.let { throw IllegalArgumentException(it) }
             return buildResult(path).getOrThrow()
         }
 
@@ -835,7 +821,7 @@ public class Url internal constructor(
          */
         public fun buildOrNull(): Url? {
             val path = effectivePath()
-            if (!isComposable(path)) return null
+            if (composabilityError(path) != null) return null
             return buildResult(path).getOrNull()
         }
 
@@ -891,11 +877,26 @@ public class Url internal constructor(
          */
         private fun pathAllowedWithoutAuthority(path: String): Boolean = host != null || !path.startsWith("//")
 
-        /** True iff [build] would pass its composability requires for [path] without throwing; for [buildOrNull]. */
-        private fun isComposable(path: String): Boolean =
-            hasRequiredHost() &&
-                pathMatchesAuthority(path) &&
-                pathAllowedWithoutAuthority(path) &&
-                this.path.wellFormed()
+        /**
+         * The message for the first component combination that cannot form a valid URL, or `null` when
+         * the accumulated components are composable.
+         *
+         * The single ordered source of the composability rules [build] and [buildOrNull] share, so a
+         * rule cannot drift between the throwing and the non-throwing path: a special (non-`file`)
+         * scheme needs a host (whose absence the parser would misread as the first path segment), a
+         * present authority forbids a rootless [path], and a rootless path must not re-root at build.
+         */
+        private fun composabilityError(path: String): String? =
+            when {
+                !hasRequiredHost() ->
+                    "a special scheme requires a host: set host(...) before build(): $scheme"
+                !pathMatchesAuthority(path) ->
+                    "a path with an authority must be empty or start with '/': $path"
+                !pathAllowedWithoutAuthority(path) ->
+                    "an authority-less path cannot begin with '//': $path"
+                !this.path.wellFormed() ->
+                    "a rootless path cannot begin with an empty segment; the edit would re-root it: $path"
+                else -> null
+            }
     }
 }

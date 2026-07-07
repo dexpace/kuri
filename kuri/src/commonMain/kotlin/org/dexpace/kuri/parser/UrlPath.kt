@@ -157,6 +157,23 @@ internal fun fileExtensionOf(name: String): String {
 }
 
 /**
+ * The decoded path segments of [path], each percent-decoded through [decode]; an
+ * [Opaque][UrlPath.Opaque] path has no segment structure and yields its single decoded value as a
+ * one-element list. Shared by the `Uri`/`Url` `pathSegments` projections.
+ *
+ * Takes the decoder as a lambda so this helper stays free of the percent-codec dependency, the same
+ * convention [appendPathSegments] follows with its `encode` lambda.
+ */
+internal fun decodedSegments(
+    path: UrlPath,
+    decode: (String) -> String,
+): List<String> =
+    when (path) {
+        is UrlPath.Opaque -> listOf(decode(path.path))
+        is UrlPath.Segments -> path.segments.map(decode)
+    }
+
+/**
  * Appends the '/'-separated [input] onto [current] as decoded path segments (OkHttp
  * `HttpUrl.Builder.addPathSegments` semantics), encoding each piece with [encode].
  *
