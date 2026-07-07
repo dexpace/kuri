@@ -33,7 +33,10 @@ internal interface BuilderSink {
     /** Sets the host from a plain text (possibly IDNA) hostname string. */
     fun hostText(value: String)
 
-    /** Sets the port. The caller guarantees [value] is within 0–65535 (validated in `convertPort`). */
+    /**
+     * Sets the port. The caller guarantees [value] is non-negative (validated in `convertPort`); each
+     * profile's builder then applies its own upper bound — `Url` caps at 65535, `Uri` applies no cap.
+     */
     fun port(value: Int)
 
     /** Appends a single decoded path segment. The implementation percent-encodes it. */

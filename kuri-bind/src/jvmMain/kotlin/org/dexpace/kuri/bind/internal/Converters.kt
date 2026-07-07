@@ -7,17 +7,19 @@ package org.dexpace.kuri.bind.internal
 import org.dexpace.kuri.bind.KuriBindException
 import org.dexpace.kuri.host.Host
 
-/** The inclusive port ceiling shared by both profiles: a port is a 16-bit number (0–65535). */
-private const val MAX_PORT = 65535
-
 /** Renders a scalar to text: enums by `name`, everything else by `toString`. */
 internal fun scalarText(value: Any): String = if (value is Enum<*>) value.name else value.toString()
 
 /**
- * Converts a value to a port, accepting integral numbers and numeric strings and enforcing the
- * 0–65535 range. Both the type failure and the range failure raise [KuriBindException] carrying
- * [path], so a misconfigured port surfaces uniformly with the member it came from — the profile sinks
- * therefore forward the already-validated port without re-checking it.
+ * Coerces a value to a non-negative port number, accepting integral numbers and numeric strings. A
+ * non-numeric value or a negative number raises [KuriBindException] carrying [path], so a misconfigured
+ * port surfaces with the member it came from.
+ *
+ * Only the profile-agnostic floor (`>= 0`, required by both profiles) is enforced here; the upper bound
+ * is deliberately left to each profile's builder at projection — `Url.Builder.port` caps at 65535 while
+ * `Uri.Builder.port` applies no cap (RFC 3986 `port = *DIGIT`). Enforcing a shared 65535 ceiling here
+ * would wrongly reject `Uri` ports the core accepts, and would duplicate a range the builders already
+ * own; keeping this converter profile-agnostic matches the rest of the accumulation stage.
  */
 internal fun convertPort(
     value: Any,
@@ -34,9 +36,7 @@ internal fun convertPort(
             else -> null
         }
     val resolved = port ?: throw KuriBindException("not a valid port: '$value' (${value::class.simpleName})", path)
-    if (resolved !in 0..MAX_PORT) {
-        throw KuriBindException("port out of range [$resolved]: must be 0–$MAX_PORT", path)
-    }
+    if (resolved < 0) throw KuriBindException("port must be non-negative [$resolved]", path)
     return resolved
 }
 

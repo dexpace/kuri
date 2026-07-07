@@ -49,12 +49,14 @@ class ConvertersTest {
     }
 
     @Test
-    fun `convertPort rejects a port outside the 0 to 65535 range`() {
+    fun `convertPort accepts any non-negative port and rejects a negative one`() {
         assertEquals(0, convertPort(0, "p"))
         assertEquals(65535, convertPort(65535, "p"))
-        val tooBig = assertFailsWith<KuriBindException> { convertPort(70000, "p") }
-        assertEquals("p", tooBig.path)
-        assertFailsWith<KuriBindException> { convertPort(-1, "p") }
+        // No upper cap here: the Uri profile accepts ports above 65535, so the per-profile ceiling is
+        // enforced by each builder at projection, not by this profile-agnostic converter.
+        assertEquals(70000, convertPort(70000, "p"))
+        val negative = assertFailsWith<KuriBindException> { convertPort(-1, "p") }
+        assertEquals("p", negative.path)
     }
 
     @Test

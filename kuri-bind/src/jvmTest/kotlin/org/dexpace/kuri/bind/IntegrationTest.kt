@@ -84,6 +84,22 @@ private class RelativeUri(
     @Path("id") val id: String,
 )
 
+// A port above the 16-bit ceiling on each profile: the Uri profile applies no cap (so it binds),
+// while the Url profile caps at 65535 (so its builder rejects it). Same value, profile-specific policy.
+@Uri
+private class UriHighPort(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Port val port: Int = 70000,
+)
+
+@Url
+private class UrlHighPort(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Port val port: Int = 70000,
+)
+
 // Positional collections: a list path (multiple segments) and a list query (repeated params).
 @Url
 private class WithCollections(
@@ -553,6 +569,18 @@ class IntegrationTest {
         val uri = KuriBind.toUri(RelativeUri(id = "7"))
         assertEquals("a/7", uri.toString())
         assertNull(uri.scheme)
+    }
+
+    @Test
+    fun `binds a uri port above 65535 since the uri profile applies no port cap`() {
+        val uri = KuriBind.toUri(UriHighPort())
+        assertEquals(70000, uri.port)
+        assertEquals("https://h:70000", uri.toString())
+    }
+
+    @Test
+    fun `rejects the same port on the url profile whose builder caps ports at 65535`() {
+        assertFailsWith<IllegalArgumentException> { KuriBind.toUrl(UrlHighPort()) }
     }
 
     @Test
