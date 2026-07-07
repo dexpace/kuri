@@ -49,6 +49,15 @@ class ConvertersTest {
     }
 
     @Test
+    fun `convertPort rejects a port outside the 0 to 65535 range`() {
+        assertEquals(0, convertPort(0, "p"))
+        assertEquals(65535, convertPort(65535, "p"))
+        val tooBig = assertFailsWith<KuriBindException> { convertPort(70000, "p") }
+        assertEquals("p", tooBig.path)
+        assertFailsWith<KuriBindException> { convertPort(-1, "p") }
+    }
+
+    @Test
     fun `splitUserInfo splits on the first colon`() {
         assertEquals(UserInfoValue("u", "p:w"), splitUserInfo("u:p:w"))
         assertEquals(UserInfoValue("u", null), splitUserInfo("u"))

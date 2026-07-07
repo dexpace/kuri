@@ -28,7 +28,7 @@ internal class PathTemplate private constructor(
         private const val CATCH_ALL_SUFFIX_LEN = 3
 
         fun parse(template: String): PathTemplate {
-            require(template.isNotEmpty()) { "path template must not be empty" }
+            if (template.isEmpty()) throw KuriBindException("path template must not be empty")
             val tokens = ArrayList<PathToken>()
             val holes = ArrayList<PathToken.Hole>()
             val literal = StringBuilder()

@@ -8,7 +8,6 @@ import org.dexpace.kuri.Uri
 import org.dexpace.kuri.Url
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 
 class BuilderSinkTest {
     // UrlBuilderSink — userinfo split and fragment encoding
@@ -41,7 +40,6 @@ class BuilderSinkTest {
         sink.scheme("https")
         val url = b.build()
         assertEquals("https", url.scheme)
-        assertNotNull(url)
     }
 
     @Test

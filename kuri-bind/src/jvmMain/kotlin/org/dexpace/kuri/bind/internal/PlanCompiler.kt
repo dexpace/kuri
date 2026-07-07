@@ -71,7 +71,7 @@ internal class PlanCompiler(
         template: PathTemplate,
         steps: List<BindStep>,
     ): Map<String, HoleProvider> {
-        val entries = collectHoleProviders(type, steps, { it }, HashSet())
+        val entries = collectHoleProviders(type, steps, { it }, emptySet())
         val holeNames = template.holes.map { it.name }
         validateBijection(type, holeNames, entries.map { it.name })
         val catchAll = template.holes.associate { it.name to it.catchAll }
@@ -81,14 +81,18 @@ internal class PlanCompiler(
     // Walks the merge scope with a cycle guard, composing a root-relative accessor for every hole:
     // providers declared directly on `type`, plus those from each `@Url`/`@Uri` MERGE member (its
     // declared type scanned in template mode so its named `@Path` members surface as holes). `prefix`
-    // reads from the root to the current instance; `seen` bounds cyclic graphs.
+    // reads from the root to the current instance. `seen` holds the types already on THIS merge branch
+    // (a per-branch copy, not a shared mutable set), so a type recurring along one chain is bounded
+    // while two same-typed sibling providers are each still counted — the bijection check then rejects
+    // the ambiguity instead of silently deduping the second sibling by type.
     private fun collectHoleProviders(
         type: KClass<*>,
         steps: List<BindStep>,
         prefix: (Any) -> Any?,
-        seen: MutableSet<KClass<*>>,
+        seen: Set<KClass<*>>,
     ): List<HoleProviderEntry> {
-        if (!seen.add(type)) return emptyList()
+        if (type in seen) return emptyList()
+        val branchSeen = seen + type
         val here =
             steps.filterIsInstance<BindStep.Hole>().map { hole ->
                 HoleProviderEntry(hole.name) { root -> prefix(root)?.let { hole.member.read(it) } }
@@ -101,7 +105,7 @@ internal class PlanCompiler(
                     val nested = recurse.member.declaredType
                     val nestedSteps = scanner.scan(nested).mapNotNull { m -> stepFor(m, inTemplate = true) }
                     val nestedPrefix = { root: Any -> prefix(root)?.let { recurse.member.read(it) } }
-                    collectHoleProviders(nested, nestedSteps, nestedPrefix, seen)
+                    collectHoleProviders(nested, nestedSteps, nestedPrefix, branchSeen)
                 }
         return here + merged
     }

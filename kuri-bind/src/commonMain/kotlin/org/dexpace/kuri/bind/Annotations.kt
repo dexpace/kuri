@@ -4,7 +4,12 @@
  */
 package org.dexpace.kuri.bind
 
-/** Marks a root class to bind as a `Url`, or a member for full sub-URL merge. */
+/**
+ * Marks a root class to bind as a `Url`, or a member for a full sub-object merge.
+ *
+ * On a member, `@Url` and `@Uri` are interchangeable: both merge the member's components into the
+ * parent, and the bound profile is fixed by the root marker, never by the member's.
+ */
 @Retention(AnnotationRetention.RUNTIME)
 @Target(
     AnnotationTarget.CLASS,
@@ -16,7 +21,12 @@ package org.dexpace.kuri.bind
 )
 public annotation class Url
 
-/** Marks a root class to bind as a `Uri`, or a member for full sub-URI merge. */
+/**
+ * Marks a root class to bind as a `Uri`, or a member for a full sub-object merge.
+ *
+ * On a member, `@Uri` and `@Url` are interchangeable: both merge the member's components into the
+ * parent, and the bound profile is fixed by the root marker, never by the member's.
+ */
 @Retention(AnnotationRetention.RUNTIME)
 @Target(
     AnnotationTarget.CLASS,

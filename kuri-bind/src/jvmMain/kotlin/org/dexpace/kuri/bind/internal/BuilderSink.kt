@@ -13,16 +13,15 @@ import org.dexpace.kuri.percent.Percent
 /**
  * The narrow set of builder operations the binder needs, abstracting the two profiles.
  *
- * All profile-specific differences — userinfo split vs. verbatim-join, fragment encoding,
- * and port range constraints — live in the concrete implementations rather than in the binder.
- * Callers pass decoded (raw) values; each implementation decides how to encode before forwarding
- * to the underlying builder.
+ * All profile-specific differences — userinfo split vs. verbatim-join, and fragment encoding — live
+ * in the concrete implementations rather than in the binder. Callers pass decoded (raw) values; each
+ * implementation decides how to encode before forwarding to the underlying builder.
  */
 internal interface BuilderSink {
     /** The profile this sink targets. */
     val profile: Profile
 
-    /** Sets the scheme component. [value] must not be empty. */
+    /** Sets the scheme component. The caller guarantees [value] is non-empty (validated upstream). */
     fun scheme(value: String)
 
     /**
@@ -42,7 +41,7 @@ internal interface BuilderSink {
     /** Sets the host from a pre-parsed structured [Host] value. */
     fun hostStructured(value: Host)
 
-    /** Sets the port. Valid ranges differ by profile. */
+    /** Sets the port. The caller guarantees [value] is within 0–65535 (validated in `convertPort`). */
     fun port(value: Int)
 
     /** Appends a single decoded path segment. The implementation percent-encodes it. */
@@ -61,8 +60,6 @@ internal interface BuilderSink {
 /**
  * Projects decoded contributions onto a [Url.Builder]: split username/password setters, and a
  * percent-encoded fragment stored via the raw-fragment setter.
- *
- * Port range is validated against the WHATWG URL port ceiling of 65 535.
  */
 internal class UrlBuilderSink(
     private val builder: Url.Builder,
@@ -70,7 +67,6 @@ internal class UrlBuilderSink(
     override val profile: Profile get() = Profile.URL
 
     override fun scheme(value: String) {
-        require(value.isNotEmpty()) { "scheme must not be empty" }
         builder.scheme(value)
     }
 
@@ -96,7 +92,6 @@ internal class UrlBuilderSink(
     }
 
     override fun port(value: Int) {
-        require(value in 0..MAX_URL_PORT) { "url port out of range [$value]: must be 0–$MAX_URL_PORT" }
         builder.port(value)
     }
 
@@ -118,10 +113,6 @@ internal class UrlBuilderSink(
     override fun fragmentDecoded(decoded: String) {
         builder.fragment(Percent.encode(decoded, Percent.Component.FRAGMENT))
     }
-
-    private companion object {
-        const val MAX_URL_PORT = 65535
-    }
 }
 
 /**
@@ -138,7 +129,6 @@ internal class UriBuilderSink(
     override val profile: Profile get() = Profile.URI
 
     override fun scheme(value: String) {
-        require(value.isNotEmpty()) { "scheme must not be empty" }
         builder.scheme(value)
     }
 
@@ -173,7 +163,6 @@ internal class UriBuilderSink(
     }
 
     override fun port(value: Int) {
-        require(value >= 0) { "uri port must be non-negative: $value" }
         builder.port(value)
     }
 

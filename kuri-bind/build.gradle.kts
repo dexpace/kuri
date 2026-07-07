@@ -16,8 +16,24 @@ plugins {
 group = "org.dexpace"
 
 tasks.withType<JavaCompile>().configureEach {
-    sourceCompatibility = JavaVersion.VERSION_1_8.toString()
-    targetCompatibility = JavaVersion.VERSION_1_8.toString()
+    // The jvmTest Java fixtures include a `record` (a Java 16 language feature) to prove record binding,
+    // so the test-only Java compilation targets 16. Shipped code is pure Kotlin pinned to JVM 1.8 (see
+    // the jvm block below); no Java is compiled into the published artifact, so this does not relax the
+    // runtime floor of the library itself.
+    val forTestFixtures = name == "compileJvmTestJava"
+    val level = if (forTestFixtures) JavaVersion.VERSION_16 else JavaVersion.VERSION_1_8
+    sourceCompatibility = level.toString()
+    targetCompatibility = level.toString()
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
+    // The record test fixture (RecordItem.java) compiles to Java 16 bytecode while the paired Kotlin
+    // test code keeps the shipped 1.8 target. The cross-task JVM-target equality check exists to protect
+    // published jars from mixed targets; test classes are never published and run on the JDK 21 toolchain,
+    // so relax the check to a warning for this one source set rather than dragging the test target up.
+    if (name == "compileTestKotlinJvm") {
+        jvmTargetValidationMode.set(org.jetbrains.kotlin.gradle.dsl.jvm.JvmTargetValidationMode.WARNING)
+    }
 }
 
 kotlin {

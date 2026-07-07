@@ -34,21 +34,25 @@ internal class BindingExecutor(
         val sink = ComponentSink(options.strict)
         val active: MutableSet<Any> = Collections.newSetFromMap(IdentityHashMap<Any, Boolean>())
         // A root `@PathTemplate` owns the whole path, so positional `@Path` contributions from the
-        // merge scope are suppressed for the entire walk; the flag rides along in [WalkContext].
-        val pathTemplated = cache.planFor(target::class).template != null
-        walk(target, WalkContext(sink, options, active, depth = 0, pathTemplated = pathTemplated))
+        // merge scope are suppressed for the entire walk; the flag rides along in [WalkContext]. The
+        // root plan is fetched once here and threaded into [walk] (each merge step re-fetches its own
+        // child plan), so the root type is not looked up twice.
+        val rootPlan = cache.planFor(target::class)
+        val ctx = WalkContext(sink, options, active, depth = 0, pathTemplated = rootPlan.template != null)
+        walk(target, rootPlan, ctx)
         return sink
     }
 
     private fun walk(
         target: Any,
+        plan: TypePlan,
         ctx: WalkContext,
     ) {
         require(ctx.depth >= 0) { "walk depth must be non-negative: ${ctx.depth}" }
+        check(plan.type == target::class) { "threaded plan ${plan.type} does not match target ${target::class}" }
         checkDepth(ctx.depth, ctx.options.maxDepth)
         if (!ctx.active.add(target)) throw KuriBindException("cycle detected at ${target::class.simpleName}")
         try {
-            val plan = cache.planFor(target::class)
             plan.template?.let { template -> TemplateBinder.emit(template, plan.holeProviders, target, ctx.sink) }
             UserInfoBinder.apply(plan, target, ctx.sink)
             for (step in plan.steps) applyStep(step, target, ctx)
@@ -97,7 +101,7 @@ internal class BindingExecutor(
         ctx: WalkContext,
     ) {
         when (step.scope) {
-            Scope.MERGE -> walk(value, ctx.deeper())
+            Scope.MERGE -> walk(value, cache.planFor(value::class), ctx.deeper())
             Scope.QUERY -> recurseScoped(value, ctx, LeafOp.QUERY)
             // A templated root owns the path (see [applyLeafStep]); skip scoped path recursion too.
             Scope.PATH -> if (!ctx.pathTemplated) recurseScoped(value, ctx, LeafOp.PATH)
@@ -243,7 +247,7 @@ private object LeafBinder {
         path: String,
     ) {
         val map = asMapOrNull(value) ?: throw KuriBindException("@QueryMap requires a Map", path)
-        for ((key, entryValue) in map) applyQueryMapEntry(key, entryValue, sink)
+        for ((key, entryValue) in map) applyQueryMapEntry(key, entryValue, sink, path)
     }
 
     private fun applyPath(
@@ -275,8 +279,10 @@ private object LeafBinder {
         key: Any?,
         value: Any?,
         sink: ComponentSink,
+        path: String,
     ) {
         val name = key?.let(::scalarText) ?: return
+        if (name.isEmpty()) throw KuriBindException("query parameter name must not be empty", path)
         val iterable = value?.let(::asIterableOrNull)
         if (iterable != null) {
             iterable.forEach { sink.addQueryParameter(name, it?.let(::scalarText)) }
@@ -309,9 +315,12 @@ private object UserInfoBinder {
         target: Any,
     ): GatheredUserInfo? {
         val values = readValues(plan, target)
-        if (values.isEmpty()) return null
         val username = resolveUsername(values) ?: ""
         val password = resolvePassword(values)
+        // No userinfo members, or an all-empty gather (empty username, no password), is no contribution
+        // rather than an error — e.g. an `@Username val u = ""` with no `@Password` leaves it unset. The
+        // empty check subsumes the "no values" case, so `values.first()` below only runs when non-empty.
+        if (username.isEmpty() && password == null) return null
         return GatheredUserInfo(
             username,
             password,

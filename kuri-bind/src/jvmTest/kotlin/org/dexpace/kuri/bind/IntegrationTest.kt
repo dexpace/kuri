@@ -219,6 +219,47 @@ private class SingleHoleFedCollection(
     @Path("id") val id: List<String>,
 )
 
+// A root whose only userinfo member is an empty username with no password: an all-empty userinfo is
+// treated as no contribution rather than an error.
+@Url
+private class EmptyUserInfo(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Username val user: String = "",
+)
+
+// A query map whose entry key is the empty string: an empty query-parameter name is rejected fail-fast.
+@Url
+private class EmptyQueryKey(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @QueryMap val params: Map<String, String>,
+)
+
+// A nested object whose own `@Path` leaves fill the path when it is bound as a complex `@Path` member.
+private class LatLon(
+    @Path val lat: String,
+    @Path val lon: String,
+)
+
+// A complex `@Path` member: PATH-scoped recursion folds LatLon's own segments into the parent path.
+@Url
+private class GeoRequest(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Path val at: LatLon,
+)
+
+// Two positional scalar `@Path` members on a Kotlin data class: they bind in primary-constructor order
+// (zeta then alpha), which a name-sorted order would reverse.
+@Url
+private data class TwoSegments(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Path val zeta: String,
+    @Path val alpha: String,
+)
+
 /**
  * End-to-end coverage of the binding stack driven through the public [KuriBind] facade: the spec's
  * headline example plus the cross-cutting edge cases (merge, userinfo, collections, query maps, nulls,
@@ -417,5 +458,36 @@ class IntegrationTest {
         // Getters have no reliable reflective order, so the @Path segments sort by name.
         assertEquals(listOf("a", "m", "z"), url.pathSegments)
         assertEquals("https://h/a/m/z", url.toString())
+    }
+
+    @Test
+    fun `treats an all-empty userinfo as no contribution`() {
+        val url = KuriBind.toUrl(EmptyUserInfo())
+        assertEquals("https://h/", url.toString())
+        assertEquals("h", url.host?.asText())
+    }
+
+    @Test
+    fun `rejects a query map entry with an empty key`() {
+        val failure =
+            assertFailsWith<KuriBindException> {
+                KuriBind.toUrl(EmptyQueryKey(params = mapOf("" to "v")))
+            }
+        assertTrue(failure.message.orEmpty().contains("query parameter name"))
+    }
+
+    @Test
+    fun `recurses a complex path member into its nested path segments`() {
+        val url = KuriBind.toUrl(GeoRequest(at = LatLon(lat = "40", lon = "30")))
+        assertEquals("https://h/40/30", url.toString())
+        assertEquals(listOf("40", "30"), url.pathSegments)
+    }
+
+    @Test
+    fun `binds two positional path scalars in primary-constructor order`() {
+        // Constructor order is zeta then alpha; a name-sorted order would instead yield /a/z.
+        val url = KuriBind.toUrl(TwoSegments(zeta = "z", alpha = "a"))
+        assertEquals("https://h/z/a", url.toString())
+        assertEquals(listOf("z", "a"), url.pathSegments)
     }
 }

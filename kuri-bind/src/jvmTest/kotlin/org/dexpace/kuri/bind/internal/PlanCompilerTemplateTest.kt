@@ -54,6 +54,18 @@ private class UnnamedInTemplate(
     @Path val id: String,
 )
 
+// A merge sub-object providing the single hole `{id}`. Two same-typed siblings of this type both
+// provide `{id}`, which must be detected as an ambiguous (multiple) provider rather than deduped.
+private class Wing(
+    @Path("id") val id: String,
+)
+
+@PathTemplateAnn("/x/{id}")
+private class TwoSameTypedWings(
+    @Url val left: Wing,
+    @Url val right: Wing,
+)
+
 class PlanCompilerTemplateTest {
     private val compiler = PlanCompiler(KotlinReflectMemberScanner())
 
@@ -84,6 +96,14 @@ class PlanCompilerTemplateTest {
     @Test
     fun `fails when a hole has more than one provider`() {
         val failure = assertFailsWith<KuriBindException> { compiler.compile(DuplicateProvider::class) }
+        assertTrue(failure.message.orEmpty().contains("multiple @Path providers"))
+    }
+
+    @Test
+    fun `fails when two same-typed merge siblings both provide one hole`() {
+        // The type-cycle guard must be per-branch: both `Wing` siblings provide `{id}`, so the
+        // bijection must see two providers and reject the ambiguity rather than dedup by type.
+        val failure = assertFailsWith<KuriBindException> { compiler.compile(TwoSameTypedWings::class) }
         assertTrue(failure.message.orEmpty().contains("multiple @Path providers"))
     }
 

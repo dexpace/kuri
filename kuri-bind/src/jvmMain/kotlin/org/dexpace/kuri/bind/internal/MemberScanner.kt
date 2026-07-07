@@ -37,11 +37,12 @@ internal interface MemberScanner {
 /**
  * kotlin-reflect member discovery covering both Kotlin and Java bean types.
  *
- * **Ordering:** primary-constructor parameter order when a `primaryConstructor` exists. Members
- * with no constructor position — body-declared properties, getter-derived members, and every
- * member of a Java bean (no primary constructor) — carry no reliable declaration order through
- * kotlin-reflect, so they are sorted by name for determinism across JVM builds. Getter-derived
- * members that have no corresponding property are appended after the property-derived members.
+ * **Ordering:** primary-constructor parameter order when a `primaryConstructor` exists, else a Java
+ * record's canonical component order (read reflectively via `Class.getRecordComponents`). Members
+ * with no such declared position — body-declared properties, getter-derived members, and every
+ * member of a plain Java bean — carry no reliable declaration order through kotlin-reflect, so they
+ * are sorted by name for determinism across JVM builds. Getter-derived members that have no
+ * corresponding property are appended after the property-derived members.
  *
  * **Annotation sites:** for each property — the property itself, its backing `javaField`, its
  * getter, and the matching primary-constructor parameter — deduped by `annotationClass`. This
@@ -150,25 +151,27 @@ internal class KotlinReflectMemberScanner : MemberScanner {
     }
 
     /**
-     * Orders properties by primary-constructor parameter position, appending any properties that do
-     * not appear in the constructor (e.g., body-declared properties) afterwards.
+     * Orders properties by their declared source order, appending any property outside that order
+     * (e.g., a body-declared property) afterwards, name-sorted for determinism.
      *
-     * Primary-constructor position is the source order Kotlin authors expect. Everything else —
-     * body-declared properties, and every property of a type with no primary constructor (Java
-     * beans) — has no reliable declaration order through kotlin-reflect, so it is sorted by name to
-     * stay deterministic across JVM builds rather than following `memberProperties` iteration order.
+     * Source order comes from the Kotlin primary constructor when one exists, else from a Java
+     * record's canonical component order. Every other shape — body-declared properties and every
+     * property of a plain Java bean — has no reliable declaration order through kotlin-reflect, so it
+     * is sorted by name to stay deterministic across JVM builds rather than following
+     * `memberProperties` iteration order.
      */
     private fun orderProperties(
         type: KClass<*>,
         properties: Map<String, KProperty1<out Any, *>>,
     ): List<KProperty1<out Any, *>> {
-        val ctor = type.primaryConstructor ?: return properties.values.sortedBy { it.name }
-        val ctorParamNames = ctor.parameters.mapNotNull { it.name }
-        val byCtor = ctorParamNames.mapNotNull { properties[it] }
-        val ctorNameSet = ctorParamNames.toSet()
-        val rest = properties.values.filter { it.name !in ctorNameSet }.sortedBy { it.name }
-
-        return byCtor + rest
+        val declaredOrder =
+            type.primaryConstructor?.parameters?.mapNotNull { it.name }
+                ?: recordComponentNames(type.java)
+                ?: return properties.values.sortedBy { it.name }
+        val byOrder = declaredOrder.mapNotNull { properties[it] }
+        val orderedNames = declaredOrder.toSet()
+        val rest = properties.values.filter { it.name !in orderedNames }.sortedBy { it.name }
+        return byOrder + rest
     }
 
     /**
@@ -212,6 +215,37 @@ internal class KotlinReflectMemberScanner : MemberScanner {
             ?.firstOrNull { it.name == propName }
             ?.annotations
             ?.let { sink.addAll(it) }
+    }
+
+    /**
+     * The canonical component names of a Java `record` in declaration order, or `null` when [clazz]
+     * is not a record.
+     *
+     * `Class.isRecord`/`getRecordComponents` are JDK 16 APIs, so they are invoked by name (never
+     * referenced as symbols) to keep this file compiling under `-Xjdk-release=1.8`; on a pre-16
+     * runtime the reflective lookup fails and the type is treated as a non-record. A record's
+     * canonical order matches a Kotlin data class's primary-constructor order, giving records the
+     * same positional guarantee.
+     */
+    private fun recordComponentNames(clazz: Class<*>): List<String>? {
+        val isRecord = invokeNoArg(clazz, "isRecord") == true
+        val components = if (isRecord) invokeNoArg(clazz, "getRecordComponents") as? Array<*> else null
+        val names = components?.mapNotNull { component -> component?.let { invokeNoArg(it, "getName") as? String } }
+        check(names.orEmpty().all { it.isNotEmpty() }) { "record component names must be non-empty" }
+        return names
+    }
+
+    /** Invokes a no-argument method [method] on [receiver] by name, or `null` when it is absent. */
+    private fun invokeNoArg(
+        receiver: Any,
+        method: String,
+    ): Any? {
+        require(method.isNotEmpty()) { "method name must not be empty" }
+        return try {
+            receiver.javaClass.getMethod(method).invoke(receiver)
+        } catch (_: ReflectiveOperationException) {
+            null
+        }
     }
 
     private companion object {

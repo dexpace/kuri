@@ -21,14 +21,22 @@ import org.dexpace.kuri.bind.Url as UrlMarker
  * Annotate the root class with [Url] or [Uri], mark its members with the component annotations
  * ([Scheme], [Host], [Path], [Query], ...), then call one of these methods. URL entry points require an
  * `@Url` root and URI entry points require a `@Uri` root; a missing or mismatched marker raises
- * [KuriBindException]. The `...OrNull` variants translate a binding or build failure into `null`.
+ * [KuriBindException]. The `...OrNull` variants translate an [IllegalArgumentException]-family binding
+ * or build failure into `null`, while a fault thrown by the target's own accessor still propagates.
  *
- * **Member order.** Source-order fidelity is guaranteed only for Kotlin classes with a primary
- * constructor — members bind in constructor-parameter order. Every other shape (Java beans, and
- * body-declared or non-constructor properties) has no reliable declaration order through reflection,
- * so those members bind in a stable, deterministic order sorted by name. Where positional order
- * matters — repeated `@Path` segments especially — use a Kotlin primary-constructor class (a `data
- * class`) or pin the order explicitly with [PathTemplate].
+ * **Member order.** Source-order fidelity is guaranteed for Kotlin classes with a primary constructor
+ * (members bind in constructor-parameter order) and for Java records (members bind in canonical
+ * component order). Every other shape (plain Java beans, and body-declared or non-constructor
+ * properties) has no reliable declaration order through reflection, so those members bind in a stable,
+ * deterministic order sorted by name. Where positional order matters — repeated `@Path` segments
+ * especially — use a Kotlin primary-constructor class (a `data class`), a Java record, or pin the
+ * order explicitly with [PathTemplate].
+ *
+ * **Precedence within the object graph.** Single-valued components are first-writer-wins in walk
+ * order, which follows declaration order: the template, then userinfo, then each member step in turn.
+ * A parent's own leaf (say `@Host`) therefore wins over the same component merged from an `@Url`/`@Uri`
+ * child only when the leaf is declared *before* that merge member; declare the component ahead of the
+ * `@Url` member when the parent's value must win.
  *
  * A single compiled-plan cache backs every call and is shared across both profiles, so a root type is
  * scanned and validated exactly once regardless of how often — or through which profile — it is bound.
@@ -125,11 +133,14 @@ public object KuriBind {
     ): Url = toUrlBuilder(target, options).build()
 
     /**
-     * Like [toUrlBuilder], but returns `null` instead of throwing on any binding failure.
+     * Like [toUrlBuilder], but returns `null` when binding fails with an [IllegalArgumentException] —
+     * the family every expected binding failure belongs to ([KuriBindException] plus the builders' own
+     * validation). A fault thrown by [target]'s own accessor (for example a computed getter that raises
+     * a non-argument exception) is not swallowed; it propagates to the caller.
      *
      * @param target the root object.
      * @param options strictness and depth bounds; defaults to [BindOptions.DEFAULT].
-     * @return a new builder, or `null` when binding fails for any reason.
+     * @return a new builder, or `null` when binding fails in the [IllegalArgumentException] family.
      */
     @JvmStatic
     @JvmOverloads
@@ -139,11 +150,14 @@ public object KuriBind {
     ): Url.Builder? = nullOnInvalid { toUrlBuilder(target, options) }
 
     /**
-     * Like [toUrl], but returns `null` instead of throwing on any binding or build failure.
+     * Like [toUrl], but returns `null` when binding or building fails with an [IllegalArgumentException]
+     * (the family of every expected binding/build failure). A fault thrown by [target]'s own accessor is
+     * not swallowed; it propagates to the caller.
      *
      * @param target the root object.
      * @param options strictness and depth bounds; defaults to [BindOptions.DEFAULT].
-     * @return the built URL, or `null` when binding or building fails for any reason.
+     * @return the built URL, or `null` when binding or building fails in the [IllegalArgumentException]
+     *   family.
      */
     @JvmStatic
     @JvmOverloads
@@ -184,11 +198,14 @@ public object KuriBind {
     ): Uri = toUriBuilder(target, options).build()
 
     /**
-     * Like [toUriBuilder], but returns `null` instead of throwing on any binding failure.
+     * Like [toUriBuilder], but returns `null` when binding fails with an [IllegalArgumentException] —
+     * the family every expected binding failure belongs to ([KuriBindException] plus the builders' own
+     * validation). A fault thrown by [target]'s own accessor is not swallowed; it propagates to the
+     * caller.
      *
      * @param target the root object.
      * @param options strictness and depth bounds; defaults to [BindOptions.DEFAULT].
-     * @return a new builder, or `null` when binding fails for any reason.
+     * @return a new builder, or `null` when binding fails in the [IllegalArgumentException] family.
      */
     @JvmStatic
     @JvmOverloads
@@ -198,11 +215,14 @@ public object KuriBind {
     ): Uri.Builder? = nullOnInvalid { toUriBuilder(target, options) }
 
     /**
-     * Like [toUri], but returns `null` instead of throwing on any binding or build failure.
+     * Like [toUri], but returns `null` when binding or building fails with an [IllegalArgumentException]
+     * (the family of every expected binding/build failure). A fault thrown by [target]'s own accessor is
+     * not swallowed; it propagates to the caller.
      *
      * @param target the root object.
      * @param options strictness and depth bounds; defaults to [BindOptions.DEFAULT].
-     * @return the built URI, or `null` when binding or building fails for any reason.
+     * @return the built URI, or `null` when binding or building fails in the [IllegalArgumentException]
+     *   family.
      */
     @JvmStatic
     @JvmOverloads

@@ -56,9 +56,12 @@ class ComponentSinkTest {
 
     @Test
     fun `strict mode allows an equal repeat`() {
+        val builder = Url.Builder().scheme("https").host("h")
         val sink = ComponentSink(strict = true)
         sink.setPort(8080, "a")
         sink.setPort(8080, "b") // equal → no conflict
+        sink.projectInto(UrlBuilderSink(builder))
+        assertEquals(8080, builder.build().port)
     }
 
     @Test
@@ -118,10 +121,17 @@ class ComponentSinkTest {
     fun `addQueryParameter rejects an empty name`() {
         val sink = ComponentSink(strict = false)
         val error =
-            assertFailsWith<IllegalArgumentException> {
+            assertFailsWith<KuriBindException> {
                 sink.addQueryParameter("", "v")
             }
         assertNotNull(error.message)
+    }
+
+    @Test
+    fun `setScheme rejects an empty scheme with the failing path`() {
+        val sink = ComponentSink(strict = false)
+        val error = assertFailsWith<KuriBindException> { sink.setScheme("", "endpoint.scheme") }
+        assertEquals("endpoint.scheme", error.path)
     }
 
     @Test

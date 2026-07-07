@@ -44,6 +44,7 @@ internal class ComponentSink(
         value: String,
         path: String,
     ) {
+        if (value.isEmpty()) throw KuriBindException("scheme must not be empty", path)
         scheme = firstWins(scheme, value, "scheme", path)
     }
 
@@ -84,7 +85,9 @@ internal class ComponentSink(
         name: String,
         value: String?,
     ) {
-        require(name.isNotEmpty()) { "query parameter name must not be empty" }
+        // Backstop for an empty parameter name; the reachable @QueryMap "" key is rejected earlier with
+        // the offending member's path (see LeafBinder.applyQueryMapEntry).
+        if (name.isEmpty()) throw KuriBindException("query parameter name must not be empty")
         queryParams.add(name to value)
     }
 

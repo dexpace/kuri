@@ -434,9 +434,12 @@ supported: mark a complex member `@Url`/`@Uri` to merge all of its components in
 and fails fast on misconfiguration with a `KuriBindException`; pass `BindOptions(strict = true)` to reject
 a conflicting single-valued write within the object graph.
 
-Members bind in Kotlin primary-constructor order (or record component order). Other shapes — Java beans
-and body-declared properties — have no reliable order through reflection and bind in a stable order
-sorted by name, so prefer a `data class` or a `@PathTemplate` when positional path order matters. A
+Members bind in Kotlin primary-constructor order (or Java record component order). Other shapes — plain
+Java beans and body-declared properties — have no reliable order through reflection and bind in a stable
+order sorted by name, so prefer a `data class`, a record, or a `@PathTemplate` when positional path order
+matters. Within the object graph, single-valued components are first-writer-wins in that declaration
+order: a parent's own leaf overrides the same component from an `@Url`/`@Uri`-merged child only when it
+is declared before the merge member, so declare the component first when the parent's value must win. A
 leading `/` in a template is decorative for an authority-less URI, where a segment path roots only under
 an authority.
 

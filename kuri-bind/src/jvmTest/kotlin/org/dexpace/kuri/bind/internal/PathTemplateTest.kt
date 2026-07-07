@@ -40,4 +40,9 @@ class PathTemplateTest {
         assertFailsWith<KuriBindException> { PathTemplate.parse("/{}") }
         assertFailsWith<KuriBindException> { PathTemplate.parse("/{a") }
     }
+
+    @Test
+    fun `rejects an empty template`() {
+        assertFailsWith<KuriBindException> { PathTemplate.parse("") }
+    }
 }
