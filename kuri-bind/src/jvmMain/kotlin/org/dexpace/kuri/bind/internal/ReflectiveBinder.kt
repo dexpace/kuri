@@ -127,7 +127,12 @@ internal class BindingExecutor(
     ) {
         require(op == LeafOp.QUERY || op == LeafOp.PATH) { "scoped op must be QUERY or PATH: $op" }
         val plan = cache.planFor(nested::class)
-        val leaves = plan.steps.filterIsInstance<BindStep.Leaf>().filter { it.op == op }
+        // A scoped `@Query` object contributes every query leaf it declares — both its `@Query`
+        // params and its `@QueryMap` entries; a scoped `@Path` object contributes its path segments.
+        val leaves =
+            plan.steps
+                .filterIsInstance<BindStep.Leaf>()
+                .filter { it.op == op || (op == LeafOp.QUERY && it.op == LeafOp.QUERY_MAP) }
         for (leaf in leaves) applyScopedLeaf(leaf, nested, sink)
     }
 
@@ -295,10 +300,11 @@ private object LeafBinder {
 /**
  * Pairs an object's userinfo leaves into a single [ComponentSink.setUserInfo] contribution.
  *
- * A `@UserInfo` token is split on its first `:` and takes precedence over separate `@Username`/
- * `@Password` members: `username = @UserInfo.user ?: @Username`, `password = @UserInfo.pass ?:
- * @Password`. Emitting the pair once (rather than two `setUserInfo` calls) keeps sibling
- * `@Username` and `@Password` on one object from clobbering each other under first-writer-wins.
+ * A `@UserInfo` token is split on its first `:` and a non-empty `@UserInfo` token takes precedence
+ * over separate `@Username`/`@Password` members (an empty token defers to them): `username =
+ * @UserInfo.user ?: @Username`, `password = @UserInfo.pass ?: @Password`. Emitting the pair once
+ * (rather than two `setUserInfo` calls) keeps sibling `@Username` and `@Password` on one object from
+ * clobbering each other under first-writer-wins.
  */
 private object UserInfoBinder {
     fun apply(
@@ -340,10 +346,16 @@ private object UserInfoBinder {
             .mapNotNull { leaf -> leaf.member.read(target)?.let { leaf to scalarText(it) } }
 
     private fun resolveUsername(values: List<Pair<BindStep.Leaf, String>>): String? =
-        rawFor(values, LeafOp.USERINFO)?.let { splitUserInfo(it).username } ?: rawFor(values, LeafOp.USERNAME)
+        userInfoToken(values)?.let { splitUserInfo(it).username } ?: rawFor(values, LeafOp.USERNAME)
 
     private fun resolvePassword(values: List<Pair<BindStep.Leaf, String>>): String? =
-        rawFor(values, LeafOp.USERINFO)?.let { splitUserInfo(it).password } ?: rawFor(values, LeafOp.PASSWORD)
+        userInfoToken(values)?.let { splitUserInfo(it).password } ?: rawFor(values, LeafOp.PASSWORD)
+
+    // A non-empty whole-token `@UserInfo` takes precedence over the split members; an EMPTY token is
+    // treated as absent so a sibling `@Username`/`@Password` still wins (an empty `@UserInfo` default
+    // must not shadow a real username).
+    private fun userInfoToken(values: List<Pair<BindStep.Leaf, String>>): String? =
+        rawFor(values, LeafOp.USERINFO)?.takeIf { it.isNotEmpty() }
 
     private fun rawFor(
         values: List<Pair<BindStep.Leaf, String>>,

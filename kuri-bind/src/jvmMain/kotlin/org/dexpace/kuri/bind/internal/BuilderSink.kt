@@ -6,8 +6,6 @@ package org.dexpace.kuri.bind.internal
 
 import org.dexpace.kuri.Uri
 import org.dexpace.kuri.Url
-import org.dexpace.kuri.bind.Profile
-import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.percent.Percent
 
 /**
@@ -18,9 +16,6 @@ import org.dexpace.kuri.percent.Percent
  * implementation decides how to encode before forwarding to the underlying builder.
  */
 internal interface BuilderSink {
-    /** The profile this sink targets. */
-    val profile: Profile
-
     /** Sets the scheme component. The caller guarantees [value] is non-empty (validated upstream). */
     fun scheme(value: String)
 
@@ -38,9 +33,6 @@ internal interface BuilderSink {
     /** Sets the host from a plain text (possibly IDNA) hostname string. */
     fun hostText(value: String)
 
-    /** Sets the host from a pre-parsed structured [Host] value. */
-    fun hostStructured(value: Host)
-
     /** Sets the port. The caller guarantees [value] is within 0–65535 (validated in `convertPort`). */
     fun port(value: Int)
 
@@ -53,8 +45,17 @@ internal interface BuilderSink {
         value: String?,
     )
 
-    /** Sets the fragment from a decoded string. The implementation percent-encodes it. */
-    fun fragmentDecoded(decoded: String)
+    /**
+     * Percent-encodes [decoded] under the FRAGMENT set, then stores it. Both profiles' fragment
+     * setters take an already-encoded string, so the encode is shared here and each sink only supplies
+     * the raw store via [setEncodedFragment].
+     */
+    fun fragmentDecoded(decoded: String) {
+        setEncodedFragment(Percent.encode(decoded, Percent.Component.FRAGMENT))
+    }
+
+    /** Stores an already-encoded fragment verbatim on the underlying builder. */
+    fun setEncodedFragment(encoded: String)
 }
 
 /**
@@ -64,8 +65,6 @@ internal interface BuilderSink {
 internal class UrlBuilderSink(
     private val builder: Url.Builder,
 ) : BuilderSink {
-    override val profile: Profile get() = Profile.URL
-
     override fun scheme(value: String) {
         builder.scheme(value)
     }
@@ -87,10 +86,6 @@ internal class UrlBuilderSink(
         builder.host(value)
     }
 
-    override fun hostStructured(value: Host) {
-        builder.host(value)
-    }
-
     override fun port(value: Int) {
         builder.port(value)
     }
@@ -106,12 +101,8 @@ internal class UrlBuilderSink(
         builder.addQueryParameter(name, value)
     }
 
-    /**
-     * Percent-encodes [decoded] under the FRAGMENT encode set and forwards the raw encoded string
-     * to the builder. The builder stores it without re-encoding.
-     */
-    override fun fragmentDecoded(decoded: String) {
-        builder.fragment(Percent.encode(decoded, Percent.Component.FRAGMENT))
+    override fun setEncodedFragment(encoded: String) {
+        builder.fragment(encoded)
     }
 }
 
@@ -126,8 +117,6 @@ internal class UrlBuilderSink(
 internal class UriBuilderSink(
     private val builder: Uri.Builder,
 ) : BuilderSink {
-    override val profile: Profile get() = Profile.URI
-
     override fun scheme(value: String) {
         builder.scheme(value)
     }
@@ -158,10 +147,6 @@ internal class UriBuilderSink(
         builder.host(value)
     }
 
-    override fun hostStructured(value: Host) {
-        builder.host(value)
-    }
-
     override fun port(value: Int) {
         builder.port(value)
     }
@@ -177,11 +162,7 @@ internal class UriBuilderSink(
         builder.addQueryParameter(name, value)
     }
 
-    /**
-     * Percent-encodes [decoded] under the FRAGMENT encode set and forwards the raw encoded string
-     * to the builder.
-     */
-    override fun fragmentDecoded(decoded: String) {
-        builder.fragment(Percent.encode(decoded, Percent.Component.FRAGMENT))
+    override fun setEncodedFragment(encoded: String) {
+        builder.fragment(encoded)
     }
 }

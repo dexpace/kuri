@@ -42,12 +42,6 @@ class BuilderSinkTest {
         assertEquals("https", url.scheme)
     }
 
-    @Test
-    fun `url sink profile returns URL`() {
-        val sink = UrlBuilderSink(Url.Builder())
-        assertEquals(org.dexpace.kuri.bind.Profile.URL, sink.profile)
-    }
-
     // UriBuilderSink — verbatim-join userinfo and fragment encoding
 
     @Test
@@ -77,11 +71,5 @@ class BuilderSinkTest {
         sink.fragmentDecoded("x y")
         val uri = b.build()
         assertEquals("x%20y", uri.fragment)
-    }
-
-    @Test
-    fun `uri sink profile returns URI`() {
-        val sink = UriBuilderSink(Uri.Builder())
-        assertEquals(org.dexpace.kuri.bind.Profile.URI, sink.profile)
     }
 }

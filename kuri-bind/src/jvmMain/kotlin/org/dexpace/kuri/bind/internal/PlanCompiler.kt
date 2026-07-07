@@ -126,7 +126,7 @@ internal class PlanCompiler(
             }
             return BindStep.Hole(member, marker.value)
         }
-        return if (isLeafLike(member.declaredType, scalar)) {
+        return if (isLeafLike(member, scalar)) {
             BindStep.Leaf(member, LeafOp.PATH, null)
         } else {
             BindStep.Recurse(member, Scope.PATH)
@@ -144,21 +144,38 @@ internal class PlanCompiler(
         if (isMapType(member.declaredType)) {
             throw KuriBindException("a Map under @Query is not allowed; use @QueryMap", member.name)
         }
-        return if (isLeafLike(member.declaredType, scalar)) {
+        return if (isLeafLike(member, scalar)) {
             BindStep.Leaf(member, LeafOp.QUERY, marker.value.ifEmpty { member.name })
         } else {
             BindStep.Recurse(member, Scope.QUERY)
         }
     }
 
-    // A `@Query`/`@Path` member binds as a scalar leaf when it is a scalar or a collection, OR when it
-    // is a complex type that carries no binding-annotated members of its own — a leaf-like type such
-    // as `UUID`/`Instant`/`BigDecimal` then stringifies as one segment/param instead of recursing to
-    // nothing. Only a genuine nested object (one that DOES have annotated members) recurses.
+    // A `@Query`/`@Path` member binds as a scalar leaf when it is a scalar, a collection whose element
+    // is not a bindable nested object, OR a complex type that carries no binding-annotated members of
+    // its own — a leaf-like type such as `UUID`/`Instant`/`BigDecimal` then stringifies as one
+    // segment/param instead of recursing to nothing. A genuine nested object, or a collection of them,
+    // recurses (per element for a collection).
     private fun isLeafLike(
-        type: KClass<*>,
+        member: ScannedMember,
         scalar: Boolean,
-    ): Boolean = scalar || isCollectionType(type) || !hasBindingMembers(type)
+    ): Boolean =
+        when {
+            scalar -> true
+            isCollectionType(member.declaredType) -> !isBindableComplex(member.elementType)
+            else -> !hasBindingMembers(member.declaredType)
+        }
+
+    // A collection whose element is a genuine nested object (a non-scalar, non-collection, non-map
+    // type that declares binding members) recurses per element under the same scope; a collection of
+    // scalars — or one whose element type is erased away (a raw collection or a primitive array) —
+    // stays a leaf that stringifies each element.
+    private fun isBindableComplex(elementType: KClass<*>?): Boolean =
+        elementType != null &&
+            !isScalarType(elementType) &&
+            !isCollectionType(elementType) &&
+            !isMapType(elementType) &&
+            hasBindingMembers(elementType)
 
     private fun hasBindingMembers(type: KClass<*>): Boolean =
         scanner.scan(type).any { member -> member.annotations.any { it.isBindingMarker() } }
@@ -215,6 +232,13 @@ private fun mergeStep(member: ScannedMember): BindStep {
     val type = member.declaredType
     if (isScalarType(type) || isCollectionType(type) || isMapType(type)) {
         throw KuriBindException("@Url/@Uri requires a complex object, not ${type.simpleName}", member.name)
+    }
+    // A `@PathTemplate` is a root-level path skeleton, not a mergeable component: a merged child that
+    // declared one would emit a second template path on top of the parent's (the template-owned-path
+    // invariant only suppresses positional `@Path`, not a child template), so reject it fail-fast. A
+    // class is a template root OR a merge child, never both.
+    if (type.findAnnotation<PathTemplateAnn>() != null) {
+        throw KuriBindException("a @Url/@Uri merge member must not declare @PathTemplate", member.name)
     }
     return BindStep.Recurse(member, Scope.MERGE)
 }

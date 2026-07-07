@@ -260,6 +260,73 @@ private data class TwoSegments(
     @Path val alpha: String,
 )
 
+// A scoped `@Query` object that also declares a `@QueryMap`: both its `@Query` params and its
+// `@QueryMap` entries surface as sibling parameters of the parent.
+private class QueryWithMap(
+    @Query("a") val a: String = "x",
+    @QueryMap val m: Map<String, String> = mapOf("b" to "y"),
+)
+
+@Url
+private class ScopedQueryMapRoot(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Query val nested: QueryWithMap = QueryWithMap(),
+)
+
+// A `@Query` list whose element type carries its own `@Query` members: binding recurses per element,
+// emitting each element's parameters in order.
+private class Facet(
+    @Query("k") val k: String,
+    @Query("v") val v: String,
+)
+
+@Url
+private class QueryListOfObjects(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Query val facets: List<Facet>,
+)
+
+// A `@Path` list whose element type carries its own `@Path` members: binding recurses per element,
+// folding each element's segments into the parent path.
+private class Segment(
+    @Path val part: String,
+)
+
+@Url
+private class PathListOfObjects(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Path val parts: List<Segment>,
+)
+
+// An empty `@UserInfo` token alongside a real `@Username`: the empty token defers so the sibling
+// username still wins.
+@Url
+private class EmptyUserInfoWithUsername(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @UserInfo val token: String = "",
+    @Username val user: String = "realuser",
+)
+
+// A merged child whose `@Host` is a structured `Host` equal to the parent's text host: under strict
+// mode the two must compare equal (both collapse to host text) rather than raise a false conflict.
+@Url
+private class StructuredHostChild(
+    @Host val host: org.dexpace.kuri.host.Host =
+        org.dexpace.kuri.host.Host
+            .RegName("example.com"),
+)
+
+@Url
+private class TextParentStructuredChild(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "example.com",
+    @Url val child: StructuredHostChild = StructuredHostChild(),
+)
+
 /**
  * End-to-end coverage of the binding stack driven through the public [KuriBind] facade: the spec's
  * headline example plus the cross-cutting edge cases (merge, userinfo, collections, query maps, nulls,
@@ -489,5 +556,36 @@ class IntegrationTest {
         val url = KuriBind.toUrl(TwoSegments(zeta = "z", alpha = "a"))
         assertEquals("https://h/z/a", url.toString())
         assertEquals(listOf("z", "a"), url.pathSegments)
+    }
+
+    @Test
+    fun `scoped query object contributes its query-map entries`() {
+        val url = KuriBind.toUrl(ScopedQueryMapRoot())
+        assertEquals("https://h/?a=x&b=y", url.toString())
+    }
+
+    @Test
+    fun `a query list of complex objects recurses per element`() {
+        val url = KuriBind.toUrl(QueryListOfObjects(facets = listOf(Facet("a", "1"), Facet("b", "2"))))
+        assertEquals("https://h/?k=a&v=1&k=b&v=2", url.toString())
+    }
+
+    @Test
+    fun `a path list of complex objects recurses per element`() {
+        val url = KuriBind.toUrl(PathListOfObjects(parts = listOf(Segment("x"), Segment("y"))))
+        assertEquals(listOf("x", "y"), url.pathSegments)
+    }
+
+    @Test
+    fun `an empty userinfo token defers to a sibling username`() {
+        val url = KuriBind.toUrl(EmptyUserInfoWithUsername())
+        assertEquals("realuser", url.username)
+        assertEquals("https://realuser@h/", url.toString())
+    }
+
+    @Test
+    fun `strict mode does not flag a text host equal to a structured host`() {
+        val url = KuriBind.toUrl(TextParentStructuredChild(), BindOptions(strict = true))
+        assertEquals("https://example.com/", url.toString())
     }
 }

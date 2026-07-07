@@ -24,8 +24,8 @@ class ComponentSinkTest {
         val url =
             urlOf {
                 setScheme("https", "scheme")
-                setHost(HostValue.Text("first.example"), "a")
-                setHost(HostValue.Text("second.example"), "b") // ignored
+                setHost("first.example", "a")
+                setHost("second.example", "b") // ignored
             }
         assertEquals("first.example", url.host?.asText())
     }
@@ -35,7 +35,7 @@ class ComponentSinkTest {
         val url =
             urlOf {
                 setScheme("https", "s")
-                setHost(HostValue.Text("h"), "h")
+                setHost("h", "h")
                 addPathSegment("a")
                 addPathSegment("b")
                 addQueryParameter("x", "1")
@@ -70,7 +70,7 @@ class ComponentSinkTest {
             urlOf {
                 setScheme("https", "s")
                 setScheme("http", "s2") // ignored
-                setHost(HostValue.Text("h"), "h")
+                setHost("h", "h")
                 setUserInfo("alice", "secret", "u")
                 setUserInfo("bob", "other", "u2") // ignored
                 setFragment("frag1", "f")
@@ -87,7 +87,7 @@ class ComponentSinkTest {
         val url =
             urlOf {
                 setScheme("https", "s")
-                setHost(HostValue.Structured(Host.RegName("structured.example")), "h")
+                setHost(hostValueOf(Host.RegName("structured.example")), "h")
             }
         assertEquals("structured.example", url.host?.asText())
         assertEquals("https", url.scheme)
@@ -109,7 +109,7 @@ class ComponentSinkTest {
         val url =
             urlOf {
                 setScheme("https", "s")
-                setHost(HostValue.Text("h"), "h")
+                setHost("h", "h")
                 addQueryParameter("flag", null)
                 addQueryParameter("x", "1")
             }
@@ -137,10 +137,10 @@ class ComponentSinkTest {
     @Test
     fun `strict mode reports the failing component path`() {
         val sink = ComponentSink(strict = true)
-        sink.setHost(HostValue.Text("first.example"), "endpoint.host")
+        sink.setHost("first.example", "endpoint.host")
         val error =
             assertFailsWith<KuriBindException> {
-                sink.setHost(HostValue.Text("second.example"), "other.host")
+                sink.setHost("second.example", "other.host")
             }
         assertEquals("other.host", error.path)
     }

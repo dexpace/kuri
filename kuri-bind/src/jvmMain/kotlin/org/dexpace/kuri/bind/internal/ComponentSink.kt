@@ -5,18 +5,6 @@
 package org.dexpace.kuri.bind.internal
 
 import org.dexpace.kuri.bind.KuriBindException
-import org.dexpace.kuri.host.Host
-
-/** A host contribution: raw text (validated at build) or an already-structured `Host`. */
-internal sealed interface HostValue {
-    data class Text(
-        val value: String,
-    ) : HostValue
-
-    data class Structured(
-        val value: Host,
-    ) : HostValue
-}
 
 /** A decoded userinfo pair. */
 internal data class UserInfoValue(
@@ -34,7 +22,7 @@ internal class ComponentSink(
 ) {
     private var scheme: String? = null
     private var userInfo: UserInfoValue? = null
-    private var host: HostValue? = null
+    private var host: String? = null
     private var port: Int? = null
     private var fragment: String? = null
     private val pathSegments: MutableList<String> = ArrayList()
@@ -57,7 +45,7 @@ internal class ComponentSink(
     }
 
     fun setHost(
-        value: HostValue,
+        value: String,
         path: String,
     ) {
         host = firstWins(host, value, "host", path)
@@ -94,11 +82,7 @@ internal class ComponentSink(
     fun projectInto(sink: BuilderSink) {
         scheme?.let(sink::scheme)
         userInfo?.let { sink.userInfo(it.username, it.password) }
-        when (val h = host) {
-            is HostValue.Text -> sink.hostText(h.value)
-            is HostValue.Structured -> sink.hostStructured(h.value)
-            null -> Unit
-        }
+        host?.let(sink::hostText)
         port?.let(sink::port)
         for (segment in pathSegments) sink.addPathSegment(segment)
         for ((name, value) in queryParams) sink.addQueryParameter(name, value)

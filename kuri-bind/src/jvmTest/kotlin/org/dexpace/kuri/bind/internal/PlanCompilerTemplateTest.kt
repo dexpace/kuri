@@ -66,6 +66,18 @@ private class TwoSameTypedWings(
     @Url val right: Wing,
 )
 
+// A `@PathTemplate` class used as a `@Url` merge member: a merge child must not carry its own
+// template, so compiling a parent that merges it is rejected fail-fast.
+@PathTemplateAnn("/a/{id}")
+private class TemplatedChild(
+    @Path("id") val id: String,
+)
+
+@Url
+private class MergesTemplatedChild(
+    @Url val child: TemplatedChild,
+)
+
 class PlanCompilerTemplateTest {
     private val compiler = PlanCompiler(KotlinReflectMemberScanner())
 
@@ -117,6 +129,12 @@ class PlanCompilerTemplateTest {
     fun `fails on an unnamed @Path in template mode`() {
         val failure = assertFailsWith<KuriBindException> { compiler.compile(UnnamedInTemplate::class) }
         assertTrue(failure.message.orEmpty().contains("must name a hole"))
+    }
+
+    @Test
+    fun `rejects a merge member whose type declares a @PathTemplate`() {
+        val failure = assertFailsWith<KuriBindException> { compiler.compile(MergesTemplatedChild::class) }
+        assertTrue(failure.message.orEmpty().contains("@PathTemplate"))
     }
 
     private fun rebuild(t: PathTemplate): String =

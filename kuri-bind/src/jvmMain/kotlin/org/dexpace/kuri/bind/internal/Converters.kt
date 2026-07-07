@@ -46,9 +46,8 @@ internal fun splitUserInfo(token: String): UserInfoValue {
     return if (i < 0) UserInfoValue(token, null) else UserInfoValue(token.substring(0, i), token.substring(i + 1))
 }
 
-/** A `Host` stays structured; anything else becomes host text. */
-internal fun hostValueOf(value: Any): HostValue =
-    if (value is Host) HostValue.Structured(value) else HostValue.Text(scalarText(value))
+/** Renders a host contribution to text: a structured `Host` via [Host.asText], anything else via toString. */
+internal fun hostValueOf(value: Any): String = if (value is Host) value.asText() else scalarText(value)
 
 /**
  * Views arrays and `Iterable`s as `Iterable<Any?>`; returns null for non-collections. Every array

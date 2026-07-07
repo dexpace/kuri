@@ -4,9 +4,11 @@
  */
 package org.dexpace.kuri.bind.internal
 
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 import kotlin.reflect.KFunction
 import kotlin.reflect.KProperty1
+import kotlin.reflect.KType
 import kotlin.reflect.full.memberFunctions
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.full.primaryConstructor
@@ -17,7 +19,8 @@ import kotlin.reflect.jvm.javaMethod
 
 /**
  * A discovered member ready for binding: its logical name, all resolved binding annotations,
- * the erased declared type, and a reflective value reader.
+ * the erased declared type, the erased collection [elementType] (`null` when not a single-element
+ * generic), and a reflective value reader.
  *
  * Annotations are collected from every applicable use-site so that `@Host`, `@get:Host`,
  * `@field:Host`, and a constructor-parameter `@Host val` all surface through a single list.
@@ -26,8 +29,21 @@ internal class ScannedMember(
     val name: String,
     val annotations: List<Annotation>,
     val declaredType: KClass<*>,
+    val elementType: KClass<*>?,
     val read: (Any) -> Any?,
 )
+
+/**
+ * The erased element type of a single-type-argument generic (`List<Foo>`/`Array<Foo>` → `Foo`), or
+ * `null` when there is no single element type — a raw collection, a primitive array (`IntArray`), a
+ * `Map`, or a scalar. Lets the plan compiler decide whether a `@Query`/`@Path` collection holds
+ * bindable objects (recurse per element) or scalars (stringify each element).
+ */
+private fun elementClassifierOf(type: KType): KClass<*>? =
+    type.arguments
+        .singleOrNull()
+        ?.type
+        ?.classifier as? KClass<*>
 
 /** Discovers a type's members in a deterministic order, collecting binding annotations. */
 internal interface MemberScanner {
@@ -57,11 +73,19 @@ internal interface MemberScanner {
  * already traverse the full class hierarchy.
  */
 internal class KotlinReflectMemberScanner : MemberScanner {
-    override fun scan(type: KClass<*>): List<ScannedMember> {
-        val propertyMembers = buildPropertyMembers(type)
-        val getterMembers = buildGetterMembers(type)
-        return merge(propertyMembers, getterMembers)
-    }
+    // kotlin-reflect member discovery is the heavy path (memberProperties + memberFunctions + per-
+    // property annotation-site probing) and a single compile scans a type several times — the root,
+    // each complex `@Query`/`@Path` member via `hasBindingMembers`, and each `@Url`/`@Uri` merge type.
+    // Memoize per type so each is scanned once; readers are instance-parameterized and stateless, so a
+    // cached member list is safe to reuse across instances.
+    private val scanCache = ConcurrentHashMap<KClass<*>, List<ScannedMember>>()
+
+    override fun scan(type: KClass<*>): List<ScannedMember> =
+        scanCache.getOrPut(type) {
+            val propertyMembers = buildPropertyMembers(type)
+            val getterMembers = buildGetterMembers(type)
+            merge(propertyMembers, getterMembers)
+        }
 
     private fun buildPropertyMembers(type: KClass<*>): LinkedHashMap<String, ScannedMember> {
         val properties = type.memberProperties.associateBy { it.name }
@@ -79,6 +103,7 @@ internal class KotlinReflectMemberScanner : MemberScanner {
                     name = p.name,
                     annotations = annotationSites(type, p),
                     declaredType = (p.returnType.classifier as? KClass<*>) ?: Any::class,
+                    elementType = elementClassifierOf(p.returnType),
                     read = { instance ->
                         p.isAccessible = true
                         p.get(instance)
@@ -108,6 +133,7 @@ internal class KotlinReflectMemberScanner : MemberScanner {
                     name = logicalName,
                     annotations = annotations,
                     declaredType = (func.returnType.classifier as? KClass<*>) ?: Any::class,
+                    elementType = elementClassifierOf(func.returnType),
                     read = { instance -> func.call(instance) },
                 )
             }.sortedBy { it.name }

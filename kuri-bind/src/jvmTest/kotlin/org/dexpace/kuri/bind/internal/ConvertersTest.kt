@@ -64,11 +64,10 @@ class ConvertersTest {
     }
 
     @Test
-    fun `hostValueOf keeps a Host structured and renders other values as text`() {
-        val host = Host.RegName("example.com")
-        assertEquals(HostValue.Structured(host), hostValueOf(host))
-        assertEquals(HostValue.Text("example.com"), hostValueOf("example.com"))
-        assertEquals(HostValue.Text("7"), hostValueOf(7))
+    fun `hostValueOf renders a Host via asText and other values as text`() {
+        assertEquals("example.com", hostValueOf(Host.RegName("example.com")))
+        assertEquals("example.com", hostValueOf("example.com"))
+        assertEquals("7", hostValueOf(7))
     }
 
     @Test
