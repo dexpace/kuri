@@ -8,7 +8,6 @@ import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriSyntaxException
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.Host
-import org.dexpace.kuri.host.serialize
 import org.dexpace.kuri.parser.BuilderPath
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.Resolver
@@ -92,7 +91,7 @@ public class Uri internal constructor(
     /** The serialized host text (brackets included for IPv6), or `null` when there is no authority. */
     @get:JvmName("hostName")
     public val hostName: String?
-        get() = components.host?.serialize()
+        get() = components.host?.asText()
 
     /**
      * The explicit port, preserved exactly as parsed, or `null` when no port was present.
@@ -517,7 +516,7 @@ public class Uri internal constructor(
         val authorityHost = components.host ?: return null
         val credentials = reconstructUserInfo()?.let { "$it@" } ?: ""
         val portPart = components.port?.let { ":$it" } ?: ""
-        return "$credentials${authorityHost.serialize()}$portPart"
+        return "$credentials${authorityHost.asText()}$portPart"
     }
 
     /** Decoded path and segments, computed once each; the value is immutable, mirroring [canonicalUri]. */

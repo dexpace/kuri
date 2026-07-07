@@ -9,7 +9,6 @@ import org.dexpace.kuri.error.UriSyntaxException
 import org.dexpace.kuri.error.ValidationError
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.Host
-import org.dexpace.kuri.host.serialize
 import org.dexpace.kuri.parser.BuilderPath
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.UrlParser
@@ -25,6 +24,8 @@ import org.dexpace.kuri.query.QueryState
 import org.dexpace.kuri.query.applyParameterEdit
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.serialize.Serializer
+import org.dexpace.kuri.serialize.serializeAuthority
+import org.dexpace.kuri.serialize.serializeUrlPath
 import kotlin.jvm.JvmName
 import kotlin.jvm.JvmOverloads
 import kotlin.jvm.JvmStatic
@@ -109,7 +110,7 @@ public class Url internal constructor(
      */
     @get:JvmName("hostName")
     public val hostName: String?
-        get() = components.host?.serialize()
+        get() = components.host?.asText()
 
     /**
      * The explicit port, or `null` when the port was elided or equals the scheme default.
@@ -144,7 +145,7 @@ public class Url internal constructor(
     /** The canonical encoded path string (e.g. `/a/b`, or the opaque path verbatim). */
     @get:JvmName("encodedPath")
     public val encodedPath: String
-        get() = serializeEncodedPath()
+        get() = serializeUrlPath(components)
 
     /**
      * The raw encoded query without its leading `?`, or `null` when no `?` was present.
@@ -179,7 +180,7 @@ public class Url internal constructor(
     /** The `userinfo@host:port` authority, or `null` when the URL has no authority. */
     @get:JvmName("authority")
     public val authority: String?
-        get() = components.host?.let { serializeAuthority(it) }
+        get() = if (components.host == null) null else serializeAuthority(components)
 
     /**
      * The ASCII serialization of this URL's WHATWG origin (§11.6).
@@ -406,33 +407,6 @@ public class Url internal constructor(
 
     /** The hash of the canonical [href], consistent with [equals]. */
     override fun hashCode(): Int = href.hashCode()
-
-    /** Recomposes the encoded path, applying the no-authority leading-`/.` guard. */
-    private fun serializeEncodedPath(): String =
-        when (val path = components.path) {
-            is UrlPath.Opaque -> path.path
-            is UrlPath.Segments -> joinSegments(path.segments)
-        }
-
-    /** Joins encoded [segments] as `/`-prefixed runs, guarding a hostless `//`-opening path. */
-    private fun joinSegments(segments: List<String>): String {
-        val joined = segments.joinToString("") { "/$it" }
-        val needsGuard = components.host == null && segments.size > 1 && segments[0] == ""
-        return if (needsGuard) "/.$joined" else joined
-    }
-
-    /** Serializes `[userinfo@]host[:port]` for a present authority. */
-    private fun serializeAuthority(authorityHost: Host): String {
-        val credentials = if (username.isEmpty() && password.isEmpty()) "" else credentialsPrefix()
-        val portPart = components.port?.let { ":$it" } ?: ""
-        return "$credentials${authorityHost.serialize()}$portPart"
-    }
-
-    /** The `user[:password]@` credentials prefix for a value that includes credentials. */
-    private fun credentialsPrefix(): String {
-        val passwordPart = if (password.isNotEmpty()) ":$password" else ""
-        return "$username$passwordPart@"
-    }
 
     /** The tuple origin `scheme://host[:port]`: host elides to `""`, port and userinfo are omitted. */
     private fun tupleOrigin(): String = "$scheme://${hostName.orEmpty()}${port?.let { ":$it" } ?: ""}"

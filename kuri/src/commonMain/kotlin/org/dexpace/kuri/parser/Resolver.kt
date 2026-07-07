@@ -9,9 +9,7 @@ import org.dexpace.kuri.ZONE_ID_ENABLED
 import org.dexpace.kuri.carriesZoneId
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
-import org.dexpace.kuri.host.Host
-import org.dexpace.kuri.host.Ipv4
-import org.dexpace.kuri.host.Ipv6
+import org.dexpace.kuri.host.serializeHost
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.scheme.schemeColonIndex
 
@@ -47,9 +45,6 @@ private const val SEGMENT_DOT: String = "."
 
 /** §5.2.4 case D terminal: the whole remaining input is the bare complete segment `..`. */
 private const val SEGMENT_DOTDOT: String = ".."
-
-/** RFC 6874 zone-id introducer used when re-serializing an IPv6 authority. */
-private const val ZONE_PREFIX: String = "%25"
 
 /**
  * RFC 3986 §5 reference resolution — the SPEC §9 "resolve a relative reference against an absolute
@@ -378,7 +373,7 @@ internal object Resolver {
     private fun authorityOf(c: ParsedComponents): String? {
         val host = c.host ?: return null
         val port = if (c.port != null) ":${c.port}" else ""
-        return userinfoPrefix(c) + hostString(host) + port
+        return userinfoPrefix(c) + serializeHost(host) + port
     }
 
     /** Builds the `userinfo@` prefix from the decoded credentials, or `""` when no userinfo is present. */
@@ -388,20 +383,6 @@ internal object Resolver {
             c.password.isEmpty() -> "${c.username}@"
             else -> "${c.username}:${c.password}@"
         }
-
-    /** Serializes a [Host] to its authority text, applying IPv6/IP-future bracketing (§3.5, §7.9). */
-    private fun hostString(host: Host): String =
-        when (host) {
-            is Host.RegName -> host.value
-            is Host.Opaque -> host.value
-            is Host.Ipv4 -> Ipv4.serialize(host.value)
-            is Host.Ipv6 -> "[${Ipv6.serialize(host.pieces)}${zoneSuffix(host.zoneId)}]"
-            is Host.IpFuture -> "[${host.value}]"
-            Host.Empty -> ""
-        }
-
-    /** Renders an optional IPv6 zone id as the RFC 6874 `%25<id>` suffix, or `""` when absent. */
-    private fun zoneSuffix(zoneId: String?): String = if (zoneId == null) "" else "$ZONE_PREFIX$zoneId"
 
     /** The behaviour-free five-component view the §5 algorithm operates on (each component nullable per §5.3). */
     private data class UriParts(

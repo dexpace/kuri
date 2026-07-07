@@ -103,48 +103,6 @@ internal object Serializer {
         return sb.toString()
     }
 
-    /** §11.2 [NORM-16] authority `[userinfo "@"] host [":" port]`; the credentials rule is shared (below). */
-    private fun serializeAuthority(c: ParsedComponents): String {
-        val host = requireNotNull(c.host) { "authority serialization requires a host" }
-        val port = if (c.port != null) ":${c.port}" else ""
-        return credentialsPrefix(c) + serializeHost(host) + port
-    }
-
-    /**
-     * The `userinfo@` prefix ([NORM-16] / [NORM-30]); empty for a value with no credentials.
-     *
-     * The WHATWG "includes credentials" rule and the RFC null/empty rule coincide here because
-     * [ParsedComponents] holds the credentials as (possibly empty) strings, never null: the prefix
-     * appears iff `username` or `password` is non-empty, and `:password` iff `password` is non-empty.
-     */
-    private fun credentialsPrefix(c: ParsedComponents): String {
-        if (c.username.isEmpty() && c.password.isEmpty()) return ""
-        val password = if (c.password.isNotEmpty()) ":${c.password}" else ""
-        return "${c.username}$password@"
-    }
-
-    /** WHATWG URL path serialization: an opaque path verbatim, else the segment list ([NORM-15] step 3). */
-    private fun serializeUrlPath(c: ParsedComponents): String =
-        when (val path = c.path) {
-            is UrlPath.Opaque -> path.path
-            is UrlPath.Segments -> serializeUrlSegments(path.segments, noAuthority = c.host == null)
-        }
-
-    /**
-     * Joins URL path [segments] as `"/" + segment` runs, applying the [NORM-18] `/.` guard.
-     *
-     * The guard fires only for a no-authority value whose first segment is empty and which has a
-     * further segment (so the serialization would open `//` and re-parse with a spurious authority).
-     */
-    private fun serializeUrlSegments(
-        segments: List<String>,
-        noAuthority: Boolean,
-    ): String {
-        val needsGuard = noAuthority && segments.size > 1 && segments[0] == ""
-        val prefix = if (needsGuard) LEADING_DOT_GUARD else ""
-        return prefix + segments.joinToString("") { "$SLASH$it" }
-    }
-
     /** Appends `?query` then (unless excluded) `#fragment`, each only when its component is present. */
     private fun appendQueryFragment(
         sb: StringBuilder,
@@ -154,4 +112,59 @@ internal object Serializer {
         if (c.query != null) sb.append('?').append(c.query)
         if (!excludeFragment && c.fragment != null) sb.append('#').append(c.fragment)
     }
+}
+
+/**
+ * §11.2 [NORM-16] authority serializer `[userinfo "@"] host [":" port]`; the single home shared by both
+ * profiles' URL-side authority rendering (the `Serializer` object and `Url.authority`).
+ *
+ * @param components the stored components whose authority is rendered; MUST carry a non-null host.
+ * @return the authority text `[userinfo@]host[:port]`.
+ */
+internal fun serializeAuthority(components: ParsedComponents): String {
+    val host = requireNotNull(components.host) { "authority serialization requires a host" }
+    val port = if (components.port != null) ":${components.port}" else ""
+    return credentialsPrefix(components) + serializeHost(host) + port
+}
+
+/**
+ * The `userinfo@` prefix ([NORM-16] / [NORM-30]); empty for a value with no credentials.
+ *
+ * The WHATWG "includes credentials" rule and the RFC null/empty rule coincide here because
+ * [ParsedComponents] holds the credentials as (possibly empty) strings, never null: the prefix
+ * appears iff `username` or `password` is non-empty, and `:password` iff `password` is non-empty.
+ */
+private fun credentialsPrefix(components: ParsedComponents): String {
+    if (components.username.isEmpty() && components.password.isEmpty()) return ""
+    val password = if (components.password.isNotEmpty()) ":${components.password}" else ""
+    return "${components.username}$password@"
+}
+
+/**
+ * WHATWG URL path serialization: an opaque path verbatim, else the segment list ([NORM-15] step 3).
+ *
+ * The single home shared by the `Serializer` object and `Url.encodedPath`.
+ *
+ * @param components the stored components whose path is rendered.
+ * @return the encoded URL path string, with the [NORM-18] `/.` guard applied where required.
+ */
+internal fun serializeUrlPath(components: ParsedComponents): String =
+    when (val path = components.path) {
+        is UrlPath.Opaque -> path.path
+        is UrlPath.Segments -> serializeUrlSegments(path.segments, noAuthority = components.host == null)
+    }
+
+/**
+ * Joins URL path [segments] as `"/" + segment` runs, applying the [NORM-18] `/.` guard.
+ *
+ * The guard fires only for a no-authority value whose first segment is empty and which has a
+ * further segment (so the serialization would open `//` and re-parse with a spurious authority).
+ */
+private fun serializeUrlSegments(
+    segments: List<String>,
+    noAuthority: Boolean,
+): String {
+    val needsGuard = noAuthority && segments.size > 1 && segments[0] == ""
+    val prefix = if (needsGuard) LEADING_DOT_GUARD else ""
+    return prefix + segments.joinToString("") { "$SLASH$it" }
 }
