@@ -300,7 +300,8 @@ public class Uri internal constructor(
      * relative form resolves back to [target] — the two differ in [scheme] or [authority], either side
      * has an opaque path (see [isOpaquePath]), [target] is not under this URI's directory, or the only
      * candidate is a case RFC 3986 resolution would re-read (an empty reference re-inherits the base
-     * query; a `..`-bearing suffix). This mirrors [Url.relativize], which likewise returns `null` when
+     * query; a `..`-bearing suffix), or this URI has no [scheme] (resolution requires an absolute base).
+     * This mirrors [Url.relativize], which likewise returns `null` when
      * no relative form exists. This is total: it never throws.
      *
      * @param target the URI to express relative to this one.
@@ -308,17 +309,22 @@ public class Uri internal constructor(
      *   reproduces it.
      */
     public fun relativize(target: Uri): Uri? {
-        val reference = relativeReference(target) ?: return null
-        return if (resolveOrNull(reference.toString()) == target) reference else null
+        // relativize inverts resolve, which requires an absolute base; a scheme-less base has no relative
+        // form and would trip the structured resolver's absolute-base precondition, so reject it up front.
+        if (scheme == null) return null
+        // Round-trip the already-parsed candidate through the structured resolver instead of re-parsing
+        // its serialized string, keeping it only when the resolved value equals the target.
+        return relativeReference(target)?.takeIf { Uri(Resolver.resolve(components, it.components)) == target }
     }
 
     /**
      * Builds a candidate relative reference to [target] (path suffix, query, and fragment), or `null`
      * when the two cannot share a hierarchy (an opaque path on either side, a differing
-     * scheme/authority, or a [target] not under this URI's directory). The caller verifies the
-     * candidate actually resolves to [target] before returning it.
+     * scheme/authority, or a [target] not under this URI's directory). Shared by [relativize] and
+     * [Url.relativize]; each caller verifies the candidate resolves back to [target] under its own
+     * profile's resolve before returning it.
      */
-    private fun relativeReference(target: Uri): Uri? {
+    internal fun relativeReference(target: Uri): Uri? {
         val sharesHierarchy =
             !isOpaquePath() && !target.isOpaquePath() && scheme == target.scheme && authority == target.authority
         if (!sharesHierarchy) return null

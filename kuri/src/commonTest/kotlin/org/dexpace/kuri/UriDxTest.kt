@@ -288,6 +288,26 @@ class UriDxTest {
         assertEquals(target, base.resolveOrThrow(assertNotNull(base.relativize(target)).uriString))
     }
 
+    @Test
+    fun `relativize returns null when the base has no scheme`() {
+        // relativize inverts resolve, which requires an absolute base; a scheme-less relative reference
+        // has no relative form, and must return null rather than throw.
+        val base = parseOk("a/b/")
+        val target = parseOk("a/b/c")
+
+        assertNull(base.relativize(target))
+    }
+
+    @Test
+    fun `relativize round-trips for an IPv6-authority base`() {
+        // The structured resolver re-serializes the inherited base authority; an IPv6 literal is the
+        // non-trivial authority case, so pin that it still round-trips through resolve.
+        val base = parseOk("http://[::1]/a/b/")
+        val target = parseOk("http://[::1]/a/b/c")
+
+        assertEquals(target, base.resolveOrThrow(assertNotNull(base.relativize(target)).uriString))
+    }
+
     // --- path-segment editing + fileName / fileExtension ---
 
     @Test
