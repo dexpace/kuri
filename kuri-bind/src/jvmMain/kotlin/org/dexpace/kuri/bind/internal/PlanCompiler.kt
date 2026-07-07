@@ -162,20 +162,19 @@ internal class PlanCompiler(
     ): Boolean =
         when {
             scalar -> true
-            isCollectionType(member.declaredType) -> !isBindableComplex(member.elementType)
-            else -> !hasBindingMembers(member.declaredType)
+            isCollectionType(member.declaredType) -> !isBindableObject(member.elementType)
+            else -> !isBindableObject(member.declaredType)
         }
 
-    // A collection whose element is a genuine nested object (a non-scalar, non-collection, non-map
-    // type that declares binding members) recurses per element under the same scope; a collection of
-    // scalars — or one whose element type is erased away (a raw collection or a primitive array) —
-    // stays a leaf that stringifies each element.
-    private fun isBindableComplex(elementType: KClass<*>?): Boolean =
-        elementType != null &&
-            !isScalarType(elementType) &&
-            !isCollectionType(elementType) &&
-            !isMapType(elementType) &&
-            hasBindingMembers(elementType)
+    // A genuine nested object: a non-null, non-scalar, non-collection, non-map type that declares
+    // binding members. A @Query/@Path member of such a type (or a collection of them) recurses; a
+    // scalar, a value-type with no binding members, or an erased/raw element type stays a leaf.
+    private fun isBindableObject(type: KClass<*>?): Boolean =
+        type != null &&
+            !isScalarType(type) &&
+            !isCollectionType(type) &&
+            !isMapType(type) &&
+            hasBindingMembers(type)
 
     private fun hasBindingMembers(type: KClass<*>): Boolean =
         scanner.scan(type).any { member -> member.annotations.any { it.isBindingMarker() } }

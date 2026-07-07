@@ -6,6 +6,7 @@ package org.dexpace.kuri.bind.internal
 
 import org.dexpace.kuri.bind.Host
 import org.dexpace.kuri.bind.Path
+import org.dexpace.kuri.bind.Query
 import org.dexpace.kuri.bind.Scheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -66,5 +67,13 @@ class MemberScannerTest {
         val bean = JavaBean("https", "example.com")
         assertEquals("https", members.getValue("scheme").read(bean))
         assertEquals("example.com", members.getValue("host").read(bean))
+    }
+
+    @Test
+    fun `derives a member name from a java is-prefixed boolean getter`() {
+        val byName = scanner.scan(BoolBean::class).associateBy { it.name }
+        // `isActive()` surfaces as `active` (the `is`-prefix branch), carrying its @Query annotation.
+        assertEquals(true, byName.containsKey("active"))
+        assertEquals(true, byName.getValue("active").annotations.any { it is Query })
     }
 }

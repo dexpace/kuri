@@ -70,8 +70,10 @@ internal class UrlBuilderSink(
     }
 
     /**
-     * Forwards decoded [username] and [password] directly to the URL builder, which encodes
-     * each under the userinfo set internally. The `:` separator is managed by the builder.
+     * Fully replaces the userinfo slot from decoded [username] and [password] (an empty or absent
+     * password clears the slot), so an object's userinfo never leaks a base builder's existing
+     * password. The URL builder encodes each part under the userinfo set; the `:` separator is
+     * managed by the builder.
      */
     override fun userInfo(
         username: String,
@@ -79,7 +81,9 @@ internal class UrlBuilderSink(
     ) {
         require(username.isNotEmpty() || password != null) { "at least one of username or password must be present" }
         builder.username(username)
-        if (password != null) builder.password(password)
+        // Always set the password (empty clears it) so the object's userinfo FULLY replaces a base
+        // builder's slot — otherwise a username-only object would leak a base URL's existing password.
+        builder.password(password ?: "")
     }
 
     override fun hostText(value: String) {

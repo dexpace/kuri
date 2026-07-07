@@ -15,11 +15,15 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.dexpace.kuri.Url as KuriUrl
 
+// A marker interface so a `@Query` member can be typed as an interface (or `Any`) yet resolve its
+// bindable runtime value at bind time (see the polymorphic-query fixtures below).
+private interface Filter
+
 // A scalar-scoped `@Query` object: its own `@Query` members become sibling parameters of the parent.
 private class PriceFilter(
     @Query("min") val min: Int,
     @Query("max") val max: Int,
-)
+) : Filter
 
 // The spec headline: a templated path, a scalar query, a nested scoped-query object, and a query map.
 @Url
@@ -327,6 +331,170 @@ private class TextParentStructuredChild(
     @Url val child: StructuredHostChild = StructuredHostChild(),
 )
 
+// A username-only object bound onto a base that already carries credentials: its userinfo must fully
+// replace the base slot, so the base password does not leak through.
+@Url
+private class UsernameOnlyReq(
+    @Host val host: String = "h.example",
+    @Username val user: String = "newuser",
+)
+
+// A `@Query` member typed as the `Filter` interface: its declared type carries no binding members, so
+// it compiles to a leaf, yet its bindable runtime value (a `PriceFilter`) must recurse at bind time.
+@Url
+private class PolymorphicQuery(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Query val filter: Filter = PriceFilter(10, 50),
+)
+
+// The same, but typed as `Any` — the most erased declared type — to prove runtime dispatch, not the
+// declared type, drives the recurse-vs-stringify decision.
+@Url
+private class AnyTypedQuery(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Query val filter: Any = PriceFilter(1, 2),
+)
+
+// A merge declared BEFORE the parent's own `@Host` leaf: first-writer-wins in walk order lets the
+// child host win over the later parent leaf.
+@Url
+private class MergeThenHost(
+    @Scheme val scheme: String = "https",
+    @Url val endpoint: Endpoint,
+    @Host val host: String = "parent",
+)
+
+// Two sibling `@Url` merges that disagree on host: non-strict keeps the first; strict conflicts.
+@Url
+private class TwoEndpoints(
+    @Scheme val scheme: String = "https",
+    @Url val a: Endpoint,
+    @Url val b: Endpoint,
+)
+
+// A three-level `@Url` merge chain, each level contributing one distinct component (port, host, scheme)
+// that must all surface at the root.
+@Url
+private class GrandChild(
+    @Port val port: Int = 8443,
+)
+
+@Url
+private class Child3(
+    @Host val host: String = "h",
+    @Url val grand: GrandChild = GrandChild(),
+)
+
+@Url
+private class Root3(
+    @Scheme val scheme: String = "https",
+    @Url val child: Child3 = Child3(),
+)
+
+// A parent port leaf plus a merged child carrying a different port: strict mode flags the single-valued
+// conflict on a non-host slot.
+@Url
+private class PortConflict(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Port val port: Int = 8080,
+    @Url val endpoint: Endpoint = Endpoint(host = "h", port = 9090),
+)
+
+// A query-only object appended onto a base that already has a query.
+@Url
+private class QueryOnlyReq(
+    @Query("page") val page: Int = 2,
+)
+
+// A fragment-carrying object; also standalone-buildable so it exercises fresh-builder fragment encoding.
+@Url
+private class FragReq(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Fragment val frag: String = "section",
+)
+
+// A fragment-less object bound onto a base with a fragment: the base fragment must be kept.
+@Url
+private class NoFragReq(
+    @Query("q") val q: String = "x",
+)
+
+// A port-only object appended onto a base: its port overrides the base's.
+@Url
+private class PortReq(
+    @Port val port: Int = 9090,
+)
+
+private enum class Sort { ASC }
+
+// Scalar query values across the Boolean/enum/Double types: each stringifies to its own text form.
+@Url
+private class ScalarTypes(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Query("active") val active: Boolean = true,
+    @Query("sort") val sort: Sort = Sort.ASC,
+    @Query("ratio") val ratio: Double = 1.5,
+)
+
+// A structured IPv6 `Host` under `@Host`: `::1` as its eight 16-bit pieces, rendered bracketed on output.
+@Url
+private class Ipv6Host(
+    @Scheme val scheme: String = "https",
+    @Host val host: org.dexpace.kuri.host.Host =
+        org.dexpace.kuri.host.Host
+            .Ipv6(pieces = listOf(0, 0, 0, 0, 0, 0, 0, 1)),
+)
+
+// An empty (but non-null) query value: it renders `q=` (an `=` with nothing after), distinct from the
+// no-`=` form a null value produces.
+@Url
+private class EmptyQueryValue(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Query("q") val q: String = "",
+)
+
+// A `/` inside a single `@Path` value: it stays one decoded segment, encoded as `a%2Fb`, not split.
+@Url
+private class SlashInSegment(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Path val seg: String = "a/b",
+)
+
+// Pins the inherited WHATWG dot-segment behavior on positional `@Path` segments.
+@Url
+private class DotSegment(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Path val a: String = "keep",
+    @Path val b: String = "..",
+)
+
+// Pins the inherited `%`-under-encoding of the core query set.
+@Url
+private class PercentValue(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Query("q") val q: String = "a%2Bb",
+)
+
+// A data class mixing primary-constructor `@Path` props with a body-declared one: constructor order
+// first (zeta), then the name-sorted remainder (alpha).
+@Url
+private data class MixedOrder(
+    @Scheme val s: String = "https",
+    @Host val h: String = "h",
+    @Path val zeta: String = "z",
+) {
+    @Path val alpha: String = "a"
+}
+
 /**
  * End-to-end coverage of the binding stack driven through the public [KuriBind] facade: the spec's
  * headline example plus the cross-cutting edge cases (merge, userinfo, collections, query maps, nulls,
@@ -587,5 +755,143 @@ class IntegrationTest {
     fun `strict mode does not flag a text host equal to a structured host`() {
         val url = KuriBind.toUrl(TextParentStructuredChild(), BindOptions(strict = true))
         assertEquals("https://example.com/", url.toString())
+    }
+
+    @Test
+    fun `object username-only fully overrides base userinfo without leaking the base password`() {
+        val base = KuriUrl.parseOrThrow("https://olduser:oldpass@h.example/")
+        val url = KuriBind.bindInto(base.newBuilder(), UsernameOnlyReq()).build()
+        assertEquals("https://newuser@h.example/", url.toString())
+        assertEquals("", url.password) // the base password must be cleared, not leaked
+    }
+
+    @Test
+    fun `an interface-typed query member recurses on its runtime value`() {
+        assertEquals("https://h/?min=10&max=50", KuriBind.toUrl(PolymorphicQuery()).toString())
+    }
+
+    @Test
+    fun `an Any-typed query member recurses on its runtime value`() {
+        assertEquals("https://h/?min=1&max=2", KuriBind.toUrl(AnyTypedQuery()).toString())
+    }
+
+    @Test
+    fun `a merge declared before the parent host leaf lets the child host win`() {
+        val url = KuriBind.toUrl(MergeThenHost(endpoint = Endpoint(host = "child")))
+        assertEquals("child", url.host?.asText())
+    }
+
+    @Test
+    fun `first sibling merge wins a single-valued conflict in non-strict mode`() {
+        val url = KuriBind.toUrl(TwoEndpoints(a = Endpoint("a.example"), b = Endpoint("b.example")))
+        assertEquals("a.example", url.host?.asText())
+    }
+
+    @Test
+    fun `strict mode rejects two sibling merges conflicting on host`() {
+        val target = TwoEndpoints(a = Endpoint("a.example"), b = Endpoint("b.example"))
+        assertFailsWith<KuriBindException> { KuriBind.toUrl(target, BindOptions(strict = true)) }
+    }
+
+    @Test
+    fun `a three-level merge chain surfaces each component at the root`() {
+        assertEquals("https://h:8443/", KuriBind.toUrl(Root3()).toString())
+    }
+
+    @Test
+    fun `strict mode allows repeated path segments and query params`() {
+        val request = WithCollections(more = listOf("x", "y"), tags = listOf("a", "b"))
+        val url = KuriBind.toUrl(request, BindOptions(strict = true))
+        assertEquals("https://h/x/y?tag=a&tag=b", url.toString())
+    }
+
+    @Test
+    fun `strict mode rejects two sibling merges conflicting on port`() {
+        val failure =
+            assertFailsWith<KuriBindException> {
+                KuriBind.toUrl(PortConflict(), BindOptions(strict = true))
+            }
+        assertTrue(failure.message.orEmpty().contains("conflicting"))
+    }
+
+    @Test
+    fun `binding onto a base with an existing query appends the object's params`() {
+        val base = KuriUrl.parseOrThrow("https://api.example.com/?x=1")
+        val url = KuriBind.bindInto(base.newBuilder(), QueryOnlyReq()).build()
+        assertEquals("https://api.example.com/?x=1&page=2", url.toString())
+    }
+
+    @Test
+    fun `an object without a fragment keeps the base fragment`() {
+        val base = KuriUrl.parseOrThrow("https://h/#old")
+        assertEquals("old", KuriBind.bindInto(base.newBuilder(), NoFragReq()).build().encodedFragment)
+    }
+
+    @Test
+    fun `an object fragment overrides the base fragment`() {
+        val base = KuriUrl.parseOrThrow("https://h/#old")
+        assertEquals("section", KuriBind.bindInto(base.newBuilder(), FragReq()).build().encodedFragment)
+    }
+
+    @Test
+    fun `an object with a port overrides the base port`() {
+        val base = KuriUrl.parseOrThrow("https://h:8080/")
+        assertEquals(9090, KuriBind.bindInto(base.newBuilder(), PortReq()).build().port)
+    }
+
+    @Test
+    fun `an object without a port keeps the base port`() {
+        val base = KuriUrl.parseOrThrow("https://h:8080/")
+        assertEquals(8080, KuriBind.bindInto(base.newBuilder(), QueryOnlyReq()).build().port)
+    }
+
+    @Test
+    fun `binds a decoded fragment percent-encoding it`() {
+        val url = KuriBind.toUrl(FragReq(frag = "a b"))
+        assertEquals("a%20b", url.encodedFragment)
+    }
+
+    @Test
+    fun `binds Boolean enum and Double query values via their text forms`() {
+        val url = KuriBind.toUrl(ScalarTypes())
+        assertEquals("active=true&sort=ASC&ratio=1.5", url.query)
+    }
+
+    @Test
+    fun `binds a structured ipv6 host bracketed on output`() {
+        assertEquals("https://[::1]/", KuriBind.toUrl(Ipv6Host()).toString())
+    }
+
+    @Test
+    fun `an empty query value renders an equals with no value distinct from a null value`() {
+        assertEquals("q=", KuriBind.toUrl(EmptyQueryValue()).query)
+    }
+
+    @Test
+    fun `a slash inside a single path value stays one encoded segment`() {
+        val url = KuriBind.toUrl(SlashInSegment())
+        assertEquals(listOf("a/b"), url.pathSegments)
+        assertTrue(url.toString().contains("a%2Fb"))
+    }
+
+    @Test
+    fun `pins the inherited WHATWG dot-segment path shortening`() {
+        // WHATWG path shortening removes the prior segment; inherited from the core Url builder — pinned
+        // to catch a change. A `..` following `keep` pops `keep`, leaving an empty (root-only) path.
+        val url = KuriBind.toUrl(DotSegment())
+        assertEquals("https://h/", url.toString())
+        assertEquals(listOf(""), url.pathSegments)
+    }
+
+    @Test
+    fun `pins the inherited percent under-encoding of the query set`() {
+        // The core query set leaves `%` literal (WHATWG "already-encoded" convention) rather than
+        // re-encoding it to `%25` — pinned to document the contract, not a binder-level choice.
+        assertEquals("q=a%2Bb", KuriBind.toUrl(PercentValue()).query)
+    }
+
+    @Test
+    fun `binds a mixed constructor and body path in constructor-then-name order`() {
+        assertEquals(listOf("z", "a"), KuriBind.toUrl(MixedOrder()).pathSegments)
     }
 }

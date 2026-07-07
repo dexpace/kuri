@@ -31,6 +31,11 @@ class PathTemplateTest {
     }
 
     @Test
+    fun `rejects a trailing literal after a catch-all`() {
+        assertFailsWith<KuriBindException> { PathTemplate.parse("/files/{p...}/download") }
+    }
+
+    @Test
     fun `rejects duplicate hole names`() {
         assertFailsWith<KuriBindException> { PathTemplate.parse("/{a}/{a}") }
     }

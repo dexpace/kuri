@@ -54,6 +54,7 @@ internal class PathTemplate private constructor(
                 }
             }
             if (literal.isNotEmpty()) tokens.add(PathToken.Literal(literal.toString()))
+            requireCatchAllIsFinal(holes, tokens, template)
             check(holes.all { it.name.isNotEmpty() }) { "hole names validated above" }
             return PathTemplate(tokens, holes)
         }
@@ -94,6 +95,21 @@ internal class PathTemplate private constructor(
             if (holes.isNotEmpty() && holes.last().catchAll) {
                 val lastName = holes.last().name
                 throw KuriBindException("catch-all '{$lastName...}' must be the final hole: $template")
+            }
+        }
+
+        /**
+         * A catch-all hole must be the final token; a trailing literal (or any token) after it is
+         * rejected — complements [requireValidHoleInsertion], which only guards a following hole.
+         */
+        private fun requireCatchAllIsFinal(
+            holes: List<PathToken.Hole>,
+            tokens: List<PathToken>,
+            template: String,
+        ) {
+            val last = holes.lastOrNull() ?: return
+            if (last.catchAll && tokens.lastOrNull() != last) {
+                throw KuriBindException("catch-all '{${last.name}...}' must be the final token: $template")
             }
         }
     }

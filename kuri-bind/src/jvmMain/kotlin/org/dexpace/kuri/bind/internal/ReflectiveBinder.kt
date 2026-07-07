@@ -83,7 +83,23 @@ internal class BindingExecutor(
         // merge member's own `@Path` value (already emitted as a hole) must not double as a segment.
         if (step.op.isUserInfo() || (step.op == LeafOp.PATH && ctx.pathTemplated)) return
         val value = step.member.read(target) ?: return
-        LeafBinder.apply(step, value, ctx.sink)
+        applyLeafValue(step, value, ctx)
+    }
+
+    // A @Query/@Path member typed as an interface/`Any`/erased generic compiles to a leaf (its declared
+    // type carries no binding members), but if the RUNTIME value is actually a bindable object, recurse
+    // it under the matching scope — the same value-class dispatch @Url/MERGE uses — instead of
+    // stringifying it. Scalars, collections, and maps are unaffected and bind as before.
+    private fun applyLeafValue(
+        step: BindStep.Leaf,
+        value: Any,
+        ctx: WalkContext,
+    ) {
+        if ((step.op == LeafOp.QUERY || step.op == LeafOp.PATH) && runtimeValueIsBindable(value, cache)) {
+            applyRecurse(BindStep.Recurse(step.member, scopeFor(step.op)), value, ctx)
+        } else {
+            LeafBinder.apply(step, value, ctx.sink)
+        }
     }
 
     private fun applyRecurseStep(
@@ -258,14 +274,7 @@ private object LeafBinder {
     private fun applyPath(
         value: Any,
         sink: ComponentSink,
-    ) {
-        val iterable = asIterableOrNull(value)
-        if (iterable != null) {
-            iterable.filterNotNull().forEach { sink.addPathSegment(scalarText(it)) }
-        } else {
-            sink.addPathSegment(scalarText(value))
-        }
-    }
+    ) = forEachScoped(value) { sink.addPathSegment(scalarText(it)) }
 
     private fun applyQuery(
         name: String,
@@ -321,11 +330,13 @@ private object UserInfoBinder {
         target: Any,
     ): GatheredUserInfo? {
         val values = readValues(plan, target)
-        val username = resolveUsername(values) ?: ""
-        val password = resolvePassword(values)
-        // No userinfo members, or an all-empty gather (empty username, no password), is no contribution
-        // rather than an error — e.g. an `@Username val u = ""` with no `@Password` leaves it unset. The
-        // empty check subsumes the "no values" case, so `values.first()` below only runs when non-empty.
+        // A non-empty whole-token @UserInfo wins over split @Username/@Password; an EMPTY token is
+        // treated as absent so a sibling @Username/@Password still wins.
+        val split = rawFor(values, LeafOp.USERINFO)?.takeIf { it.isNotEmpty() }?.let(::splitUserInfo)
+        val username = split?.username ?: rawFor(values, LeafOp.USERNAME) ?: ""
+        val password = split?.password ?: rawFor(values, LeafOp.PASSWORD)
+        // No userinfo members, or an all-empty gather, is no contribution rather than an error. The
+        // empty check subsumes the "no values" case, so values.first() below only runs when non-empty.
         if (username.isEmpty() && password == null) return null
         return GatheredUserInfo(
             username,
@@ -344,18 +355,6 @@ private object UserInfoBinder {
             .filterIsInstance<BindStep.Leaf>()
             .filter { it.op.isUserInfo() }
             .mapNotNull { leaf -> leaf.member.read(target)?.let { leaf to scalarText(it) } }
-
-    private fun resolveUsername(values: List<Pair<BindStep.Leaf, String>>): String? =
-        userInfoToken(values)?.let { splitUserInfo(it).username } ?: rawFor(values, LeafOp.USERNAME)
-
-    private fun resolvePassword(values: List<Pair<BindStep.Leaf, String>>): String? =
-        userInfoToken(values)?.let { splitUserInfo(it).password } ?: rawFor(values, LeafOp.PASSWORD)
-
-    // A non-empty whole-token `@UserInfo` takes precedence over the split members; an EMPTY token is
-    // treated as absent so a sibling `@Username`/`@Password` still wins (an empty `@UserInfo` default
-    // must not shadow a real username).
-    private fun userInfoToken(values: List<Pair<BindStep.Leaf, String>>): String? =
-        rawFor(values, LeafOp.USERINFO)?.takeIf { it.isNotEmpty() }
 
     private fun rawFor(
         values: List<Pair<BindStep.Leaf, String>>,
@@ -386,6 +385,23 @@ private fun forEachScoped(
     val iterable = asIterableOrNull(value)
     if (iterable != null) iterable.filterNotNull().forEach(action) else action(value)
 }
+
+/**
+ * Whether [value]'s runtime type is a bindable object (carries component annotations) rather than a
+ * scalar/collection/map. A cheap scalar allowlist avoids reflecting over `String`/`Int`/`BigDecimal`/
+ * enums etc.; anything else is probed through the plan cache (empty plan → not bindable → a leaf).
+ */
+private fun runtimeValueIsBindable(
+    value: Any,
+    cache: PlanCache,
+): Boolean {
+    val scalarLike = value is CharSequence || value is Number || value is Char || value is Boolean || value is Enum<*>
+    if (scalarLike || asIterableOrNull(value) != null || asMapOrNull(value) != null) return false
+    return cache.planFor(value::class).steps.isNotEmpty()
+}
+
+/** The recursion scope matching a scalar-scoped leaf op. */
+private fun scopeFor(op: LeafOp): Scope = if (op == LeafOp.QUERY) Scope.QUERY else Scope.PATH
 
 /** Whether this op feeds the single userinfo slot and is therefore paired by [UserInfoBinder]. */
 private fun LeafOp.isUserInfo(): Boolean = this == LeafOp.USERINFO || this == LeafOp.USERNAME || this == LeafOp.PASSWORD

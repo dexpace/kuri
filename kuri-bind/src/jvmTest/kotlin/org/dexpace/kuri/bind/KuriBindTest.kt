@@ -41,6 +41,23 @@ private class NoRootMarker(
     val name: String,
 )
 
+// A linear `@Url` merge chain used to probe the exact `maxDepth` boundary. It carries a scheme so a
+// within-bound chain builds to a full URL, and each level merges the same scheme/host without conflict.
+@Url
+private class DepthNode(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Url val next: DepthNode? = null,
+)
+
+// A root whose `@Host` accessor throws an `IllegalArgumentException` (the family every expected binding
+// failure belongs to): `...OrNull` must translate it to `null`, distinct from the `ThrowingHost` case
+// where a non-argument fault propagates.
+@Url
+private class IaeHost {
+    @Host val host: String get() = throw IllegalArgumentException("bad host")
+}
+
 class KuriBindTest {
     @Test
     fun `binds onto a base url with the object appending a templated segment`() {
@@ -91,6 +108,30 @@ class KuriBindTest {
     @Test
     fun `toUrlOrNull rethrows a non-argument failure instead of swallowing it`() {
         val error = assertFails { KuriBind.toUrlOrNull(ThrowingHost()) }
+        assertTrue(error !is IllegalArgumentException)
+    }
+
+    @Test
+    fun `a chain exactly at the depth bound binds while one level deeper fails`() {
+        // The walk depth starts at 0 and increments once per @Url merge, so a K-node chain reaches
+        // depth K-1: maxDepth = 2 admits a 3-node chain (depths 0,1,2) and rejects a 4-node chain.
+        val atBound = DepthNode(next = DepthNode(next = DepthNode()))
+        assertEquals("https://h/", KuriBind.toUrl(atBound, BindOptions(maxDepth = 2)).toString())
+        val overBound = DepthNode(next = DepthNode(next = DepthNode(next = DepthNode())))
+        val failure =
+            assertFailsWith<KuriBindException> {
+                KuriBind.toUrl(overBound, BindOptions(maxDepth = 2))
+            }
+        assertTrue(failure.message.orEmpty().contains("depth"))
+    }
+
+    @Test
+    fun `toUrlOrNull does not swallow a user accessor's IllegalArgumentException`() {
+        // The `...OrNull` contract maps a binding-level IllegalArgumentException to null, but a fault
+        // thrown by the target's OWN accessor arrives wrapped in a reflective InvocationTargetException
+        // (not an IllegalArgumentException), so it propagates rather than being swallowed. Pinned to
+        // document that boundary — the reflective wrapping is what keeps an accessor fault out of null.
+        val error = assertFails { KuriBind.toUrlOrNull(IaeHost()) }
         assertTrue(error !is IllegalArgumentException)
     }
 }
