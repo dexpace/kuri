@@ -6,6 +6,7 @@ package org.dexpace.kuri.percent
 
 import org.dexpace.kuri.text.hexDigitToInt
 import org.dexpace.kuri.text.isAsciiHexDigit
+import org.dexpace.kuri.text.isSurrogatePairAt
 import org.dexpace.kuri.text.toPercentEncodedByte
 
 /** Mask isolating the low eight bits of an `Int`, turning a signed `Byte` into an octet `0..255`. */
@@ -204,15 +205,6 @@ internal object PercentCodec {
             i++
         }
         return found
-    }
-
-    /** True when a high surrogate at [i] is immediately followed by a low surrogate. */
-    private fun isSurrogatePairAt(
-        input: String,
-        i: Int,
-    ): Boolean {
-        val next = i + 1
-        return input[i].isHighSurrogate() && next < input.length && input[next].isLowSurrogate()
     }
 
     /** Appends the [step]-unit code point at [i] as `+` (form space) or as UTF-8 triplets. */

@@ -8,6 +8,9 @@ import org.dexpace.kuri.error.HostError
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.error.map
+import org.dexpace.kuri.text.MAX_CODE_POINT
+import org.dexpace.kuri.text.appendCodePoint
+import org.dexpace.kuri.text.codePointsOf
 
 /** ACE prefix marking a Punycode-encoded (`xn--`) label (RFC 5890 §2.3.2.1). */
 private const val ACE_PREFIX: String = "xn--"
@@ -23,27 +26,6 @@ private const val NON_ASCII_MIN: Int = 0x80
 
 /** Distance from an uppercase ASCII letter to its lowercase counterpart (`'A'` -> `'a'`). */
 private const val ASCII_CASE_OFFSET: Int = 0x20
-
-/** Largest Unicode scalar value (U+10FFFF). */
-private const val MAX_CODE_POINT: Int = 0x10FFFF
-
-/** Largest code point that fits in a single UTF-16 code unit. */
-private const val MAX_BMP_CODE_POINT: Int = 0xFFFF
-
-/** First code point of the supplementary planes (needs a surrogate pair). */
-private const val SUPPLEMENTARY_BASE: Int = 0x10000
-
-/** Bit shift separating the high- and low-surrogate halves of a code point. */
-private const val SURROGATE_SHIFT: Int = 10
-
-/** Mask isolating the low-surrogate payload bits of a supplementary code point. */
-private const val LOW_SURROGATE_MASK: Int = 0x3FF
-
-/** First UTF-16 high-surrogate code unit (`U+D800`). */
-private const val HIGH_SURROGATE_START: Int = 0xD800
-
-/** First UTF-16 low-surrogate code unit (`U+DC00`). */
-private const val LOW_SURROGATE_START: Int = 0xDC00
 
 /**
  * UTS-46 ToASCII / ToUnicode for IDNA domains (SPEC §7.4, [HOST-26]) under the `Url`-profile
@@ -290,48 +272,4 @@ internal object Idna {
         buildString(s.length) {
             for (c in s) append(if (c in 'A'..'Z') c + ASCII_CASE_OFFSET else c)
         }
-
-    /** Splits [input] into Unicode code points, combining well-formed surrogate pairs. */
-    private fun codePointsOf(input: String): List<Int> {
-        val result = ArrayList<Int>(input.length)
-        var index = 0
-        while (index < input.length) {
-            val high = input[index]
-            val low = if (index + 1 < input.length) input[index + 1] else null
-            if (high.isHighSurrogate() && low != null && low.isLowSurrogate()) {
-                result.add(toCodePoint(high, low))
-                index += 2
-            } else {
-                result.add(high.code)
-                index++
-            }
-        }
-        return result
-    }
-
-    /** Combines a UTF-16 surrogate pair into a single supplementary-plane code point. */
-    private fun toCodePoint(
-        high: Char,
-        low: Char,
-    ): Int {
-        require(high.isHighSurrogate()) { "expected high surrogate: $high" }
-        require(low.isLowSurrogate()) { "expected low surrogate: $low" }
-        val highBits = (high.code - HIGH_SURROGATE_START) shl SURROGATE_SHIFT
-        return SUPPLEMENTARY_BASE + highBits + (low.code - LOW_SURROGATE_START)
-    }
-
-    /** Appends [codePoint] to [out], emitting a surrogate pair for supplementary values. */
-    private fun appendCodePoint(
-        out: StringBuilder,
-        codePoint: Int,
-    ) {
-        require(codePoint in 0..MAX_CODE_POINT) { "code point out of range: $codePoint" }
-        if (codePoint <= MAX_BMP_CODE_POINT) {
-            out.append(codePoint.toChar())
-        } else {
-            val offset = codePoint - SUPPLEMENTARY_BASE
-            out.append((HIGH_SURROGATE_START + (offset ushr SURROGATE_SHIFT)).toChar())
-            out.append((LOW_SURROGATE_START + (offset and LOW_SURROGATE_MASK)).toChar())
-        }
-    }
 }
