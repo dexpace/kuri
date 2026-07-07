@@ -13,9 +13,6 @@ import org.dexpace.kuri.scheme.isSchemeContinuationChar
 import org.dexpace.kuri.text.asciiLowercased
 import org.dexpace.kuri.text.isAsciiAlpha
 
-/** The canonical `file` scheme, special-cased throughout the §8 state machine. */
-private const val FILE_SCHEME: String = "file"
-
 /**
  * The routing, scheme, relative-resolution, path, query, and opaque-path states of the §8.3
  * `Url`-profile state machine (WHATWG basic URL parser).

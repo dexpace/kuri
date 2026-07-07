@@ -15,9 +15,6 @@ import org.dexpace.kuri.percent.PercentEncodeSets
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.text.isAsciiDigit
 
-/** The canonical `file` scheme, special-cased by the file sub-machine (§8.3). */
-private const val FILE_SCHEME: String = "file"
-
 /** WHATWG `localhost`, mapped to the empty host in the FILE_HOST state ([PARSE-37]). */
 private const val LOCALHOST: String = "localhost"
 
