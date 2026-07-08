@@ -254,7 +254,8 @@ private object LeafBinder {
     // Contributes a `@Query` value under [name]: a collection fans out into one parameter per element
     // (a null element yields a valueless parameter), any other value becomes a single scalar parameter.
     // The direct `@Query` leaf and each `@QueryMap` entry share this; they differ only in how [name] is
-    // derived. A non-null [value] takes the same paths (`value?.let(::x)` collapses to `x(value)`).
+    // derived. [value] is nullable only so a `@QueryMap` entry's null value can pass through as a
+    // valueless parameter; the direct `@Query` path always reads a non-null value first.
     private fun addQueryValues(
         name: String,
         value: Any?,

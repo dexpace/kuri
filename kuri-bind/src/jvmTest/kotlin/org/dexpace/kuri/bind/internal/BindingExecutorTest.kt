@@ -66,7 +66,7 @@ private class SelfRef(
     @BindUrl var self: SelfRef?,
 )
 
-class ReflectiveBinderTest {
+class BindingExecutorTest {
     private val executor = BindingExecutor(PlanCompiler(KotlinReflectMemberScanner()))
 
     // Exercises the reflective walk end to end into a URL: this is exactly what the `@Url` entry point
