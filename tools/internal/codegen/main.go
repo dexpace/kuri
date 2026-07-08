@@ -17,7 +17,7 @@ import (
 
 // usage describes the command line for error messages.
 const usage = "usage: codegen <name> [--stdout]\n" +
-	"  names: url, idna-mapping, idna-validity, nfc-tables, nfc-test, conformance\n" +
+	"  names: url, idna-mapping, idna-validity, nfc-tables, nfc-test, conformance, setters\n" +
 	"  conformance also accepts --stdout-data / --stdout-known to print one of its two files"
 
 // singleGenerator pairs a single-file generator's source builder with a resolver
@@ -50,6 +50,10 @@ var singleGenerators = map[string]singleGenerator{
 	"nfc-test": {
 		generate: generateNfcTest,
 		output:   outputPath("kuri", "src", "commonTest", "kotlin", "org", "dexpace", "kuri", "idna", "NfcTestData.kt"),
+	},
+	"setters": {
+		generate: generateSetters,
+		output:   outputPath("kuri", "src", "commonTest", "kotlin", "org", "dexpace", "kuri", "parser", "SetterTestData.kt"),
 	},
 }
 
