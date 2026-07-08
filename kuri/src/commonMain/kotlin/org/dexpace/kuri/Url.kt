@@ -137,12 +137,12 @@ public class Url internal constructor(
     /** The decoded path segments in order (read-only); an opaque path yields its single decoded value. */
     @get:JvmName("pathSegments")
     public val pathSegments: List<String>
-        get() = decodedSegments(components.path) { PercentCodec.decode(it) }
+        get() = decodedPathSegments
 
     /** The canonical encoded path string (e.g. `/a/b`, or the opaque path verbatim). */
     @get:JvmName("encodedPath")
     public val encodedPath: String
-        get() = serializeUrlPath(components)
+        get() = encodedPathText
 
     /**
      * The raw encoded query without its leading `?`, or `null` when no `?` was present.
@@ -157,7 +157,7 @@ public class Url internal constructor(
     /** A decoded, immutable snapshot of the query's `name=value` pairs; never live. */
     @get:JvmName("queryParameters")
     public val queryParameters: QueryParameters
-        get() = QueryParameters.parseOrEmpty(components.query)
+        get() = queryParameterSnapshot
 
     /**
      * The raw encoded fragment without its leading `#`, or `null` when no `#` was present.
@@ -214,6 +214,13 @@ public class Url internal constructor(
 
     /** Cached canonical serialization, computed once (permits caching an immutable value). */
     private val canonicalHref: String by lazy { Serializer.serialize(components, ParseProfile.URL) }
+
+    /** Path/query projections, each computed once; every value is immutable, mirroring [canonicalHref]. */
+    private val decodedPathSegments: List<String> by lazy {
+        decodedSegments(components.path) { PercentCodec.decode(it) }
+    }
+    private val encodedPathText: String by lazy { serializeUrlPath(components) }
+    private val queryParameterSnapshot: QueryParameters by lazy { QueryParameters.parseOrEmpty(components.query) }
 
     /**
      * The canonical serialized URL; the basis of [toString], [equals], and [hashCode].

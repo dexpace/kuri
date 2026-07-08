@@ -158,7 +158,7 @@ public class Uri internal constructor(
      *
      * @return the decoded, ordered, duplicate-preserving snapshot; empty when there is no query.
      */
-    public fun queryParameters(): QueryParameters = QueryParameters.parseOrEmpty(query)
+    public fun queryParameters(): QueryParameters = queryParameterSnapshot
 
     /**
      * The last non-empty decoded path segment — the "file name" — or `""` when the path has none.
@@ -213,7 +213,7 @@ public class Uri internal constructor(
      */
     @get:JvmName("encodedPath")
     public val encodedPath: String
-        get() = components.path.toUriPathString()
+        get() = encodedPathText
 
     /**
      * Returns a [Builder] pre-filled with this URI's components, for producing a modified copy.
@@ -523,6 +523,10 @@ public class Uri internal constructor(
     /** Decoded path and segments, computed once each; the value is immutable, mirroring [canonicalUri]. */
     private val decodedPath: String by lazy { computeDecodedPath() }
     private val decodedPathSegments: List<String> by lazy { computeDecodedPathSegments() }
+
+    /** Encoded path and query snapshot, computed once each; both are immutable, mirroring [canonicalUri]. */
+    private val encodedPathText: String by lazy { components.path.toUriPathString() }
+    private val queryParameterSnapshot: QueryParameters by lazy { QueryParameters.parseOrEmpty(query) }
 
     /**
      * Percent-decodes the stored path — an opaque path whole, else each segment — backing [path].
