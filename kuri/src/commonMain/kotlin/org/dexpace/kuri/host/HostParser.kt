@@ -10,8 +10,9 @@ import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.idna.Idna
 import org.dexpace.kuri.percent.PercentCodec
-import org.dexpace.kuri.text.isAsciiAlphanumeric
+import org.dexpace.kuri.text.hasPercentHexPairAt
 import org.dexpace.kuri.text.isAsciiHexDigit
+import org.dexpace.kuri.text.isUnreserved
 
 /** Opening delimiter of an IP-literal; a host beginning with it dispatches to §7.2/§7.8. */
 private const val BRACKET_OPEN: Char = '['
@@ -30,9 +31,6 @@ private const val MIN_IP_FUTURE_DOT_INDEX: Int = 2
 
 /** The `.` separating the IPvFuture version digits from their payload. */
 private const val IP_FUTURE_DOT: Char = '.'
-
-/** RFC 3986 `unreserved` symbol characters beyond ALPHA/DIGIT (`ALPHA / DIGIT / "-._~"`). */
-private const val UNRESERVED_SYMBOLS: String = "-._~"
 
 /** RFC 3986 `sub-delims` set (`"!" / "$" / "&" / "'" / "(" / ")" / "*" / "+" / "," / ";" / "="`). */
 private const val SUB_DELIMS: String = "!\$&'()*+,;="
@@ -256,8 +254,8 @@ internal object HostParser {
         require(index in input.indices) { "index out of range: $index" }
         val c = input[index]
         return when {
-            c == '%' && isPctEncodedAt(input, index) -> PCT_TRIPLET_LENGTH
-            isUnreserved(c) || isSubDelim(c) -> 1
+            c == '%' && hasPercentHexPairAt(input, index) -> PCT_TRIPLET_LENGTH
+            c.isUnreserved() || isSubDelim(c) -> 1
             else -> 0
         }
     }
@@ -274,18 +272,9 @@ internal object HostParser {
     private fun bracketError(input: String): ParseResult<Host> =
         ParseResult.Err(UriParseError.InvalidHost(input, HostError.Ipv6Malformed))
 
-    /** True when a `%` at [index] introduces a valid `pct-encoded` triplet (`%` then two HEXDIG). */
-    private fun isPctEncodedAt(
-        input: String,
-        index: Int,
-    ): Boolean = index + 2 < input.length && input[index + 1].isAsciiHexDigit() && input[index + 2].isAsciiHexDigit()
-
-    /** True when [c] is an RFC 3986 `unreserved` code point. */
-    private fun isUnreserved(c: Char): Boolean = c.isAsciiAlphanumeric() || c in UNRESERVED_SYMBOLS
-
     /** True when [c] is an RFC 3986 `sub-delims` code point. */
     private fun isSubDelim(c: Char): Boolean = c in SUB_DELIMS
 
     /** True when [c] is admissible in an IPvFuture payload (`unreserved / sub-delims / ":"`). */
-    private fun isIpFuturePayloadChar(c: Char): Boolean = isUnreserved(c) || isSubDelim(c) || c == ':'
+    private fun isIpFuturePayloadChar(c: Char): Boolean = c.isUnreserved() || isSubDelim(c) || c == ':'
 }

@@ -9,8 +9,9 @@ import org.dexpace.kuri.error.ValidationError
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSets
 import org.dexpace.kuri.scheme.Scheme
+import org.dexpace.kuri.scheme.isSchemeContinuationChar
+import org.dexpace.kuri.text.asciiLowercased
 import org.dexpace.kuri.text.isAsciiAlpha
-import org.dexpace.kuri.text.isAsciiAlphanumeric
 
 /** The canonical `file` scheme, special-cased throughout the §8 state machine. */
 private const val FILE_SCHEME: String = "file"
@@ -38,7 +39,7 @@ internal object UrlParserStates {
     internal fun schemeStartState(state: UrlParserState): UrlTransition {
         val c = state.currentChar()
         if (c != null && c.isAsciiAlpha()) {
-            state.buffer.append(c.lowercaseChar())
+            state.buffer.append(c.asciiLowercased())
             return UrlTransition.Advance(UrlState.SCHEME)
         }
         return UrlTransition.Reconsume(UrlState.NO_SCHEME)
@@ -54,17 +55,14 @@ internal object UrlParserStates {
     internal fun schemeState(state: UrlParserState): UrlTransition {
         val c = state.currentChar()
         return when {
-            c != null && isSchemeTailChar(c) -> {
-                state.buffer.append(c.lowercaseChar())
+            c != null && isSchemeContinuationChar(c) -> {
+                state.buffer.append(c.asciiLowercased())
                 UrlTransition.Advance(UrlState.SCHEME)
             }
             c == ':' -> schemeColon(state)
             else -> schemeRestart(state)
         }
     }
-
-    /** True when [c] may continue a scheme: ASCII alphanumeric, `+`, `-`, or `.` ([PARSE-14]). */
-    private fun isSchemeTailChar(c: Char): Boolean = c.isAsciiAlphanumeric() || c == '+' || c == '-' || c == '.'
 
     /** Resets the scan to NO_SCHEME from the first code point ([PARSE-16]; the only `pos` reset). */
     private fun schemeRestart(state: UrlParserState): UrlTransition {

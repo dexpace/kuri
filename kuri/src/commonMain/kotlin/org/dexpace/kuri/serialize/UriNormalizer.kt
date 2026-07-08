@@ -11,24 +11,16 @@ import org.dexpace.kuri.parser.UrlPath
 import org.dexpace.kuri.parser.splitUriPath
 import org.dexpace.kuri.parser.toUriPathString
 import org.dexpace.kuri.scheme.Scheme
-import org.dexpace.kuri.text.hexDigitToInt
-import org.dexpace.kuri.text.isAsciiAlphanumeric
-import org.dexpace.kuri.text.isAsciiHexDigit
+import org.dexpace.kuri.text.asciiLowercased
+import org.dexpace.kuri.text.hasPercentHexPairAt
+import org.dexpace.kuri.text.isUnreserved
+import org.dexpace.kuri.text.percentByteAt
 
 /** Length of a percent-encoded triplet `%XY`; hoisted so the triplet scanners carry no bare `3`. */
 private const val TRIPLET_LENGTH: Int = 3
 
-/** Bit width of one hex nibble; the high triplet digit is shifted left by this to form the octet. */
-private const val HEX_SHIFT: Int = 4
-
 /** Path-segment separator used when re-stringifying and re-splitting a hierarchical path. */
 private const val SLASH: String = "/"
-
-/** The non-alphanumeric members of RFC 3986 `unreserved` (`ALPHA`/`DIGIT` are tested separately). */
-private const val UNRESERVED_SYMBOLS: String = "-._~"
-
-/** ASCII distance from an upper-case letter to its lower-case counterpart (`'a' - 'A'`, 32). */
-private const val ASCII_CASE_OFFSET: Int = 'a' - 'A'
 
 /**
  * The RFC 3986 §6.2 syntax-based and scheme-based normalizations for the `Uri` profile (SPEC §11.1
@@ -103,11 +95,11 @@ internal object UriNormalizer {
         text: String,
         i: Int,
     ): Int {
-        if (text[i] == '%' && isHexPairAt(text, i)) {
+        if (text[i] == '%' && hasPercentHexPairAt(text, i)) {
             out.append(text.substring(i, i + TRIPLET_LENGTH))
             return i + TRIPLET_LENGTH
         }
-        out.append(asciiLowercased(text[i]))
+        out.append(text[i].asciiLowercased())
         return i + 1
     }
 
@@ -133,7 +125,7 @@ internal object UriNormalizer {
         text: String,
         i: Int,
     ): Int {
-        if (text[i] != '%' || !isHexPairAt(text, i)) {
+        if (text[i] != '%' || !hasPercentHexPairAt(text, i)) {
             out.append(text[i])
             return i + 1
         }
@@ -158,13 +150,13 @@ internal object UriNormalizer {
         text: String,
         i: Int,
     ): Int {
-        if (text[i] != '%' || !isHexPairAt(text, i)) {
+        if (text[i] != '%' || !hasPercentHexPairAt(text, i)) {
             out.append(text[i])
             return i + 1
         }
-        val octet = (hexDigitToInt(text[i + 1]) shl HEX_SHIFT) or hexDigitToInt(text[i + 2])
+        val octet = percentByteAt(text, i)
         val decoded = octet.toChar()
-        if (isUnreserved(decoded)) out.append(decoded) else out.append(text.substring(i, i + TRIPLET_LENGTH))
+        if (decoded.isUnreserved()) out.append(decoded) else out.append(text.substring(i, i + TRIPLET_LENGTH))
         return i + TRIPLET_LENGTH
     }
 
@@ -203,18 +195,4 @@ internal object UriNormalizer {
             port == Scheme.defaultPort(scheme) -> null
             else -> port
         }
-
-    // --- shared predicates -------------------------------------------------------------------------
-
-    /** True when a `%` at [i] is followed by two in-bounds ASCII hex digits ([GRAM-6]). */
-    private fun isHexPairAt(
-        text: String,
-        i: Int,
-    ): Boolean = i + 2 < text.length && text[i + 1].isAsciiHexDigit() && text[i + 2].isAsciiHexDigit()
-
-    /** True when [c] is RFC 3986 `unreserved`: an ASCII alphanumeric or one of `- . _ ~`. */
-    private fun isUnreserved(c: Char): Boolean = c.isAsciiAlphanumeric() || c in UNRESERVED_SYMBOLS
-
-    /** Lowercases a single ASCII letter, leaving every other code point untouched (locale-invariant). */
-    private fun asciiLowercased(c: Char): Char = if (c in 'A'..'Z') c + ASCII_CASE_OFFSET else c
 }

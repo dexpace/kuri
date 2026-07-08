@@ -11,11 +11,11 @@ import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.host.HostParser
 import org.dexpace.kuri.scheme.Scheme
+import org.dexpace.kuri.scheme.isSchemeContinuationChar
 import org.dexpace.kuri.scheme.schemeColonIndex
+import org.dexpace.kuri.text.hasPercentHexPairAt
 import org.dexpace.kuri.text.isAsciiAlpha
-import org.dexpace.kuri.text.isAsciiAlphanumeric
 import org.dexpace.kuri.text.isAsciiDigit
-import org.dexpace.kuri.text.isAsciiHexDigit
 import org.dexpace.kuri.text.isC0Control
 
 /** Sentinel returned by the index scanners when no offending position exists. */
@@ -168,11 +168,8 @@ internal object UriParser {
         when {
             candidate.isEmpty() -> 0
             !candidate[0].isAsciiAlpha() -> 0
-            else -> (1 until candidate.length).firstOrNull { !isSchemeTailChar(candidate[it]) } ?: 0
+            else -> (1 until candidate.length).firstOrNull { !isSchemeContinuationChar(candidate[it]) } ?: 0
         }
-
-    /** True when [c] may follow the first code point of a scheme (§6.2; ALPHA / DIGIT / `+` / `-` / `.`). */
-    private fun isSchemeTailChar(c: Char): Boolean = c.isAsciiAlphanumeric() || c == '+' || c == '-' || c == '.'
 
     /** Assembles the [Sections] record, splitting the post-scheme remainder into authority and path. */
     private fun buildSections(
@@ -410,18 +407,12 @@ internal object UriParser {
         var index = 0
         var bad = NOT_FOUND
         while (index < text.length && bad == NOT_FOUND) {
-            if (text[index] == '%' && !isHexPairAt(text, index)) bad = index
+            if (text[index] == '%' && !hasPercentHexPairAt(text, index)) bad = index
             index++
         }
         check(bad == NOT_FOUND || bad in text.indices) { "bad percent index out of range: $bad" }
         return bad
     }
-
-    /** True when a `%` at [index] is followed by two in-bounds ASCII hex digits. */
-    private fun isHexPairAt(
-        text: String,
-        index: Int,
-    ): Boolean = index + 2 < text.length && text[index + 1].isAsciiHexDigit() && text[index + 2].isAsciiHexDigit()
 
     /** The smaller non-negative index of [a] and [b], or the present one, or [NOT_FOUND] when both are absent. */
     private fun earliest(

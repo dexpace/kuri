@@ -7,10 +7,11 @@ package org.dexpace.kuri.host
 import org.dexpace.kuri.error.HostError
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
+import org.dexpace.kuri.text.hasPercentHexPairAt
 import org.dexpace.kuri.text.hexDigitToInt
-import org.dexpace.kuri.text.isAsciiAlphanumeric
 import org.dexpace.kuri.text.isAsciiDigit
 import org.dexpace.kuri.text.isAsciiHexDigit
+import org.dexpace.kuri.text.isUnreserved
 
 /** Number of 16-bit pieces in an IPv6 address (§7.2). */
 private const val PIECE_COUNT: Int = 8
@@ -53,9 +54,6 @@ private const val ZONE_INTRODUCER: String = "%25"
 
 /** Length of a `pct-encoded` triplet, `%HH`, consumed whole by the `ZoneID` scanner ([HOST-18]). */
 private const val PCT_TRIPLET_LENGTH: Int = 3
-
-/** RFC 3986 `unreserved` symbol characters beyond ALPHA/DIGIT (`ALPHA / DIGIT / "-._~"`). */
-private const val ZONE_UNRESERVED_SYMBOLS: String = "-._~"
 
 /**
  * The IPv6 literal parser and RFC 5952 serializer (SPEC §7.2).
@@ -161,25 +159,10 @@ internal object Ipv6 {
         require(index in rawZone.indices) { "zone index out of range: $index" }
         val c = rawZone[index]
         return when {
-            c == '%' && isPctTriplet(rawZone, index) -> PCT_TRIPLET_LENGTH
-            isZoneUnreserved(c) -> 1
+            c == '%' && hasPercentHexPairAt(rawZone, index) -> PCT_TRIPLET_LENGTH
+            c.isUnreserved() -> 1
             else -> 0
         }
-    }
-
-    /** True when [c] is an RFC 3986 `unreserved` code point (`ALPHA / DIGIT / "-._~"`). */
-    private fun isZoneUnreserved(c: Char): Boolean = c.isAsciiAlphanumeric() || c in ZONE_UNRESERVED_SYMBOLS
-
-    /** True when a `%` at [index] introduces a valid `pct-encoded` triplet (`%` then two HEXDIG). */
-    private fun isPctTriplet(
-        rawZone: String,
-        index: Int,
-    ): Boolean {
-        require(index in rawZone.indices) { "pct index out of range: $index" }
-        require(rawZone[index] == '%') { "pct triplet must start with '%'" }
-        return index + 2 < rawZone.length &&
-            rawZone[index + 1].isAsciiHexDigit() &&
-            rawZone[index + 2].isAsciiHexDigit()
     }
 
     /**
