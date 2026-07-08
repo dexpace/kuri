@@ -6,6 +6,7 @@ package org.dexpace.kuri.parser
 
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.error.ValidationError
+import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSets
 import org.dexpace.kuri.scheme.Scheme
@@ -75,10 +76,37 @@ internal object UrlParserStates {
     private fun schemeColon(state: UrlParserState): UrlTransition {
         val scheme = state.buffer.toString()
         check(Scheme.isValidScheme(scheme)) { "scheme buffer must already be valid: $scheme" }
+        if (state.stateOverride == StateOverride.PROTOCOL) {
+            return protocolOverride(state, scheme)
+        }
         state.scheme = scheme
         state.special = Scheme.isSpecial(scheme)
         state.buffer.setLength(0)
         return dispatchAfterScheme(state, scheme)
+    }
+
+    /**
+     * WHATWG `protocol` setter guards (URL §5): refuse a special↔non-special change, refuse a
+     * `file` scheme when credentials/port/host would be invalid, then commit the scheme and
+     * default-port-elide. Any refusal is a no-op ([UrlTransition.Abort]).
+     */
+    private fun protocolOverride(
+        state: UrlParserState,
+        scheme: String,
+    ): UrlTransition {
+        val newSpecial = Scheme.isSpecial(scheme)
+        val oldSpecial = state.scheme?.let { Scheme.isSpecial(it) } ?: false
+        val hasCredentials = state.username.isNotEmpty() || state.password.isNotEmpty()
+        val hostEmptyOrAbsent = state.host == null || state.host == Host.Empty
+        val refuse =
+            newSpecial != oldSpecial ||
+                (scheme == FILE_SCHEME && (hasCredentials || state.port != null)) ||
+                (state.scheme == FILE_SCHEME && hostEmptyOrAbsent)
+        if (refuse) return UrlTransition.Abort
+        state.scheme = scheme
+        state.special = newSpecial
+        if (state.port != null && Scheme.defaultPort(scheme) == state.port) state.port = null
+        return UrlTransition.Done
     }
 
     /** The post-`:` dispatch of [PARSE-15]: file / special-relative / special / path-or-authority / opaque. */

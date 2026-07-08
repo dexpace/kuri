@@ -11,6 +11,7 @@ import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.parser.BuilderPath
 import org.dexpace.kuri.parser.ParsedComponents
+import org.dexpace.kuri.parser.StateOverride
 import org.dexpace.kuri.parser.UrlParser
 import org.dexpace.kuri.parser.UrlPath
 import org.dexpace.kuri.parser.decodedSegments
@@ -402,6 +403,62 @@ public class Url internal constructor(
      * @return a new [Url] with no fragment.
      */
     public fun withoutFragment(): Url = withFragment(null)
+
+    /**
+     * The WHATWG `protocol` setter (URL §5): returns a copy with [value]'s scheme, or this URL
+     * unchanged when the change is not permitted (special↔non-special, or an invalid `file`
+     * transition). Never throws — an invalid scheme is a no-op.
+     *
+     * @param value the new scheme, with or without a trailing `:`.
+     * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
+     */
+    public fun withProtocol(value: String): Url {
+        val trimmed = value.substringBefore(':')
+        if (!Scheme.isValidScheme(Scheme.normalize(trimmed))) return this
+        return applyOverride("$trimmed:", StateOverride.PROTOCOL)
+    }
+
+    /**
+     * The WHATWG `username` setter (URL §5): returns a copy whose userinfo user is [value]
+     * percent-encoded with the userinfo set, or `this` when the URL cannot have credentials
+     * (no host, empty host, or a `file` scheme). Never throws.
+     *
+     * @param value the decoded username to set.
+     * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
+     */
+    public fun withUsername(value: String): Url {
+        if (!canHaveCredentials()) return this
+        val encoded = PercentCodec.encode(value, PercentEncodeSets.USERINFO)
+        return Url(components.copy(username = encoded))
+    }
+
+    /**
+     * The WHATWG `password` setter (URL §5): as [withUsername], for the password half.
+     *
+     * @param value the decoded password to set.
+     * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
+     */
+    public fun withPassword(value: String): Url {
+        if (!canHaveCredentials()) return this
+        val encoded = PercentCodec.encode(value, PercentEncodeSets.USERINFO)
+        return Url(components.copy(password = encoded))
+    }
+
+    /** WHATWG "cannot have a username/password/port": no host, empty host, or `file` scheme. */
+    private fun canHaveCredentials(): Boolean {
+        val h = components.host
+        return h != null && h != Host.Empty && !scheme.equals(FILE_SCHEME, ignoreCase = true)
+    }
+
+    /** Runs a setter [override] over [value], returning `this` on any error or WHATWG no-op. */
+    private fun applyOverride(
+        value: String,
+        override: StateOverride,
+    ): Url =
+        when (val result = UrlParser.parseWithOverride(value, components, override)) {
+            is ParseResult.Ok -> if (result.value == components) this else Url(result.value)
+            is ParseResult.Err -> this
+        }
 
     /** The canonical [href]; a parsed `Url` round-trips through `toString` then [parse]. */
     override fun toString(): String = href
