@@ -129,17 +129,24 @@ internal fun hasPercentHexPairAt(
 /**
  * Decodes the two hex digits following the `%` at [index] into one octet `0..255` (SPEC §5.3).
  *
- * The caller MUST have verified a valid triplet (e.g. via [hasPercentHexPairAt]); otherwise a
- * non-hex code unit decodes to `-1` and the result is undefined.
+ * The caller MUST have verified a valid triplet (e.g. via [hasPercentHexPairAt]). This re-checks
+ * that precondition on the two decoded nibbles — free, since [hexDigitToInt] runs regardless — so a
+ * misuse fails loudly instead of silently yielding a garbage octet from a `-1` nibble.
  *
  * @param text the sequence holding the triplet.
  * @param index the index of the `%`; the hex digits are read at [index]+1 and [index]+2.
  * @return the decoded octet in `0..255`.
+ * @throws IllegalArgumentException if the code unit at [index]+1 or [index]+2 is not an ASCII hex digit.
  */
 internal fun percentByteAt(
     text: CharSequence,
     index: Int,
-): Int = (hexDigitToInt(text[index + 1]) shl HEX_SHIFT) or hexDigitToInt(text[index + 2])
+): Int {
+    val high = hexDigitToInt(text[index + 1])
+    val low = hexDigitToInt(text[index + 2])
+    require(high >= 0 && low >= 0) { "percentByteAt requires a verified hex pair at index $index" }
+    return (high shl HEX_SHIFT) or low
+}
 
 /**
  * Encodes a single octet `0..255` as an uppercase percent-encoded triplet `"%XX"` (SPEC
