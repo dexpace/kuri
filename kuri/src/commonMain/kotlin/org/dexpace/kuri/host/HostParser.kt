@@ -133,17 +133,8 @@ internal object HostParser {
         }
     }
 
-    /** Index of the first forbidden-domain code point in [domain] (§7.6 [HOST-37]), or [NOT_FOUND]. */
-    private fun firstForbiddenDomainIndex(domain: String): Int {
-        var index = 0
-        var found = NOT_FOUND
-        while (index < domain.length && found == NOT_FOUND) {
-            if (isForbiddenDomainCodePoint(domain[index])) found = index
-            index++
-        }
-        check(found == NOT_FOUND || found in domain.indices) { "found out of bounds: $found" }
-        return found
-    }
+    /** Index of the first forbidden-domain code point in [domain] (§7.6 [HOST-37]), or [NOT_FOUND] (`-1`). */
+    private fun firstForbiddenDomainIndex(domain: String): Int = domain.indexOfFirst { isForbiddenDomainCodePoint(it) }
 
     // --- Uri profile (RFC 3986 §3.2.2 host grammar, §7.2/§7.5/§7.8) -------------------
 

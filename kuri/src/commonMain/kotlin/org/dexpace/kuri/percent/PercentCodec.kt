@@ -154,16 +154,7 @@ internal object PercentCodec {
             out.appendRange(input, start, start + TRIPLET_LENGTH)
             return start + TRIPLET_LENGTH
         }
-        val count = (end - start) / TRIPLET_LENGTH
-        check(count >= 1) { "a decode run must contain at least one non-ASCII triplet" }
-        val bytes = ByteArray(count)
-        var source = start
-        var target = 0
-        while (target < count) {
-            bytes[target] = percentByteAt(input, source).toByte()
-            source += TRIPLET_LENGTH
-            target++
-        }
+        val bytes = tripletRunBytes(input, start, end)
         val decoded = bytes.decodeToString()
         // A run decodes only when it is well-formed UTF-8: re-encoding the decoded text must
         // reproduce the exact octets. This preserves a genuinely-encoded U+FFFD (which round-trips)
@@ -254,8 +245,22 @@ internal object PercentCodec {
         while (end < input.length && input[end] == '%' && hasPercentHexPairAt(input, end)) {
             end += TRIPLET_LENGTH
         }
+        out.append(tripletRunBytes(input, start, end).decodeToString())
+        return end
+    }
+
+    /**
+     * Materializes the triplet run `input[start, end)` into one decoded octet per `%HH` triplet
+     * ([PCT-25] gathering); [start]..[end] MUST span a whole, non-empty number of triplets. Shared by
+     * the lenient decode and RFC 3987 display-decode run appenders, whose surrounding logic differs.
+     */
+    private fun tripletRunBytes(
+        input: String,
+        start: Int,
+        end: Int,
+    ): ByteArray {
         val count = (end - start) / TRIPLET_LENGTH
-        check(count >= 1) { "triplet run must contain at least one triplet" }
+        check(count >= 1) { "a triplet run must contain at least one triplet" }
         val bytes = ByteArray(count)
         var source = start
         var target = 0
@@ -264,7 +269,6 @@ internal object PercentCodec {
             source += TRIPLET_LENGTH
             target++
         }
-        out.append(bytes.decodeToString())
-        return end
+        return bytes
     }
 }

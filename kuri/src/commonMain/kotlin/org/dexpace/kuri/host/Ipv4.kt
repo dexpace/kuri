@@ -48,6 +48,12 @@ private const val RADIX_OCTAL: Int = 8
 /** Hexadecimal radix selected by a `0x`/`0X` part prefix. */
 private const val RADIX_HEX: Int = 16
 
+/** Length of the `0x`/`0X` prefix stripped from a hexadecimal part before its digits ([HOST-21] step 3). */
+private const val HEX_PREFIX_LENGTH: Int = 2
+
+/** Length of the single leading `0` stripped from an octal part before its digits ([HOST-21] step 3). */
+private const val OCTAL_PREFIX_LENGTH: Int = 1
+
 /** Sentinel returned by [parsePart]/[decOctetOrNull] for an unparsable part. */
 private const val INVALID_PART: Long = -1L
 
@@ -164,22 +170,25 @@ internal object Ipv4 {
         require(part.isNotEmpty()) { "empty part reached parsePart" }
         val hex = isHexPrefixed(part)
         val octal = !hex && part.length > 1 && part[0] == '0'
-        val radix =
-            if (hex) {
-                RADIX_HEX
-            } else if (octal) {
-                RADIX_OCTAL
-            } else {
-                RADIX_DECIMAL
+        // One decision selects both the radix and the prefix length to strip; a decimal part carries
+        // offset 0 so it reuses `part` verbatim, materializing no substring on the common path.
+        val radix: Int
+        val prefixLength: Int
+        when {
+            hex -> {
+                radix = RADIX_HEX
+                prefixLength = HEX_PREFIX_LENGTH
             }
-        val digits =
-            if (hex) {
-                part.substring(2)
-            } else if (octal) {
-                part.substring(1)
-            } else {
-                part
+            octal -> {
+                radix = RADIX_OCTAL
+                prefixLength = OCTAL_PREFIX_LENGTH
             }
+            else -> {
+                radix = RADIX_DECIMAL
+                prefixLength = 0
+            }
+        }
+        val digits = if (prefixLength == 0) part else part.substring(prefixLength)
         return parseInRadix(digits, radix)
     }
 
