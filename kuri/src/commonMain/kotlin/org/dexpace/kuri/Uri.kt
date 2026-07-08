@@ -13,6 +13,7 @@ import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.Resolver
 import org.dexpace.kuri.parser.UriParser
 import org.dexpace.kuri.parser.UrlPath
+import org.dexpace.kuri.parser.decodedSegments
 import org.dexpace.kuri.parser.fileExtensionOf
 import org.dexpace.kuri.parser.fileNameOf
 import org.dexpace.kuri.parser.toUriPathString
@@ -540,10 +541,7 @@ public class Uri internal constructor(
 
     /** The decoded segments backing [pathSegments]; an opaque path yields its single decoded value. */
     private fun computeDecodedPathSegments(): List<String> =
-        when (val storedPath = components.path) {
-            is UrlPath.Opaque -> listOf(PercentCodec.decode(storedPath.path))
-            is UrlPath.Segments -> storedPath.segments.map { PercentCodec.decode(it) }
-        }
+        decodedSegments(components.path) { PercentCodec.decode(it) }
 
     /**
      * True for the RFC 3986 opaque shape: an absolute URI with no authority and a rootless path.
@@ -960,7 +958,7 @@ public class Uri internal constructor(
          */
         public fun build(): Uri {
             val path = effectivePath()
-            validateComposable(path)
+            composabilityError(path)?.let { throw IllegalArgumentException(it) }
             return buildResult(path).getOrThrow()
         }
 
@@ -977,7 +975,7 @@ public class Uri internal constructor(
          */
         public fun buildOrNull(): Uri? {
             val path = effectivePath()
-            if (!isComposable(path)) return null
+            if (composabilityError(path) != null) return null
             return buildResult(path).getOrNull()
         }
 
@@ -993,34 +991,28 @@ public class Uri internal constructor(
             UriParser.parse(recompose(path), options).map { Uri(it) }
 
         /**
-         * Rejects component combinations no RFC 3986 recomposition can represent (RFC 3986 §3.2/§3.3).
+         * The RFC 3986 §3.2/§3.3 message for the first component combination no recomposition can
+         * represent, or `null` when the accumulated components are composable.
          *
-         * `userinfo`/`port` are authority sub-components, so they require a host; a caller wanting an
-         * empty authority passes `host("")`. A present authority forbids a rootless [path], which
-         * would otherwise merge into the authority on re-parse; a segment-built path is already rooted
-         * by [effectivePath] when a host is present, so only a verbatim rootless path can trip this.
+         * The single ordered source of the composability rules [build] and [buildOrNull] share, so a
+         * rule cannot drift between the throwing and the non-throwing path. `userinfo`/`port` are
+         * authority sub-components, so they require a host; a caller wanting an empty authority passes
+         * `host("")`. A present authority forbids a rootless [path], which would otherwise merge into
+         * the authority on re-parse; a segment-built path is already rooted by [effectivePath] when a
+         * host is present, so only a verbatim rootless path can trip that rule.
          */
-        private fun validateComposable(path: String) {
-            require(authorityHasHost()) {
-                "userInfo/port require a host: set host(\"\") for an empty-authority URI, or drop them"
+        private fun composabilityError(path: String): String? =
+            when {
+                !authorityHasHost() ->
+                    "userInfo/port require a host: set host(\"\") for an empty-authority URI, or drop them"
+                !pathFitsAuthority(path) ->
+                    "a path with an authority must be empty or start with '/': $path"
+                host == null && path.startsWith("//") ->
+                    "an authority-less path cannot begin with '//': $path"
+                !this.path.wellFormed() ->
+                    "a rootless path cannot begin with an empty segment; the edit would re-root it: $path"
+                else -> null
             }
-            require(pathFitsAuthority(path)) {
-                "a path with an authority must be empty or start with '/': $path"
-            }
-            require(host != null || !path.startsWith("//")) {
-                "an authority-less path cannot begin with '//': $path"
-            }
-            require(this.path.wellFormed()) {
-                "a rootless path cannot begin with an empty segment; the edit would re-root it: $path"
-            }
-        }
-
-        /** True iff [build] would pass [validateComposable] for [path] without throwing; for [buildOrNull]. */
-        private fun isComposable(path: String): Boolean =
-            authorityHasHost() &&
-                pathFitsAuthority(path) &&
-                (host != null || !path.startsWith("//")) &&
-                this.path.wellFormed()
 
         /** True when a [host] is present, or neither [userInfo] nor [port] (which require one) is set. */
         private fun authorityHasHost(): Boolean = host != null || (userInfo.isNullOrEmpty() && port == null)
