@@ -78,4 +78,15 @@ class UrlSetterTest {
         val original = url("mailto:x@example.com")
         assertEquals(original.href, original.withPort("80").href)
     }
+
+    @Test
+    fun `withPathname replaces the path`() {
+        assertEquals("http://h/a/b", url("http://h/old").withPathname("/a/b").href)
+    }
+
+    @Test
+    fun `withPathname is a no-op on an opaque-path url`() {
+        val original = url("mailto:x@example.com")
+        assertEquals(original.href, original.withPathname("/a").href)
+    }
 }

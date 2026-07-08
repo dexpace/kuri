@@ -402,6 +402,16 @@ public class Url internal constructor(
     }
 
     /**
+     * The WHATWG `pathname` setter (URL §5): returns a copy whose path is parsed from [value]
+     * (the existing path is discarded first), or `this` when the URL has an opaque path. Never
+     * throws.
+     */
+    public fun withPathname(value: String): Url {
+        if (components.path is UrlPath.Opaque) return this
+        return applyOverride(value, StateOverride.PATHNAME)
+    }
+
+    /**
      * Returns a copy of this URL with its [fragment] set (or removed when `null`).
      *
      * A convenience for `newBuilder().fragment(fragment).build()`. A non-`null` `""` keeps a present-
