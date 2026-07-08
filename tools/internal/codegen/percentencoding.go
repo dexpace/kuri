@@ -85,6 +85,7 @@ func percentLoadCases(data []byte) ([]percentCase, error) {
 		}
 		utf8, ok := entry.Output["utf-8"]
 		if !ok {
+			fmt.Fprintf(os.Stderr, "percent-encoding: skipping entry %q (no utf-8 output)\n", *entry.Input)
 			continue // only UTF-8 is in scope
 		}
 		cases = append(cases, percentCase{input: *entry.Input, utf8: utf8})

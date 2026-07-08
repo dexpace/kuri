@@ -21,6 +21,10 @@ import kotlin.test.assertTrue
  * conformance. It still ratchets in both directions -- a brand-new failure breaks the
  * untracked-regressions test, and a regression that repopulates the live set breaks the
  * baseline-equality test until the baseline is updated.
+ *
+ * Per-component percent-encode-set membership (query/path/userinfo/fragment sets) is validated
+ * by the URL and setter conformance suites; this suite validates the charset -> UTF-8-byte
+ * percent-encoding mapping over the WPT percent-encoding corpus.
  */
 class PercentEncodingConformanceTest {
     /** True when encoding [case]'s input under the C0-control set reproduces its `utf-8` expectation. */

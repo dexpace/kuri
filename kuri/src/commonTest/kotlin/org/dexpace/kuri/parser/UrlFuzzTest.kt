@@ -11,7 +11,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class UrlFuzzTest {
-    private val alphabet: String = "abc019:/?#@[]%.\\ \t\n&=+-_~<>^`{}|!$(),;*'\""
+    private val alphabet: String = "abc019:/?#@[]%.\\ \t\n\r&=+-_~<>^`{}|!$(),;*'\""
 
     private fun randomInput(random: Random): String {
         val length = random.nextInt(0, MAX_LEN)
