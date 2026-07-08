@@ -169,7 +169,16 @@ public final class org/dexpace/kuri/Url {
 	public final fun username ()Ljava/lang/String;
 	public final fun validationErrors ()Ljava/util/List;
 	public final fun withFragment (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public final fun withHash (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public final fun withHost (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public final fun withHostname (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public final fun withPassword (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public final fun withPathname (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
 	public final fun withPort (Ljava/lang/Integer;)Lorg/dexpace/kuri/Url;
+	public final fun withPort (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public final fun withProtocol (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public final fun withSearch (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public final fun withUsername (Ljava/lang/String;)Lorg/dexpace/kuri/Url;
 	public final fun withoutFragment ()Lorg/dexpace/kuri/Url;
 }
 
