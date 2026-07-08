@@ -305,17 +305,19 @@ public class Url internal constructor(
      * fragment) for which `this.resolve(result)` yields [target]. When they differ in scheme or
      * authority — or [target] is otherwise not reachable as a relative suffix of this URL's path —
      * there is no relative form and the result is `null` (mirroring the Rust `url` crate's
-     * `make_relative`). Delegates to [Uri.relativize] over the profile-bridged [toUri] values, so the
-     * RFC 3986 dot-segment semantics apply, then re-verifies the candidate under this profile's own
-     * (WHATWG) [resolve] — returning `null` rather than a reference that would not reproduce [target]
-     * where the two resolution algorithms differ.
+     * `make_relative`). Builds the candidate relative reference over the profile-bridged [toUri] values,
+     * so RFC 3986 dot-segment semantics shape it, then verifies it under this profile's own (WHATWG)
+     * [resolve] — the only resolution authoritative for a `Url` — returning `null` rather than a
+     * reference that would not reproduce [target].
      *
      * @param target the absolute URL to express relative to this one.
      * @return the relative-reference string that resolves to [target], or `null` when none does.
      */
     public fun relativize(target: Url): String? {
-        val relative = toUri().relativize(target.toUri()) ?: return null
-        val reference = relative.toString()
+        // Build the candidate relative reference over the URI profile (shared RFC 3986 dot-segment
+        // semantics) but skip its URI-level round-trip check: only the WHATWG resolve below is
+        // authoritative for a Url, so a single verification here removes a redundant resolve.
+        val reference = toUri().relativeReference(target.toUri())?.toString() ?: return null
         return if (resolveOrNull(reference) == target) reference else null
     }
 
