@@ -34,18 +34,5 @@ internal fun serializeHost(host: Host): String =
         Host.Empty -> ""
     }
 
-/**
- * Renders this [Host] to its canonical authority text, bracketing IPv6 / IP-future literals.
- *
- * An internal extension alias onto [serializeHost], kept as an ergonomic receiver form for the
- * `Uri`/`Url` serializers; the public renderer is the [Host.asText] member. It applies the §11.2 /
- * RFC 3986 §3.2.2 bracketing rules, so the result carries brackets for [Host.Ipv6] / [Host.IpFuture]
- * and the value verbatim otherwise.
- *
- * @return the host's canonical authority text.
- * @see Host.asText
- */
-internal fun Host.serialize(): String = serializeHost(this)
-
 /** Renders an optional IPv6 zone id as the RFC 6874 `%25<id>` suffix, or `""` when absent. */
 private fun zoneSuffix(zoneId: String?): String = if (zoneId == null) "" else "$ZONE_PREFIX$zoneId"
