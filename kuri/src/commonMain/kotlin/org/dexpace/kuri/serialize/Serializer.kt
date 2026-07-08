@@ -146,25 +146,39 @@ private fun credentialsPrefix(components: ParsedComponents): String {
  * The single home shared by the `Serializer` object and `Url.encodedPath`.
  *
  * @param components the stored components whose path is rendered.
- * @return the encoded URL path string, with the [NORM-18] `/.` guard applied where required.
+ * @param guardAgainstAuthority whether to prepend the [NORM-18] `/.` guard where required
+ *   (`true` for the full `href`, where an unguarded `//`-leading path would re-parse with a
+ *   spurious authority); the standalone `pathname` getter passes `false` since it is never
+ *   concatenated onto a bare `scheme:` and WHATWG's pathname-getter algorithm has no such guard.
+ * @return the encoded URL path string.
  */
-internal fun serializeUrlPath(components: ParsedComponents): String =
+internal fun serializeUrlPath(
+    components: ParsedComponents,
+    guardAgainstAuthority: Boolean = true,
+): String =
     when (val path = components.path) {
         is UrlPath.Opaque -> path.path
-        is UrlPath.Segments -> serializeUrlSegments(path.segments, noAuthority = components.host == null)
+        is UrlPath.Segments ->
+            serializeUrlSegments(
+                path.segments,
+                noAuthority = components.host == null,
+                guardAgainstAuthority = guardAgainstAuthority,
+            )
     }
 
 /**
  * Joins URL path [segments] as `"/" + segment` runs, applying the [NORM-18] `/.` guard.
  *
- * The guard fires only for a no-authority value whose first segment is empty and which has a
- * further segment (so the serialization would open `//` and re-parse with a spurious authority).
+ * The guard fires only when [guardAgainstAuthority] is requested, for a no-authority value whose
+ * first segment is empty and which has a further segment (so the serialization would open `//`
+ * and re-parse with a spurious authority).
  */
 private fun serializeUrlSegments(
     segments: List<String>,
     noAuthority: Boolean,
+    guardAgainstAuthority: Boolean,
 ): String {
-    val needsGuard = noAuthority && segments.size > 1 && segments[0] == ""
+    val needsGuard = guardAgainstAuthority && noAuthority && segments.size > 1 && segments[0] == ""
     val prefix = if (needsGuard) LEADING_DOT_GUARD else ""
     return prefix + segments.joinToString("") { "$SLASH$it" }
 }

@@ -32,7 +32,10 @@ internal object UrlParserStates {
      * SCHEME_START (§8.3 [PARSE-13]; WHATWG scheme-start state).
      *
      * An ASCII-alpha first code point seeds the scheme buffer (lowercased) and enters SCHEME;
-     * anything else backs up into NO_SCHEME without consuming.
+     * anything else backs up into NO_SCHEME without consuming. Under a setter override (the
+     * `protocol` setter), that fallback is instead a hard failure — there is no base to resolve a
+     * "no scheme" reference against, so the WHATWG "otherwise, return failure" branch applies, and
+     * [UrlParser.parseWithOverride] turns the failure into the setter's documented no-op.
      */
     internal fun schemeStartState(state: UrlParserState): UrlTransition {
         val c = state.currentChar()
@@ -40,7 +43,11 @@ internal object UrlParserStates {
             state.buffer.append(c.asciiLowercased())
             return UrlTransition.Advance(UrlState.SCHEME)
         }
-        return UrlTransition.Reconsume(UrlState.NO_SCHEME)
+        return if (state.stateOverride != null) {
+            UrlTransition.Fail(UriParseError.InvalidScheme(state.pos, "scheme must start with an ASCII alpha"))
+        } else {
+            UrlTransition.Reconsume(UrlState.NO_SCHEME)
+        }
     }
 
     /**
@@ -48,7 +55,9 @@ internal object UrlParserStates {
      *
      * Accumulates valid scheme code points (lowercased); a `:` finalizes the scheme, any other
      * code point restarts the scan as NO_SCHEME from the first code point ([PARSE-16], the one
-     * sanctioned pointer reset).
+     * sanctioned pointer reset) — except under a setter override, where WHATWG has no "start over"
+     * option (there is no base to fall back to) and instead fails outright, letting
+     * [UrlParser.parseWithOverride] surface it as the setter's no-op.
      */
     internal fun schemeState(state: UrlParserState): UrlTransition {
         val c = state.currentChar()
@@ -58,6 +67,8 @@ internal object UrlParserStates {
                 UrlTransition.Advance(UrlState.SCHEME)
             }
             c == ':' -> schemeColon(state)
+            state.stateOverride != null ->
+                UrlTransition.Fail(UriParseError.InvalidScheme(state.pos, "invalid scheme code point under override"))
             else -> schemeRestart(state)
         }
     }
@@ -373,18 +384,26 @@ internal object UrlParserStates {
     }
 
     /**
-     * Non-special PATH_START: `?` opens the query; EOF terminates with an empty path (PATH never
-     * runs, so no root segment is synthesized); a leading `/` is consumed, anything else
-     * reconsumed, in PATH.
+     * Non-special PATH_START: `?` opens the query (only outside a state override — a `pathname`
+     * setter value keeps a literal `?` as path text, WHATWG "state override is not given and c is
+     * U+003F"); EOF under an override with no host appends the root segment directly (WHATWG
+     * path-start-state step 5) since PATH never otherwise runs to synthesize one, while a full,
+     * non-override parse leaves the path empty (no root is synthesized for a hostful non-special
+     * URL with no path, e.g. `sc://host`); a leading `/` is consumed, anything else reconsumed, in
+     * PATH.
      */
     private fun pathStartNonSpecial(
         state: UrlParserState,
         c: Char?,
     ): UrlTransition =
         when {
-            c == '?' -> {
+            c == '?' && state.stateOverride == null -> {
                 state.query = ""
                 UrlTransition.Advance(UrlState.QUERY)
+            }
+            c == null && state.stateOverride != null && state.host == null -> {
+                state.path.add("")
+                UrlTransition.Done
             }
             c == null -> UrlTransition.Advance(UrlState.PATH)
             c == '/' -> UrlTransition.Advance(UrlState.PATH)

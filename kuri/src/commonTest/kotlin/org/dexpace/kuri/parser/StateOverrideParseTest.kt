@@ -32,10 +32,14 @@ class StateOverrideParseTest {
     }
 
     @Test
-    fun `hostname override ignores a colon and keeps the existing port`() {
+    fun `hostname override with an embedded colon is a total no-op`() {
+        // WHATWG host state, `:` branch: "If state override is given and state override is
+        // hostname state, then return" -- BEFORE the buffer is parsed as a host at all, so neither
+        // the host nor the port changes (WPT setters_tests.json exercises this exact shape: e.g.
+        // hostname "example.com:8080" on "http://example.net/path" leaves host "example.net").
         val result = UrlParser.parseWithOverride("example.com:81", seed("http://h:90/"), StateOverride.HOSTNAME)
         val c = (result as ParseResult.Ok).value
-        assertEquals("example.com", c.host?.asText())
+        assertEquals("h", c.host?.asText())
         assertEquals(90, c.port)
     }
 

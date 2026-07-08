@@ -177,9 +177,25 @@ internal object UrlParserAuthority {
     ): UrlTransition =
         when {
             isColon && hostSlice.isEmpty() -> UrlTransition.Fail(UriParseError.EmptyHost)
+            // WHATWG host state, `:` branch: "If state override is given and state override is
+            // hostname state, then return" -- BEFORE the buffer is ever parsed as a host, so a `:`
+            // in a `hostname` setter value is a no-op (the port-bearing suffix is for `host` only).
+            isColon && state.stateOverride == StateOverride.HOSTNAME -> UrlTransition.Done
             !isColon && state.special && hostSlice.isEmpty() -> UrlTransition.Fail(UriParseError.EmptyHost)
+            // WHATWG host state, delimiter branch: "if state override is given, buffer is the empty
+            // string, and either url includes credentials or url's port is non-null, then return" --
+            // clearing a non-special host is refused when doing so would strand existing
+            // userinfo/port with no host to attach to.
+            !isColon && hostSlice.isEmpty() && state.stateOverride != null && hasCredentialsOrPort(state) -> {
+                state.pos = idx
+                UrlTransition.Done
+            }
             else -> parseAndStoreHost(state, hostSlice, idx, isColon)
         }
+
+    /** True when [state] has a non-empty username/password or an explicit port ([PARSE-30] guard). */
+    private fun hasCredentialsOrPort(state: UrlParserState): Boolean =
+        state.username.isNotEmpty() || state.password.isNotEmpty() || state.port != null
 
     /** Parses [hostSlice] via [HostParser] and advances to PORT (on `:`) or PATH_START. */
     private fun parseAndStoreHost(
@@ -249,11 +265,13 @@ internal object UrlParserAuthority {
         end: Int,
         terminator: Char?,
     ): UrlTransition {
-        // Per the WHATWG port state, a state override ends the digit run on *any* trailing
-        // character — not just an authority terminator — since there is no following state to
-        // reconsume into ([PARSE-34]; e.g. the `port` setter's "8080stuff" keeps port 8080).
+        // Per the WHATWG port state, ANY state override ends the digit run on any trailing
+        // character -- not just an authority terminator, and not only for the `port` setter itself
+        // -- since there is no following state to reconsume into ([PARSE-34]; e.g. the `port`
+        // setter's "8080stuff" keeps port 8080, and the `host` setter's "h:8080stuff" must stop
+        // the same way once it falls through into port sub-parsing).
         val terminated =
-            terminator == null || isAuthorityTerminator(state, terminator) || state.stateOverride == StateOverride.PORT
+            terminator == null || isAuthorityTerminator(state, terminator) || state.stateOverride != null
         if (!terminated) {
             return UrlTransition.Fail(UriParseError.InvalidPort(digits + terminator))
         }
@@ -266,17 +284,24 @@ internal object UrlParserAuthority {
         digits: String,
         end: Int,
     ): UrlTransition {
-        val value = computePort(digits)
-        if (digits.isNotEmpty() && value == null) {
-            return UrlTransition.Fail(UriParseError.InvalidPort(digits))
+        val overridden = state.stateOverride != null
+        if (digits.isNotEmpty()) {
+            val value = computePort(digits)
+            if (value == null) {
+                // Outside an override, an out-of-range port is fatal (WHATWG "port-out-of-range,
+                // return failure"). Inside one, the setter algorithm mutates the live URL field by
+                // field as it goes, so a downstream failure here does not roll back a host/hostname
+                // that already committed earlier in the same run -- the port is simply left as-is.
+                if (!overridden) return UrlTransition.Fail(UriParseError.InvalidPort(digits))
+            } else {
+                state.port = elidedPort(state, value)
+            }
         }
-        state.port = elidedPort(state, value)
+        // WHATWG port state: "if buffer is not the empty string" gates the assignment above, so an
+        // empty digit run (state override, delimiter reached with nothing scanned) leaves the port
+        // untouched rather than clearing it to null.
         state.pos = end
-        return if (state.stateOverride == StateOverride.PORT) {
-            UrlTransition.Done
-        } else {
-            UrlTransition.Reconsume(UrlState.PATH_START)
-        }
+        return if (overridden) UrlTransition.Done else UrlTransition.Reconsume(UrlState.PATH_START)
     }
 
     /** The base-10 value of [digits], or `null` when it exceeds the 16-bit ceiling ([PARSE-33]). */
@@ -438,14 +463,25 @@ internal object UrlParserAuthority {
         end: Int,
     ): UrlTransition =
         when {
-            isWindowsDriveLetter(buffer) -> UrlTransition.Reconsume(UrlState.PATH)
+            // WHATWG file-host state 1.1: the drive-letter reinterpretation applies only outside a
+            // state override; a `host`/`hostname` setter value that happens to look like a drive
+            // letter (e.g. "C:") is instead parsed as an ordinary host in the `else` branch below.
+            state.stateOverride == null && isWindowsDriveLetter(buffer) -> UrlTransition.Reconsume(UrlState.PATH)
             buffer.isEmpty() -> {
                 state.host = Host.Empty
                 state.pos = end
-                UrlTransition.Reconsume(UrlState.PATH_START)
+                fileHostTransition(state)
             }
             else -> parseFileHost(state, buffer, end)
         }
+
+    /**
+     * Post-file-host transition ([PARSE-37]; WHATWG "if state override is given, then return"): a
+     * `host`/`hostname` setter stops the moment the host is set, never touching the seeded path,
+     * while a full parse continues into path start state to build the path from scratch.
+     */
+    private fun fileHostTransition(state: UrlParserState): UrlTransition =
+        if (state.stateOverride != null) UrlTransition.Done else UrlTransition.Reconsume(UrlState.PATH_START)
 
     /** Parses a non-empty file host and maps `localhost` to the empty host ([PARSE-37]). */
     private fun parseFileHost(
@@ -466,7 +502,7 @@ internal object UrlParserAuthority {
             is ParseResult.Ok -> {
                 state.host = if (host.value == Host.RegName(LOCALHOST)) Host.Empty else host.value
                 state.pos = end
-                UrlTransition.Reconsume(UrlState.PATH_START)
+                fileHostTransition(state)
             }
         }
 }

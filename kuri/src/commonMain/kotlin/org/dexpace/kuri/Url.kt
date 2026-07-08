@@ -220,7 +220,11 @@ public class Url internal constructor(
     private val decodedPathSegments: List<String> by lazy {
         decodedSegments(components.path) { PercentCodec.decode(it) }
     }
-    private val encodedPathText: String by lazy { serializeUrlPath(components) }
+
+    // guardAgainstAuthority = false: this is the standalone `pathname` getter, never concatenated
+    // onto a bare `scheme:` the way the full `href` is, so the NORM-18 `/.` anti-authority guard
+    // (needed only to keep href re-parseable) does not belong in its output (SPEC §11.2).
+    private val encodedPathText: String by lazy { serializeUrlPath(components, guardAgainstAuthority = false) }
     private val queryParameterSnapshot: QueryParameters by lazy { QueryParameters.parseOrEmpty(components.query) }
 
     /**
@@ -393,10 +397,12 @@ public class Url internal constructor(
      * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
      */
     public fun withPort(value: String): Url {
-        if (!canHaveCredentials()) return this
+        // No pre-check on value[0]: the WHATWG pre-processing strips tab/newline from `value`
+        // before the port state ever sees it (e.g. "\t8080" is a valid port once stripped), and an
+        // invalid leading character is itself a no-op the port state machine already resolves.
         return when {
+            !canHaveCredentials() -> this
             value.isEmpty() -> Url(components.copy(port = null))
-            !value[0].isDigit() -> this
             else -> applyOverride(value, StateOverride.PORT)
         }
     }
@@ -438,7 +444,12 @@ public class Url internal constructor(
      */
     public fun withHash(value: String): Url {
         if (value.isEmpty()) return Url(components.copy(fragment = null))
-        val stripped = if (value.startsWith('#')) value.substring(1) else value
+        val withoutHash = if (value.startsWith('#')) value.substring(1) else value
+        // WHATWG's hash setter basic-URL-parses this input with fragment state as the override,
+        // which unconditionally strips every ASCII tab/LF/CR first (SPEC §8.1); withHash bypasses
+        // the shared engine (there is no FRAGMENT StateOverride), so it must replicate that step
+        // itself rather than percent-encode a literal tab/newline into the fragment.
+        val stripped = withoutHash.filterNot { it == '\t' || it == '\n' || it == '\r' }
         val encoded = PercentCodec.encode(stripped, PercentEncodeSets.FRAGMENT)
         return Url(components.copy(fragment = encoded))
     }
@@ -473,9 +484,12 @@ public class Url internal constructor(
      * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
      */
     public fun withProtocol(value: String): Url {
-        val trimmed = value.substringBefore(':')
-        if (!Scheme.isValidScheme(Scheme.normalize(trimmed))) return this
-        return applyOverride("$trimmed:", StateOverride.PROTOCOL)
+        // No pre-validation here: WHATWG appends `:` to the raw value and basic-URL-parses it with
+        // scheme-start state as the override, so the state machine itself (which strips tab/newline
+        // first) decides validity and reports an invalid scheme as a no-op (SCHEME_START/SCHEME
+        // failing under an override; see UrlParserStates). Pre-checking the unstripped value here
+        // previously rejected e.g. "h\r\ntt\tps" even though it strips to the valid scheme "https".
+        return applyOverride("$value:", StateOverride.PROTOCOL)
     }
 
     /**

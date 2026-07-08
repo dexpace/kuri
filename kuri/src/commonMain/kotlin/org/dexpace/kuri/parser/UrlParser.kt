@@ -123,8 +123,12 @@ internal object UrlParser {
 
     /**
      * Applies one [transition] under an override run, returning the terminal [OverrideOutcome] or
-     * `null` to continue the loop. [UrlTransition.Advance]/[UrlTransition.Reconsume] terminate with
-     * [OverrideOutcome.OK] at EOF (the natural end of a single-component value).
+     * `null` to continue the loop. Mirrors [runStateMachine]'s handling exactly: [Reconsume] never
+     * inspects [UrlParserState.pos] itself — it only changes state and lets the loop re-invoke the
+     * new state's handler, even at EOF, since that handler is what finalizes a component (e.g. PATH
+     * appending the root segment, or FILE_HOST clearing an empty host). Only [Advance] terminates on
+     * EOF (after the *current* state has already run once, having just consumed the final code
+     * point), the natural end of a single-component value.
      */
     private fun stepOverride(
         state: UrlParserState,
@@ -136,7 +140,7 @@ internal object UrlParser {
             is UrlTransition.Fail -> OverrideOutcome.Fail(transition.error)
             is UrlTransition.Reconsume -> {
                 state.state = transition.next
-                if (state.pos >= state.input.length && atComponentEnd(state)) OverrideOutcome.OK else null
+                null
             }
             is UrlTransition.Advance -> {
                 state.state = transition.next
@@ -148,13 +152,6 @@ internal object UrlParser {
                     }
                 }
             }
-        }
-
-    /** True when the override has finished its component and further states would over-run. */
-    private fun atComponentEnd(state: UrlParserState): Boolean =
-        when (state.stateOverride) {
-            StateOverride.PATHNAME -> state.state == UrlState.PATH_START || state.state == UrlState.PATH
-            else -> true
         }
 
     /** The dispatch table mapping each [UrlState] to its single state function (§8.3). */
