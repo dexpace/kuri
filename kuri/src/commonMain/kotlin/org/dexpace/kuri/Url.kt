@@ -444,6 +444,25 @@ public class Url internal constructor(
         return Url(components.copy(password = encoded))
     }
 
+    /**
+     * The WHATWG `host` setter (URL §5): returns a copy with host and (optional) port parsed
+     * from [value], or `this` when the URL has an opaque path or [value] is not a valid host.
+     * Never throws.
+     */
+    public fun withHost(value: String): Url {
+        if (components.path is UrlPath.Opaque) return this
+        return applyOverride(value, StateOverride.HOST)
+    }
+
+    /**
+     * The WHATWG `hostname` setter (URL §5): as [withHost] but a `:` and anything after it are
+     * ignored, so the existing port is preserved. Never throws.
+     */
+    public fun withHostname(value: String): Url {
+        if (components.path is UrlPath.Opaque) return this
+        return applyOverride(value, StateOverride.HOSTNAME)
+    }
+
     /** WHATWG "cannot have a username/password/port": no host, empty host, or `file` scheme. */
     private fun canHaveCredentials(): Boolean {
         val h = components.host

@@ -36,4 +36,25 @@ class UrlSetterTest {
     fun `withPassword sets the password`() {
         assertEquals("wss://:pw@example.org/", url("wss://example.org/").withPassword("pw").href)
     }
+
+    @Test
+    fun `withHostname replaces the host and preserves the port`() {
+        assertEquals("http://example.com:90/", url("http://h:90/").withHostname("example.com").href)
+    }
+
+    @Test
+    fun `withHost replaces host and port together`() {
+        assertEquals("http://example.com:81/", url("http://h:90/").withHost("example.com:81").href)
+    }
+
+    @Test
+    fun `withHostname is a no-op on an opaque-path url`() {
+        val original = url("mailto:x@example.com")
+        assertEquals(original.href, original.withHostname("example.org").href)
+    }
+
+    @Test
+    fun `withHost stops at a path terminator and leaves the path unchanged`() {
+        assertEquals("http://example.com/p", url("http://h/p").withHost("example.com/x").href)
+    }
 }
