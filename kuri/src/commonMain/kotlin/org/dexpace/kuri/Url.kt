@@ -684,7 +684,12 @@ public class Url internal constructor(
             encodedPassword = source.password
             host = source.hostName
             port = source.port
-            path = BuilderPath.verbatim(source.encodedPath)
+            // Pre-fill from the guarded full-URL path serialization, not the `encodedPath` getter:
+            // recompose concatenates the path directly onto `scheme:` with no authority, so an
+            // authority-less `//`-leading path must keep the NORM-18 `/.` guard or the rebuilt string
+            // re-parses with a spurious authority (the getter drops the guard per SPEC §11.2, which is
+            // correct for a standalone pathname but wrong as recompose input).
+            path = BuilderPath.verbatim(serializeUrlPath(source.components))
             queryState = QueryState.Raw(source.query)
             encodedFragment = source.fragment
         }
