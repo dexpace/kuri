@@ -2,13 +2,23 @@
  * Copyright (c) 2026 dexpace and Omar Aljarrah
  * SPDX-License-Identifier: MIT
  */
+
+// The flat bag of profile-agnostic §8.3 path/authority/drive predicates the Url state machine keys
+// off; grouping them beside their consumers keeps one definition per rule (hence the per-file
+// function count legitimately exceeds detekt's heuristic).
+@file:Suppress("TooManyFunctions")
+
 package org.dexpace.kuri.parser
 
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSets
+import org.dexpace.kuri.text.isAsciiAlpha
 
-/** The canonical scheme name whose state machine owns the Windows-drive-letter quirks. */
-private const val FILE_SCHEME: String = "file"
+/** The canonical `file` scheme, special-cased throughout the §8.3 `Url` state machine. */
+internal const val FILE_SCHEME: String = "file"
+
+/** The code points that may terminate a Windows drive letter prefix (`/`, `\`, `?`, `#`). */
+private const val WINDOWS_DRIVE_TERMINATORS: String = "/\\?#"
 
 /**
  * True when [ch] is one of the three universal authority/path terminators `/`, `?`, `#`
@@ -104,4 +114,27 @@ internal fun appendPathSegment(
 internal fun cloneBasePath(base: ParsedComponents?): MutableList<String> {
     val segments = (base?.path as? UrlPath.Segments)?.segments ?: emptyList()
     return segments.toMutableList()
+}
+
+/**
+ * True when [value] *is* a Windows drive letter: exactly an ASCII alpha followed by `:`
+ * or `|` (SPEC §9.4 [PATH-14]).
+ */
+internal fun isWindowsDriveLetter(value: String): Boolean =
+    value.length == 2 && value[0].isAsciiAlpha() && (value[1] == ':' || value[1] == '|')
+
+/**
+ * True when [value] is a *normalized* Windows drive letter: an ASCII alpha followed by `:`
+ * (SPEC §9.4 [PATH-14]).
+ */
+internal fun isNormalizedWindowsDrive(value: String): Boolean =
+    value.length == 2 && value[0].isAsciiAlpha() && value[1] == ':'
+
+/**
+ * True when [value] *starts with* a Windows drive letter (SPEC §9.4 [PATH-14]): a drive
+ * letter that is either the whole string or immediately followed by `/`, `\`, `?`, or `#`.
+ */
+internal fun startsWithWindowsDrive(value: String): Boolean {
+    val hasDrive = value.length >= 2 && value[0].isAsciiAlpha() && (value[1] == ':' || value[1] == '|')
+    return hasDrive && (value.length == 2 || value[2] in WINDOWS_DRIVE_TERMINATORS)
 }

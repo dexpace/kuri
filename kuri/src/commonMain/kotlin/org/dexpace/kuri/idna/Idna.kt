@@ -63,7 +63,8 @@ internal object Idna {
         beStrict: Boolean = false,
     ): ParseResult<String> {
         val mapped = mapAll(domain) ?: return idnaError(domain)
-        val labels = splitLabels(normalizeNfc(mapped))
+        // UTS-46 step 3: canonical NFC normalization (UAX #15), applied post-mapping, pre-label-split.
+        val labels = splitLabels(Normalizer.nfc(mapped))
         return processLabels(labels, domain).map { it.joinToString(LABEL_SEPARATOR) }
     }
 
@@ -103,12 +104,10 @@ internal object Idna {
      */
     internal fun domainToUnicode(domain: String): String {
         val mapped = mapAll(domain) ?: domain
-        val labels = splitLabels(normalizeNfc(mapped))
+        // UTS-46 step 3: canonical NFC normalization (UAX #15), applied post-mapping, pre-label-split.
+        val labels = splitLabels(Normalizer.nfc(mapped))
         return labels.joinToString(LABEL_SEPARATOR) { decodeLabelForDisplay(it) }
     }
-
-    /** UTS-46 step 3: canonical NFC normalization (UAX #15), applied post-mapping, pre-label-split. */
-    private fun normalizeNfc(s: String): String = Normalizer.nfc(s)
 
     /**
      * Applies the UTS-46 mapping step to every code point of [domain], returning the mapped text or
@@ -200,7 +199,7 @@ internal object Idna {
      * Re-validates a freshly Punycode-decoded A-label (UTS-46 V1 / P4): the decoded U-label must be
      * non-empty, must carry a non-ASCII code point (an all-ASCII result should never have been
      * ACE-encoded, whatwg/url#760), must already be in NFC (V1), and must not itself begin with the
-     * ACE prefix (a double-encoded label, whatwg/url#803). The top-level NFC pass ([normalizeNfc])
+     * ACE prefix (a double-encoded label, whatwg/url#803). The top-level NFC pass ([Normalizer.nfc])
      * runs before Punycode decoding, so this is the only point the decoded label's NFC form is checked.
      */
     internal fun isValidDecodedALabel(decoded: String): Boolean =
