@@ -4,17 +4,8 @@
  */
 package org.dexpace.kuri.query
 
-/** Smallest supplementary code point, `U+10000`; below it a code point fits one UTF-16 unit. */
-private const val SUPPLEMENTARY_MIN: Int = 0x10000
-
-/** Base of the high-surrogate range, `U+D800`, subtracted when recomposing a surrogate pair. */
-private const val HIGH_SURROGATE_BASE: Int = 0xD800
-
-/** Base of the low-surrogate range, `U+DC00`, subtracted when recomposing a surrogate pair. */
-private const val LOW_SURROGATE_BASE: Int = 0xDC00
-
-/** Bit width contributed by the high surrogate when recomposing a supplementary code point. */
-private const val SURROGATE_SHIFT: Int = 10
+import org.dexpace.kuri.text.charCount
+import org.dexpace.kuri.text.codePointAt
 
 /**
  * Mutable, ordered, duplicate-preserving accumulator that produces an immutable [QueryParameters]
@@ -240,22 +231,3 @@ private fun compareByCodePoint(
     check(i <= left.length && j <= right.length) { "code-point scan overran a name" }
     return if (result != 0) result else (left.length - i) - (right.length - j)
 }
-
-/** The code point at [index], recomposing a high+low surrogate pair into one value. */
-private fun codePointAt(
-    text: String,
-    index: Int,
-): Int {
-    val high = text[index]
-    val next = index + 1
-    val paired = high.isHighSurrogate() && next < text.length && text[next].isLowSurrogate()
-    return if (paired) {
-        SUPPLEMENTARY_MIN + ((high.code - HIGH_SURROGATE_BASE) shl SURROGATE_SHIFT) +
-            (text[next].code - LOW_SURROGATE_BASE)
-    } else {
-        high.code
-    }
-}
-
-/** UTF-16 unit width of [codePoint]: `2` for supplementary, `1` otherwise. */
-private fun charCount(codePoint: Int): Int = if (codePoint >= SUPPLEMENTARY_MIN) 2 else 1

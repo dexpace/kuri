@@ -4,6 +4,8 @@
  */
 package org.dexpace.kuri.idna
 
+import org.dexpace.kuri.text.toCodePoint
+
 /** Record separator inside a decoded range blob (never appears inside a record). */
 private const val RECORD_SEPARATOR: Char = '\n'
 
@@ -56,18 +58,6 @@ private const val BIDI_ON: Char = 'O'
 
 /** Sentinel for a code point with no Bidi_Class the rule consults; it satisfies no condition. */
 private const val BIDI_NONE: Char = '\u0000'
-
-/** First UTF-16 high-surrogate code unit (`U+D800`). */
-private const val HIGH_SURROGATE_START: Int = 0xD800
-
-/** First UTF-16 low-surrogate code unit (`U+DC00`). */
-private const val LOW_SURROGATE_START: Int = 0xDC00
-
-/** Bit shift separating the high- and low-surrogate halves of a code point. */
-private const val SURROGATE_SHIFT: Int = 10
-
-/** First code point of the supplementary planes (needs a surrogate pair). */
-private const val SUPPLEMENTARY_BASE: Int = 0x10000
 
 /**
  * UTS-46 label-validity rules beyond the mapping table (SPEC §7.4, [HOST-28] `CheckJoiners = true`,
@@ -418,16 +408,5 @@ internal object IdnaValidity {
         val low = if (label.length > 1) label[1] else null
         val paired = high.isHighSurrogate() && low != null && low.isLowSurrogate()
         return if (paired) toCodePoint(high, requireNotNull(low)) else high.code
-    }
-
-    /** Combines a UTF-16 surrogate pair into a single supplementary-plane code point. */
-    private fun toCodePoint(
-        high: Char,
-        low: Char,
-    ): Int {
-        require(high.isHighSurrogate()) { "expected high surrogate: $high" }
-        require(low.isLowSurrogate()) { "expected low surrogate: $low" }
-        val highBits = (high.code - HIGH_SURROGATE_START) shl SURROGATE_SHIFT
-        return SUPPLEMENTARY_BASE + highBits + (low.code - LOW_SURROGATE_START)
     }
 }

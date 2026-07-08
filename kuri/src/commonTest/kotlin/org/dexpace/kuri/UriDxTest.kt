@@ -238,6 +238,17 @@ class UriDxTest {
     // --- relativize ---
 
     @Test
+    fun `relativize stays total when a dot-collapsed suffix reparses as an invalid authority`() {
+        // The candidate suffix "/.//h:zz" is a valid rootless-path reference, but resolving it removes the
+        // "/./" and yields "//h:zz", which reparses as an authority with a non-numeric port. That resolution
+        // failure must surface as "no relative form" (null), never as a thrown exception.
+        val base = parseOk("s:/a/b")
+        val target = parseOk("s:/a//.//h:zz")
+
+        assertNull(base.relativize(target))
+    }
+
+    @Test
     fun `relativize emits a relative path for a same-origin descendant`() {
         val base = parseOk("http://h/a/b/")
         val target = parseOk("http://h/a/b/c/d")
