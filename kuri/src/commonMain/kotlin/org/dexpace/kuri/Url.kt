@@ -412,6 +412,29 @@ public class Url internal constructor(
     }
 
     /**
+     * The WHATWG `search` setter (URL §5): returns a copy whose query is [value] with a single
+     * leading `?` stripped and percent-encoded with the (special-)query set, or with the query
+     * removed when [value] is empty. Never throws.
+     */
+    public fun withSearch(value: String): Url {
+        if (value.isEmpty()) return Url(components.copy(query = null))
+        val stripped = if (value.startsWith('?')) value.substring(1) else value
+        return applyOverride(stripped, StateOverride.QUERY)
+    }
+
+    /**
+     * The WHATWG `hash` setter (URL §5): returns a copy whose fragment is [value] with a single
+     * leading `#` stripped and percent-encoded with the fragment set, or with the fragment
+     * removed when [value] is empty. Never throws.
+     */
+    public fun withHash(value: String): Url {
+        if (value.isEmpty()) return Url(components.copy(fragment = null))
+        val stripped = if (value.startsWith('#')) value.substring(1) else value
+        val encoded = PercentCodec.encode(stripped, PercentEncodeSets.FRAGMENT)
+        return Url(components.copy(fragment = encoded))
+    }
+
+    /**
      * Returns a copy of this URL with its [fragment] set (or removed when `null`).
      *
      * A convenience for `newBuilder().fragment(fragment).build()`. A non-`null` `""` keeps a present-

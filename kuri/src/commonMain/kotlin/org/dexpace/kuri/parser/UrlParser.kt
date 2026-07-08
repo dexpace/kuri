@@ -73,6 +73,10 @@ internal object UrlParser {
         // WHATWG pathname setter step "empty this's URL's path" before re-entering path-start
         // (WHATWG URL §5); the seeded segments must not survive into the re-parse.
         if (override == StateOverride.PATHNAME) state.path.clear()
+        // WHATWG search setter step "set this's URL's query to the empty string" (URL §5); the
+        // QUERY state handler appends to the seeded query, so it must be reset here or a
+        // withSearch call would concatenate onto the old query instead of replacing it.
+        if (override == StateOverride.QUERY) state.query = ""
         // Map each override to the UrlState the basic URL parser re-enters (WHATWG URL §5 setters).
         state.state =
             when (override) {

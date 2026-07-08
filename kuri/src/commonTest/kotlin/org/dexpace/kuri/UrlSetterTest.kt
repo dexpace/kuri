@@ -89,4 +89,29 @@ class UrlSetterTest {
         val original = url("mailto:x@example.com")
         assertEquals(original.href, original.withPathname("/a").href)
     }
+
+    @Test
+    fun `withSearch sets the query and strips a leading question mark`() {
+        assertEquals("http://h/?a=b", url("http://h/").withSearch("?a=b").href)
+    }
+
+    @Test
+    fun `withSearch empty removes the query`() {
+        assertEquals("http://h/", url("http://h/?a=b").withSearch("").href)
+    }
+
+    @Test
+    fun `withSearch replaces an existing query rather than appending`() {
+        assertEquals("http://h/?a=b", url("http://h/?old=1").withSearch("?a=b").href)
+    }
+
+    @Test
+    fun `withHash sets the fragment and strips a leading hash`() {
+        assertEquals("http://h/#frag", url("http://h/").withHash("#frag").href)
+    }
+
+    @Test
+    fun `withHash empty removes the fragment`() {
+        assertEquals("http://h/", url("http://h/#frag").withHash("").href)
+    }
 }
