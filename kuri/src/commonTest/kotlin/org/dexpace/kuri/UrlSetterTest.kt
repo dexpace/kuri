@@ -57,4 +57,25 @@ class UrlSetterTest {
     fun `withHost stops at a path terminator and leaves the path unchanged`() {
         assertEquals("http://example.com/p", url("http://h/p").withHost("example.com/x").href)
     }
+
+    @Test
+    fun `withPort string sets the port`() {
+        assertEquals("http://h:8080/", url("http://h/").withPort("8080").href)
+    }
+
+    @Test
+    fun `withPort empty string removes the port`() {
+        assertEquals("http://h/", url("http://h:8080/").withPort("").href)
+    }
+
+    @Test
+    fun `withPort ignores trailing junk after the digits`() {
+        assertEquals("http://h:8080/", url("http://h/").withPort("8080stuff").href)
+    }
+
+    @Test
+    fun `withPort is a no-op on a hostless url`() {
+        val original = url("mailto:x@example.com")
+        assertEquals(original.href, original.withPort("80").href)
+    }
 }

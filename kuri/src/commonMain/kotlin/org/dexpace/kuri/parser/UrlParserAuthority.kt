@@ -249,7 +249,11 @@ internal object UrlParserAuthority {
         end: Int,
         terminator: Char?,
     ): UrlTransition {
-        val terminated = terminator == null || isAuthorityTerminator(state, terminator)
+        // Per the WHATWG port state, a state override ends the digit run on *any* trailing
+        // character — not just an authority terminator — since there is no following state to
+        // reconsume into ([PARSE-34]; e.g. the `port` setter's "8080stuff" keeps port 8080).
+        val terminated =
+            terminator == null || isAuthorityTerminator(state, terminator) || state.stateOverride == StateOverride.PORT
         if (!terminated) {
             return UrlTransition.Fail(UriParseError.InvalidPort(digits + terminator))
         }

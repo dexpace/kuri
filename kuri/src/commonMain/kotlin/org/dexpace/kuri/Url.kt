@@ -384,6 +384,24 @@ public class Url internal constructor(
     }
 
     /**
+     * The WHATWG `port` setter (URL §5): returns a copy whose port is parsed from the leading
+     * digits of [value] (trailing non-digits are ignored, per the port state), or with the port
+     * removed when [value] is empty. A no-op when the URL cannot have a port (no host, empty host,
+     * or `file` scheme). Never throws.
+     *
+     * @param value the new port as text; `""` removes the port.
+     * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
+     */
+    public fun withPort(value: String): Url {
+        if (!canHaveCredentials()) return this
+        return when {
+            value.isEmpty() -> Url(components.copy(port = null))
+            !value[0].isDigit() -> this
+            else -> applyOverride(value, StateOverride.PORT)
+        }
+    }
+
+    /**
      * Returns a copy of this URL with its [fragment] set (or removed when `null`).
      *
      * A convenience for `newBuilder().fragment(fragment).build()`. A non-`null` `""` keeps a present-
