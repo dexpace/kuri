@@ -66,38 +66,42 @@ private class SelfRef(
     @BindUrl var self: SelfRef?,
 )
 
-class ReflectiveBinderTest {
-    private val binder = ReflectiveUrlBinder(PlanCache(PlanCompiler(KotlinReflectMemberScanner())))
+class BindingExecutorTest {
+    private val executor = BindingExecutor(PlanCompiler(KotlinReflectMemberScanner()))
+
+    // Exercises the reflective walk end to end into a URL: this is exactly what the `@Url` entry point
+    // does after root validation — run the executor, then project the accumulated components onto a
+    // fresh Url.Builder through the URL sink.
+    private fun bind(
+        target: Any,
+        options: BindOptions = BindOptions.DEFAULT,
+    ): Url.Builder {
+        val base = Url.Builder()
+        executor.execute(target, options).projectInto(UrlBuilderSink(base))
+        return base
+    }
 
     @Test
     fun `binds a templated request end to end`() {
         val target = Req("https", "h", "shoes", listOf("a", "b"), "x y")
-        val url = binder.bind(Url.Builder(), target, BindOptions.DEFAULT).build()
-        assertEquals("https://h/search/shoes/a/b?q=x%20y", url.toString())
+        assertEquals("https://h/search/shoes/a/b?q=x%20y", bind(target).build().toString())
     }
 
     @Test
     fun `combines sibling username and password into one userinfo`() {
-        val url = binder.bind(Url.Builder(), Creds("https", "h", "bob", "s3cret"), BindOptions.DEFAULT).build()
+        val url = bind(Creds("https", "h", "bob", "s3cret")).build()
         assertEquals("https://bob:s3cret@h/", url.toString())
     }
 
     @Test
     fun `recurses a scoped query into the nested object's query members`() {
         val target = ScopedSearch("https", "h", QueryFilters("red", "large"))
-        val url = binder.bind(Url.Builder(), target, BindOptions.DEFAULT).build()
-        assertEquals("https://h/?color=red&size=large", url.toString())
+        assertEquals("https://h/?color=red&size=large", bind(target).build().toString())
     }
 
     @Test
     fun `merges a nested @Url sub-object host and port into the parent`() {
-        val url =
-            binder
-                .bind(
-                    Url.Builder(),
-                    MergedCall("https", HostPortEndpoint("h", 8443)),
-                    BindOptions.DEFAULT,
-                ).build()
+        val url = bind(MergedCall("https", HostPortEndpoint("h", 8443))).build()
         assertEquals("https://h:8443/", url.toString())
     }
 
@@ -105,7 +109,7 @@ class ReflectiveBinderTest {
     fun `fails when the bind depth is exceeded`() {
         val deep = Chain(Chain(Chain(null)))
         assertFailsWith<KuriBindException> {
-            binder.bind(Url.Builder(), deep, BindOptions(maxDepth = 1))
+            bind(deep, BindOptions(maxDepth = 1))
         }
     }
 
@@ -114,7 +118,7 @@ class ReflectiveBinderTest {
         val node = SelfRef("h", null)
         node.self = node
         assertFailsWith<KuriBindException> {
-            binder.bind(Url.Builder(), node, BindOptions.DEFAULT)
+            bind(node)
         }
     }
 }
