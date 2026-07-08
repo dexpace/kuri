@@ -405,6 +405,9 @@ public class Url internal constructor(
      * The WHATWG `pathname` setter (URL §5): returns a copy whose path is parsed from [value]
      * (the existing path is discarded first), or `this` when the URL has an opaque path. Never
      * throws.
+     *
+     * @param value the new path text.
+     * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
      */
     public fun withPathname(value: String): Url {
         if (components.path is UrlPath.Opaque) return this
@@ -415,6 +418,9 @@ public class Url internal constructor(
      * The WHATWG `search` setter (URL §5): returns a copy whose query is [value] with a single
      * leading `?` stripped and percent-encoded with the (special-)query set, or with the query
      * removed when [value] is empty. Never throws.
+     *
+     * @param value the new query text, with or without a leading `?`; `""` removes the query.
+     * @return the updated [Url].
      */
     public fun withSearch(value: String): Url {
         if (value.isEmpty()) return Url(components.copy(query = null))
@@ -426,6 +432,9 @@ public class Url internal constructor(
      * The WHATWG `hash` setter (URL §5): returns a copy whose fragment is [value] with a single
      * leading `#` stripped and percent-encoded with the fragment set, or with the fragment
      * removed when [value] is empty. Never throws.
+     *
+     * @param value the new fragment text, with or without a leading `#`; `""` removes the fragment.
+     * @return the updated [Url].
      */
     public fun withHash(value: String): Url {
         if (value.isEmpty()) return Url(components.copy(fragment = null))
@@ -499,6 +508,9 @@ public class Url internal constructor(
      * The WHATWG `host` setter (URL §5): returns a copy with host and (optional) port parsed
      * from [value], or `this` when the URL has an opaque path or [value] is not a valid host.
      * Never throws.
+     *
+     * @param value the new host text, optionally followed by `:` and a port.
+     * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
      */
     public fun withHost(value: String): Url {
         if (components.path is UrlPath.Opaque) return this
@@ -508,6 +520,9 @@ public class Url internal constructor(
     /**
      * The WHATWG `hostname` setter (URL §5): as [withHost] but a `:` and anything after it are
      * ignored, so the existing port is preserved. Never throws.
+     *
+     * @param value the new host text; any `:` and trailing text are ignored.
+     * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
      */
     public fun withHostname(value: String): Url {
         if (components.path is UrlPath.Opaque) return this
