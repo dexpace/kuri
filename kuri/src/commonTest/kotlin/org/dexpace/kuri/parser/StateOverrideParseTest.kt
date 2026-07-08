@@ -20,5 +20,28 @@ class StateOverrideParseTest {
         assertEquals("https", c.scheme)
         assertEquals(listOf("new", "path"), (c.path as UrlPath.Segments).segments)
         assertEquals("q", c.query)
+        assertEquals("f", c.fragment)
+    }
+
+    @Test
+    fun `host override sets host and port from the value`() {
+        val result = UrlParser.parseWithOverride("example.com:81", seed("http://h:80/"), StateOverride.HOST)
+        val c = (result as ParseResult.Ok).value
+        assertEquals("example.com", c.host?.asText())
+        assertEquals(81, c.port)
+    }
+
+    @Test
+    fun `hostname override ignores a colon and keeps the existing port`() {
+        val result = UrlParser.parseWithOverride("example.com:81", seed("http://h:90/"), StateOverride.HOSTNAME)
+        val c = (result as ParseResult.Ok).value
+        assertEquals("example.com", c.host?.asText())
+        assertEquals(90, c.port)
+    }
+
+    @Test
+    fun `port override replaces the port`() {
+        val c = (UrlParser.parseWithOverride("8080", seed("http://h/"), StateOverride.PORT) as ParseResult.Ok).value
+        assertEquals(8080, c.port)
     }
 }

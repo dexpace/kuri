@@ -134,6 +134,9 @@ internal object UrlParserAuthority {
      * host is fatal ([PARSE-31]).
      */
     internal fun hostState(state: UrlParserState): UrlTransition {
+        if (state.stateOverride != null && state.scheme == FILE_SCHEME) {
+            return UrlTransition.Reconsume(UrlState.FILE_HOST)
+        }
         val scan = scanHost(state)
         val hostSlice = state.input.substring(state.pos, scan.first)
         return finishHost(state, hostSlice, scan.first, scan.second)
@@ -190,8 +193,19 @@ internal object UrlParserAuthority {
             is ParseResult.Ok -> {
                 state.host = host.value
                 state.pos = idx
-                if (isColon) UrlTransition.Advance(UrlState.PORT) else UrlTransition.Reconsume(UrlState.PATH_START)
+                hostTransition(state, isColon)
             }
+        }
+
+    /** Post-host transition, honouring a HOST/HOSTNAME override ([SET-*]; WHATWG host state). */
+    private fun hostTransition(
+        state: UrlParserState,
+        isColon: Boolean,
+    ): UrlTransition =
+        when (state.stateOverride) {
+            StateOverride.HOSTNAME -> UrlTransition.Done
+            StateOverride.HOST -> if (isColon) UrlTransition.Advance(UrlState.PORT) else UrlTransition.Done
+            else -> if (isColon) UrlTransition.Advance(UrlState.PORT) else UrlTransition.Reconsume(UrlState.PATH_START)
         }
 
     /** An empty non-special host is [Host.Empty]; otherwise the §7 host pipeline classifies it. */
@@ -254,7 +268,11 @@ internal object UrlParserAuthority {
         }
         state.port = elidedPort(state, value)
         state.pos = end
-        return UrlTransition.Reconsume(UrlState.PATH_START)
+        return if (state.stateOverride == StateOverride.PORT) {
+            UrlTransition.Done
+        } else {
+            UrlTransition.Reconsume(UrlState.PATH_START)
+        }
     }
 
     /** The base-10 value of [digits], or `null` when it exceeds the 16-bit ceiling ([PARSE-33]). */
