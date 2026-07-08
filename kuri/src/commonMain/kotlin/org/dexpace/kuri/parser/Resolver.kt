@@ -132,18 +132,17 @@ internal object Resolver {
      *
      * @param base the absolute base components; its scheme MUST be present.
      * @param reference the reference components to resolve.
-     * @return the resolved target components.
+     * @return [ParseResult.Ok] with the resolved target components, or [ParseResult.Err] when the
+     *   recomposed target does not parse — e.g. dot-segment removal produced a `//`-leading, authority-less
+     *   path that re-reads as an invalid authority.
      */
     internal fun resolve(
         base: ParsedComponents,
         reference: ParsedComponents,
-    ): ParsedComponents {
+    ): ParseResult<ParsedComponents> {
         require(base.scheme != null) { "structured resolution requires an absolute base scheme" }
         val target = transformReferences(partsOf(base), partsOf(reference))
-        return when (val parsed = UriParser.parse(recompose(target), structuredOptions(base, reference))) {
-            is ParseResult.Ok -> parsed.value
-            is ParseResult.Err -> error("resolved reference is not a valid URI: ${parsed.error}")
-        }
+        return UriParser.parse(recompose(target), structuredOptions(base, reference))
     }
 
     /** Derives the round-trip [ParseOptions] for a structured resolve: a zone id on either input opts in. */

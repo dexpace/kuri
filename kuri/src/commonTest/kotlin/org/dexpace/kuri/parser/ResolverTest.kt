@@ -99,7 +99,7 @@ internal class ResolverTest {
         val base = UriParser.parse("http://a/b/c/d").getOrThrow()
         val reference = UriParser.parse("mailto:x@y").getOrThrow()
 
-        val resolved = Resolver.resolve(base, reference)
+        val resolved = Resolver.resolve(base, reference).getOrThrow()
 
         assertEquals("mailto:x@y", Serializer.serialize(resolved, ParseProfile.URI))
     }
@@ -110,7 +110,7 @@ internal class ResolverTest {
         val base = UriParser.parse("http://h/a/b").getOrThrow()
         val reference = UriParser.parse("g/x").getOrThrow()
 
-        val resolved = Resolver.resolve(base, reference)
+        val resolved = Resolver.resolve(base, reference).getOrThrow()
 
         assertEquals("http://h/a/g/x", Serializer.serialize(resolved, ParseProfile.URI))
     }
@@ -121,7 +121,7 @@ internal class ResolverTest {
         val base = UriParser.parse("foo://[fe80::1%25eth0]/a/b", zoneOptions).getOrThrow()
         val reference = UriParser.parse("x", zoneOptions).getOrThrow()
 
-        val resolved = Resolver.resolve(base, reference)
+        val resolved = Resolver.resolve(base, reference).getOrThrow()
 
         assertEquals(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0"), resolved.host)
         assertEquals("foo://[fe80::1%25eth0]/a/x", Serializer.serialize(resolved, ParseProfile.URI))

@@ -298,9 +298,11 @@ public class Uri internal constructor(
      * The contract is enforced, not merely intended: the candidate is resolved back against this URI
      * and compared to [target], and returned only when it round-trips. The result is `null` when no
      * relative form resolves back to [target] — the two differ in [scheme] or [authority], either side
-     * has an opaque path (see [isOpaquePath]), [target] is not under this URI's directory, or the only
+     * has an opaque path (see [isOpaquePath]), [target] is not under this URI's directory, the only
      * candidate is a case RFC 3986 resolution would re-read (an empty reference re-inherits the base
-     * query; a `..`-bearing suffix), or this URI has no [scheme] (resolution requires an absolute base).
+     * query; a `..`-bearing suffix), the candidate's resolution does not produce a valid URI (dot-segment
+     * removal can yield a `//`-leading path that re-reads as an invalid authority), or this URI has no
+     * [scheme] (resolution requires an absolute base).
      * This mirrors [Url.relativize], which likewise returns `null` when
      * no relative form exists. This is total: it never throws.
      *
@@ -312,9 +314,13 @@ public class Uri internal constructor(
         // relativize inverts resolve, which requires an absolute base; a scheme-less base has no relative
         // form and would trip the structured resolver's absolute-base precondition, so reject it up front.
         if (scheme == null) return null
-        // Round-trip the already-parsed candidate through the structured resolver instead of re-parsing
-        // its serialized string, keeping it only when the resolved value equals the target.
-        return relativeReference(target)?.takeIf { Uri(Resolver.resolve(components, it.components)) == target }
+        val candidate = relativeReference(target)
+        // Resolve the already-parsed candidate through the structured resolver; a candidate whose
+        // resolution does not yield a valid URI (dot-segment removal can produce a //-leading path that
+        // re-reads as an invalid authority) means no relative form exists, so fold that failure to null
+        // rather than letting the resolver's internal parse error surface — relativize stays total.
+        val resolved = candidate?.let { Resolver.resolve(components, it.components).getOrNull() }
+        return candidate?.takeIf { resolved != null && Uri(resolved) == target }
     }
 
     /**
