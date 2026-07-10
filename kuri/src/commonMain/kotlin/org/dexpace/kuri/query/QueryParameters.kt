@@ -119,6 +119,42 @@ public class QueryParameters internal constructor(
     }
 
     /**
+     * The decoded values of every pair named [name], each split on [delimiter] and concatenated in
+     * appearance order (SPEC §10.3).
+     *
+     * Splitting is derived on demand (the snapshot is never modified), literal, and lossless: it applies
+     * [String.split] to each value with no trimming and no empty-token dropping, so `a,,b` yields
+     * `["a", "", "b"]` and `x=` yields `[""]`. Pairs with no `=` (a `null` value) contribute nothing,
+     * since there is no value string to partition; the null-vs-empty distinction stays observable via
+     * [getAll]/[valueAt]. A name that is absent yields an empty list. Repeated pairs and in-value
+     * delimiters both flatten into the one returned list.
+     *
+     * For typed lists, compose over the strings: `split("id", ',').map(String::toInt)`.
+     *
+     * @param name the decoded name to look up, matched case-sensitively.
+     * @param delimiter the character each matching value is split on.
+     * @return a read-only list of the split tokens in order; empty when [name] is absent or every
+     *   matching pair had no `=`.
+     */
+    public fun split(
+        name: String,
+        delimiter: Char,
+    ): List<String> {
+        val result = ArrayList<String>()
+        var contributing = 0
+        for (pair in entries) {
+            if (pair.first != name) continue
+            val value = pair.second
+            if (value != null) {
+                contributing++
+                result.addAll(value.split(delimiter))
+            }
+        }
+        check(result.size >= contributing) { "each contributing value yields at least one token" }
+        return result
+    }
+
+    /**
      * True when at least one pair is named [name], case-sensitively (SPEC §10.3).
      *
      * @param name the decoded name to test, matched case-sensitively.

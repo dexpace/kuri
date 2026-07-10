@@ -159,7 +159,8 @@ internal class PlanCompiler(
 
     // A leaf-like value is one query parameter; a complex member with its own annotated members
     // recurses under the QUERY scope. A `Map` here is ambiguous with `@QueryMap` semantics, so it is
-    // rejected.
+    // rejected. `marker.delimiter` maps its NUL sentinel to `null` (unset -> repeated params); a set
+    // delimiter only ever takes effect on an iterable leaf's join branch (see `addQueryValues`).
     private fun queryStep(
         member: ScannedMember,
         marker: Query,
@@ -168,8 +169,9 @@ internal class PlanCompiler(
         if (isMapType(member.declaredType)) {
             throw KuriBindException("a Map under @Query is not allowed; use @QueryMap", member.name)
         }
+        val delimiter = marker.delimiter.takeIf { it != '\u0000' }
         return if (isLeafLike(member, scalar)) {
-            BindStep.Leaf(member, LeafOp.QUERY, marker.value.ifEmpty { member.name })
+            BindStep.Leaf(member, LeafOp.QUERY, marker.value.ifEmpty { member.name }, delimiter)
         } else {
             BindStep.Recurse(member, Scope.QUERY)
         }

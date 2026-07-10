@@ -528,6 +528,7 @@ public final class org/dexpace/kuri/query/QueryParameters : java/lang/Iterable, 
 	public static final fun parse (Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParameters;
 	public static final fun parseForm (Ljava/lang/String;)Lorg/dexpace/kuri/query/QueryParameters;
 	public final fun size ()I
+	public final fun split (Ljava/lang/String;C)Ljava/util/List;
 	public final fun toFormUrlEncoded ()Ljava/lang/String;
 	public final fun toMap ()Ljava/util/Map;
 	public final fun toQueryString ()Ljava/lang/String;

@@ -130,7 +130,22 @@ public annotation class Path(
     val value: String = "",
 )
 
-/** One query parameter (scalar/collection) or scalar-scoped recursion (complex); [value] is the name. */
+/**
+ * One query parameter (scalar/collection) or scalar-scoped recursion (complex); [value] is the name.
+ *
+ * On an iterable member, [delimiter] switches the parameter from repeated params (`roles=admin&roles=user`,
+ * the default) to a single joined value (`roles=admin,user`): the non-null elements' scalar text is
+ * joined with [delimiter], in order. A null element is skipped; an empty or all-null collection emits
+ * no parameter at all, matching the unjoined fan-out's empty-collection behavior. On a scalar member
+ * [delimiter] is ignored — a join has no meaning for one value.
+ *
+ * The NUL sentinel (`'\u0000'`) marks [delimiter] as unset, since NUL cannot appear in a URL and so
+ * can never be a real join delimiter. [delimiter] never applies to `@QueryMap` — that stays fan-out only.
+ *
+ * A join is lossy if an element's text itself contains [delimiter]: the joined value is then not
+ * recoverable via `QueryParameters.split`, which re-splits on every occurrence of the delimiter after
+ * decoding. Choose a delimiter that is absent from the elements' text, the same caveat `split` carries.
+ */
 @Retention(AnnotationRetention.RUNTIME)
 @Target(
     AnnotationTarget.PROPERTY,
@@ -141,6 +156,7 @@ public annotation class Path(
 )
 public annotation class Query(
     val value: String = "",
+    val delimiter: Char = '\u0000',
 )
 
 /** A `Map` member: one query parameter per entry. */

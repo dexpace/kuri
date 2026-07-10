@@ -303,4 +303,89 @@ class QueryParametersTest {
         val params = QueryParameters.parse("a=1&a=2&b=3")
         assertEquals(3, params.size)
     }
+
+    @Test
+    fun `split partitions a value on a comma delimiter`() {
+        val params = QueryParameters.parse("roles=admin,user")
+        assertEquals(listOf("admin", "user"), params.split("roles", ','))
+    }
+
+    @Test
+    fun `split partitions a value on a pipe delimiter`() {
+        val params = QueryParameters.parse("perm=read|write")
+        assertEquals(listOf("read", "write"), params.split("perm", '|'))
+    }
+
+    @Test
+    fun `split flattens repeated pairs with no in-value delimiter`() {
+        val params = QueryParameters.parse("x=1&x=2")
+        assertEquals(listOf("1", "2"), params.split("x", ','))
+    }
+
+    @Test
+    fun `split flattens repeated pairs then splits each value`() {
+        val params = QueryParameters.parse("x=1,2&x=3")
+        assertEquals(listOf("1", "2", "3"), params.split("x", ','))
+    }
+
+    @Test
+    fun `split returns an empty list for an absent name`() {
+        val params = QueryParameters.parse("a=1")
+        assertEquals(emptyList(), params.split("z", ','))
+    }
+
+    @Test
+    fun `split ignores a pair with no equals sign`() {
+        val params = QueryParameters.parse("flag")
+        assertEquals(emptyList(), params.split("flag", ','))
+    }
+
+    @Test
+    fun `split ignores a no-equals pair while keeping a valued pair under the same name`() {
+        val params = QueryParameters.parse("a&a=1,2")
+        assertEquals(listOf("1", "2"), params.split("a", ','))
+    }
+
+    @Test
+    fun `split returns one empty token for an empty value`() {
+        val params = QueryParameters.parse("x=")
+        assertEquals(listOf(""), params.split("x", ','))
+    }
+
+    @Test
+    fun `split preserves an empty middle token`() {
+        val params = QueryParameters.parse("x=a,,b")
+        assertEquals(listOf("a", "", "b"), params.split("x", ','))
+    }
+
+    @Test
+    fun `split preserves empty leading and trailing tokens`() {
+        val params = QueryParameters.parse("x=,a,")
+        assertEquals(listOf("", "a", ""), params.split("x", ','))
+    }
+
+    @Test
+    fun `split works for an empty query name`() {
+        val params = QueryParameters.parse("=v")
+        assertEquals(listOf("v"), params.split("", ','))
+    }
+
+    @Test
+    fun `split returns one token per value when the delimiter is absent`() {
+        val params = QueryParameters.parse("x=abc")
+        assertEquals(listOf("abc"), params.split("x", ','))
+    }
+
+    @Test
+    fun `split preserves order across multiple pairs`() {
+        val params = QueryParameters.parse("a=1,2&b=x&a=3")
+        assertEquals(listOf("1", "2", "3"), params.split("a", ','))
+    }
+
+    @Test
+    fun `split operates on the decoded value so a percent-encoded delimiter still splits`() {
+        // %2C decodes to ',' during parse, so an encoded delimiter is not protected from the split.
+        val params = QueryParameters.parse("roles=a%2Cb")
+        assertEquals(listOf("a", "b"), params.split("roles", ','))
+    }
 }

@@ -24,4 +24,14 @@ class AnnotationsTest {
         val template = ann.filterIsInstance<PathTemplate>().single()
         assertEquals("/x/{id}", template.value)
     }
+
+    @Test
+    fun `query delimiter defaults to the nul sentinel`() {
+        assertEquals('\u0000', Query().delimiter)
+    }
+
+    @Test
+    fun `query delimiter reflects a configured value`() {
+        assertEquals(',', Query("n", ',').delimiter)
+    }
 }
