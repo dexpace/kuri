@@ -5,9 +5,9 @@
 package org.dexpace.kuri.serialize
 
 import org.dexpace.kuri.host.Host
+import org.dexpace.kuri.parser.ComponentPath
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.Resolver
-import org.dexpace.kuri.parser.UrlPath
 import org.dexpace.kuri.parser.splitUriPath
 import org.dexpace.kuri.parser.toUriPathString
 import org.dexpace.kuri.scheme.Scheme
@@ -164,19 +164,19 @@ internal object UriNormalizer {
 
     /** §6.2.2.3 / [NORM-9]: normalizes a hierarchical path; an opaque path is never dot-collapsed. */
     private fun normalizePath(
-        path: UrlPath,
+        path: ComponentPath,
         hasAuthority: Boolean,
-    ): UrlPath =
+    ): ComponentPath =
         when (path) {
-            is UrlPath.Opaque -> path
-            is UrlPath.Segments -> normalizeSegments(path, hasAuthority)
+            is ComponentPath.Opaque -> path
+            is ComponentPath.Segments -> normalizeSegments(path, hasAuthority)
         }
 
     /** Normalizes the path string (triplets, then [Resolver.removeDotSegments]) and re-splits it. */
     private fun normalizeSegments(
-        path: UrlPath.Segments,
+        path: ComponentPath.Segments,
         hasAuthority: Boolean,
-    ): UrlPath {
+    ): ComponentPath {
         val cleaned = Resolver.removeDotSegments(normalizeText(path.toUriPathString()))
         val rendered = if (cleaned.isEmpty() && hasAuthority) SLASH else cleaned
         check(!(hasAuthority && rendered.isEmpty())) { "an authority path must render as at least /" }

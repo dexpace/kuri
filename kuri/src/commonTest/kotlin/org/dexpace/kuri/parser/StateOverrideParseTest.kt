@@ -18,7 +18,7 @@ class StateOverrideParseTest {
         assertTrue(result is ParseResult.Ok)
         val c = result.value
         assertEquals("https", c.scheme)
-        assertEquals(listOf("new", "path"), (c.path as UrlPath.Segments).segments)
+        assertEquals(listOf("new", "path"), (c.path as ComponentPath.Segments).segments)
         assertEquals("q", c.query)
         assertEquals("f", c.fragment)
     }

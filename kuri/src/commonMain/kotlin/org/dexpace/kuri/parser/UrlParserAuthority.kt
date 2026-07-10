@@ -430,7 +430,7 @@ internal object UrlParserAuthority {
         state: UrlParserState,
         base: ParsedComponents,
     ) {
-        val baseSegments = (base.path as? UrlPath.Segments)?.segments ?: emptyList()
+        val baseSegments = (base.path as? ComponentPath.Segments)?.segments ?: emptyList()
         val firstIsDrive = baseSegments.isNotEmpty() && isNormalizedWindowsDrive(baseSegments[0])
         if (!startsWithWindowsDrive(state.fromCurrent()) && firstIsDrive) {
             state.path.add(baseSegments[0])

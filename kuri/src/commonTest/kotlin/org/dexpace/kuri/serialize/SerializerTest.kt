@@ -6,10 +6,10 @@ package org.dexpace.kuri.serialize
 
 import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.host.Host
+import org.dexpace.kuri.parser.ComponentPath
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.UriParser
 import org.dexpace.kuri.parser.UrlParser
-import org.dexpace.kuri.parser.UrlPath
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -43,7 +43,7 @@ internal class SerializerTest {
 
     @Test
     fun `serialize prepends the slash-dot guard for a no-authority path that opens with two slashes`() {
-        val components = ParsedComponents(scheme = "web+demo", path = UrlPath.Segments(listOf("", "x")))
+        val components = ParsedComponents(scheme = "web+demo", path = ComponentPath.Segments(listOf("", "x")))
         assertEquals("web+demo:/.//x", Serializer.serialize(components, ParseProfile.URL))
     }
 
@@ -54,7 +54,12 @@ internal class SerializerTest {
 
     @Test
     fun `serialize distinguishes a present-empty query and fragment from their absence`() {
-        val base = ParsedComponents(scheme = "https", host = Host.RegName("h"), path = UrlPath.Segments(listOf("")))
+        val base =
+            ParsedComponents(
+                scheme = "https",
+                host = Host.RegName("h"),
+                path = ComponentPath.Segments(listOf("")),
+            )
         assertEquals("https://h/", Serializer.serialize(base, ParseProfile.URL))
         assertEquals("https://h/?", Serializer.serialize(base.copy(query = ""), ParseProfile.URL))
         assertEquals("https://h/#", Serializer.serialize(base.copy(fragment = ""), ParseProfile.URL))
@@ -95,7 +100,7 @@ internal class SerializerTest {
     @Test
     fun `serialize rejects a Url profile value that carries no scheme`() {
         // The WHATWG serializer asserts the scheme is present; a Url always has one.
-        val components = ParsedComponents(host = Host.RegName("h"), path = UrlPath.Segments(listOf("")))
+        val components = ParsedComponents(host = Host.RegName("h"), path = ComponentPath.Segments(listOf("")))
         assertFailsWith<IllegalArgumentException> { Serializer.serialize(components, ParseProfile.URL) }
     }
 

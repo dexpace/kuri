@@ -6,8 +6,8 @@ package org.dexpace.kuri.serialize
 
 import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.host.serializeHost
+import org.dexpace.kuri.parser.ComponentPath
 import org.dexpace.kuri.parser.ParsedComponents
-import org.dexpace.kuri.parser.UrlPath
 import org.dexpace.kuri.parser.toUriPathString
 import org.dexpace.kuri.scheme.schemeColonIndex
 
@@ -157,8 +157,8 @@ internal fun serializeUrlPath(
     guardAgainstAuthority: Boolean = true,
 ): String =
     when (val path = components.path) {
-        is UrlPath.Opaque -> path.path
-        is UrlPath.Segments ->
+        is ComponentPath.Opaque -> path.path
+        is ComponentPath.Segments ->
             serializeUrlSegments(
                 path.segments,
                 noAuthority = components.host == null,

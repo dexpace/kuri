@@ -9,13 +9,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 /**
- * Unit tests for the structured path values in `UrlPath.kt`. [BuilderPath], the builders'
+ * Unit tests for the structured path values in `ComponentPath.kt`. [BuilderPath], the builders'
  * structured-path value (RFC 3986 §3.3; SPEC §3.7), covers the segment-edit transforms
  * ([BuilderPath.pushSegment], [BuilderPath.addSegments], [BuilderPath.setSegment],
  * [BuilderPath.removeSegment]) and their index-bounds contracts; the remaining cases pin the
- * opaque-path projections [UrlPath.toUriPathString] and [decodedSegments].
+ * opaque-path projections [ComponentPath.toUriPathString] and [decodedSegments].
  */
-internal class UrlPathTest {
+internal class ComponentPathTest {
     @Test
     fun `setSegment throws when the index is past the end`() {
         val path = BuilderPath(listOf("a", "b"))
@@ -111,14 +111,14 @@ internal class UrlPathTest {
 
     @Test
     fun `toUriPathString returns an opaque path verbatim`() {
-        val path: UrlPath = UrlPath.Opaque("a@b")
+        val path: ComponentPath = ComponentPath.Opaque("a@b")
 
         assertEquals("a@b", path.toUriPathString())
     }
 
     @Test
     fun `decodedSegments yields the single decoded value for an opaque path`() {
-        val result = decodedSegments(UrlPath.Opaque("a%40b")) { it }
+        val result = decodedSegments(ComponentPath.Opaque("a%40b")) { it }
 
         assertEquals(listOf("a%40b"), result)
     }

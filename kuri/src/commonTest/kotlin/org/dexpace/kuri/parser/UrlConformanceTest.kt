@@ -60,10 +60,10 @@ class UrlConformanceTest {
      * `Segments([])` therefore renders as `""` (a non-special authority with no path), while the
      * special-URL root `Segments([""])` renders as `"/"` -- matching WPT exactly.
      */
-    private fun serializePath(path: UrlPath): String =
+    private fun serializePath(path: ComponentPath): String =
         when (path) {
-            is UrlPath.Opaque -> path.path
-            is UrlPath.Segments -> path.segments.joinToString(separator = "") { "/$it" }
+            is ComponentPath.Opaque -> path.path
+            is ComponentPath.Segments -> path.segments.joinToString(separator = "") { "/$it" }
         }
 
     /** Maps a WPT `port` string to the parsed [ParsedComponents.port] (`""` = default/none = null). */

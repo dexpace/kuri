@@ -214,7 +214,8 @@ internal object UrlParser {
 
     /** Snapshots the mutable [state] into the immutable [ParsedComponents] result (§3, §8). */
     private fun finalize(state: UrlParserState): ParsedComponents {
-        val path = if (state.isOpaque) UrlPath.Opaque(state.opaque) else UrlPath.Segments(state.path.toList())
+        val path =
+            if (state.isOpaque) ComponentPath.Opaque(state.opaque) else ComponentPath.Segments(state.path.toList())
         val fragment = state.fragmentRaw?.let { PercentCodec.encode(it, PercentEncodeSets.FRAGMENT) }
         return ParsedComponents(
             scheme = state.scheme,

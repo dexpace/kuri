@@ -6,9 +6,9 @@ package org.dexpace.kuri.serialize
 
 import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.host.Host
+import org.dexpace.kuri.parser.ComponentPath
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.UriParser
-import org.dexpace.kuri.parser.UrlPath
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -138,7 +138,7 @@ internal class UriNormalizerTest {
     @Test
     fun `normalize leaves an opaque path untouched`() {
         // §6.2.2.3 / [NORM-9]: an opaque path is returned verbatim and is never dot-collapsed.
-        val opaque = UrlPath.Opaque("a@b")
+        val opaque = ComponentPath.Opaque("a@b")
         val components = ParsedComponents(scheme = "mailto", path = opaque)
         assertEquals(opaque, UriNormalizer.normalize(components).path)
     }

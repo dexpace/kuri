@@ -168,7 +168,7 @@ internal object UrlParserStates {
         val c = state.currentChar()
         return when {
             base == null -> UrlTransition.Fail(UriParseError.MissingScheme)
-            base.path is UrlPath.Opaque -> noSchemeOpaqueBase(state, base, c)
+            base.path is ComponentPath.Opaque -> noSchemeOpaqueBase(state, base, c)
             base.scheme != FILE_SCHEME -> UrlTransition.Reconsume(UrlState.RELATIVE)
             else -> UrlTransition.Reconsume(UrlState.FILE)
         }
@@ -194,7 +194,7 @@ internal object UrlParserStates {
     ) {
         state.scheme = base.scheme
         state.isOpaque = true
-        state.opaque = (base.path as UrlPath.Opaque).path
+        state.opaque = (base.path as ComponentPath.Opaque).path
         state.query = base.query
     }
 
