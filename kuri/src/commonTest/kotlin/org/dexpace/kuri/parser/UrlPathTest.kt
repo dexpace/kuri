@@ -9,9 +9,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 /**
- * Unit tests for [BuilderPath], the builders' structured-path value (RFC 3986 §3.3; SPEC §3.7):
- * its segment-edit transforms ([BuilderPath.pushSegment], [BuilderPath.addSegments],
- * [BuilderPath.setSegment], [BuilderPath.removeSegment]) and their index-bounds contracts.
+ * Unit tests for the structured path values in `UrlPath.kt`. [BuilderPath], the builders'
+ * structured-path value (RFC 3986 §3.3; SPEC §3.7), covers the segment-edit transforms
+ * ([BuilderPath.pushSegment], [BuilderPath.addSegments], [BuilderPath.setSegment],
+ * [BuilderPath.removeSegment]) and their index-bounds contracts; the remaining cases pin the
+ * opaque-path projections [UrlPath.toUriPathString] and [decodedSegments].
  */
 internal class UrlPathTest {
     @Test
