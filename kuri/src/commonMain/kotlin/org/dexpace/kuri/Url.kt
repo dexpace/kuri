@@ -391,7 +391,7 @@ public class Url internal constructor(
      * The WHATWG `port` setter (URL §5): returns a copy whose port is parsed from the leading
      * digits of [value] (trailing non-digits are ignored, per the port state), or with the port
      * removed when [value] is empty. A no-op when the URL cannot have a port (no host, empty host,
-     * or `file` scheme). Never throws.
+     * or `file` scheme). Never throws on invalid input — an unparseable value is a no-op.
      *
      * @param value the new port as text; `""` removes the port.
      * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
@@ -401,8 +401,8 @@ public class Url internal constructor(
         // before the port state ever sees it (e.g. "\t8080" is a valid port once stripped), and an
         // invalid leading character is itself a no-op the port state machine already resolves.
         return when {
-            !canHaveCredentials() -> this
-            value.isEmpty() -> Url(components.copy(port = null))
+            !canHaveCredentialsOrPort() -> this
+            value.isEmpty() -> withComponents(components.copy(port = null))
             else -> applyOverride(value, StateOverride.PORT)
         }
     }
@@ -410,7 +410,7 @@ public class Url internal constructor(
     /**
      * The WHATWG `pathname` setter (URL §5): returns a copy whose path is parsed from [value]
      * (the existing path is discarded first), or `this` when the URL has an opaque path. Never
-     * throws.
+     * throws on invalid input — an unparseable value is a no-op.
      *
      * @param value the new path text.
      * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
@@ -423,13 +423,13 @@ public class Url internal constructor(
     /**
      * The WHATWG `search` setter (URL §5): returns a copy whose query is [value] with a single
      * leading `?` stripped and percent-encoded with the (special-)query set, or with the query
-     * removed when [value] is empty. Never throws.
+     * removed when [value] is empty. Never throws on invalid input — an unparseable value is a no-op.
      *
      * @param value the new query text, with or without a leading `?`; `""` removes the query.
-     * @return the updated [Url].
+     * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
      */
     public fun withSearch(value: String): Url {
-        if (value.isEmpty()) return Url(components.copy(query = null))
+        if (value.isEmpty()) return withComponents(components.copy(query = null))
         val stripped = if (value.startsWith('?')) value.substring(1) else value
         return applyOverride(stripped, StateOverride.QUERY)
     }
@@ -443,7 +443,7 @@ public class Url internal constructor(
      * @return the updated [Url].
      */
     public fun withHash(value: String): Url {
-        if (value.isEmpty()) return Url(components.copy(fragment = null))
+        if (value.isEmpty()) return withComponents(components.copy(fragment = null))
         val withoutHash = if (value.startsWith('#')) value.substring(1) else value
         // WHATWG's hash setter basic-URL-parses this input with fragment state as the override,
         // which unconditionally strips every ASCII tab/LF/CR first (SPEC §8.1); withHash bypasses
@@ -451,7 +451,7 @@ public class Url internal constructor(
         // itself rather than percent-encode a literal tab/newline into the fragment.
         val stripped = withoutHash.filterNot { it == '\t' || it == '\n' || it == '\r' }
         val encoded = PercentCodec.encode(stripped, PercentEncodeSets.FRAGMENT)
-        return Url(components.copy(fragment = encoded))
+        return withComponents(components.copy(fragment = encoded))
     }
 
     /**
@@ -478,7 +478,7 @@ public class Url internal constructor(
     /**
      * The WHATWG `protocol` setter (URL §5): returns a copy with [value]'s scheme, or this URL
      * unchanged when the change is not permitted (special↔non-special, or an invalid `file`
-     * transition). Never throws — an invalid scheme is a no-op.
+     * transition). Never throws on invalid input — an invalid scheme is a no-op.
      *
      * @param value the new scheme, with or without a trailing `:`.
      * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
@@ -501,9 +501,9 @@ public class Url internal constructor(
      * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
      */
     public fun withUsername(value: String): Url {
-        if (!canHaveCredentials()) return this
+        if (!canHaveCredentialsOrPort()) return this
         val encoded = PercentCodec.encode(value, PercentEncodeSets.USERINFO)
-        return Url(components.copy(username = encoded))
+        return withComponents(components.copy(username = encoded))
     }
 
     /**
@@ -513,15 +513,15 @@ public class Url internal constructor(
      * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
      */
     public fun withPassword(value: String): Url {
-        if (!canHaveCredentials()) return this
+        if (!canHaveCredentialsOrPort()) return this
         val encoded = PercentCodec.encode(value, PercentEncodeSets.USERINFO)
-        return Url(components.copy(password = encoded))
+        return withComponents(components.copy(password = encoded))
     }
 
     /**
      * The WHATWG `host` setter (URL §5): returns a copy with host and (optional) port parsed
      * from [value], or `this` when the URL has an opaque path or [value] is not a valid host.
-     * Never throws.
+     * Never throws on invalid input — an invalid host is a no-op.
      *
      * @param value the new host text, optionally followed by `:` and a port.
      * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
@@ -533,7 +533,8 @@ public class Url internal constructor(
 
     /**
      * The WHATWG `hostname` setter (URL §5): as [withHost] but a `:` and anything after it are
-     * ignored, so the existing port is preserved. Never throws.
+     * ignored, so the existing port is preserved. Never throws on invalid input — an invalid host
+     * is a no-op.
      *
      * @param value the new host text; any `:` and trailing text are ignored.
      * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
@@ -544,10 +545,13 @@ public class Url internal constructor(
     }
 
     /** WHATWG "cannot have a username/password/port": no host, empty host, or `file` scheme. */
-    private fun canHaveCredentials(): Boolean {
+    private fun canHaveCredentialsOrPort(): Boolean {
         val h = components.host
         return h != null && h != Host.Empty && !scheme.equals(FILE_SCHEME, ignoreCase = true)
     }
+
+    /** A copy carrying [next], or `this` when [next] already equals the current components (a no-op). */
+    private fun withComponents(next: ParsedComponents): Url = if (next == components) this else Url(next)
 
     /** Runs a setter [override] over [value], returning `this` on any error or WHATWG no-op. */
     private fun applyOverride(
@@ -555,7 +559,7 @@ public class Url internal constructor(
         override: StateOverride,
     ): Url =
         when (val result = UrlParser.parseWithOverride(value, components, override)) {
-            is ParseResult.Ok -> if (result.value == components) this else Url(result.value)
+            is ParseResult.Ok -> withComponents(result.value)
             is ParseResult.Err -> this
         }
 
