@@ -9,7 +9,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
 
 /**
  * Exhaustive rendering and structural tests for the [UriParseError] catalog (SPEC §12.2):
@@ -140,6 +139,8 @@ internal class UriParseErrorTest {
         val error = assertIs<ParseResult.Err>(result).error
         val forbidden = assertIs<UriParseError.ForbiddenHostCodePoint>(error)
         assertEquals('|'.code, forbidden.codePoint)
-        assertTrue(forbidden.at >= 0, "the offending offset is within the host substring")
+        // The offset is relative to the host substring "ex|ample" (UriParser forwards the host
+        // error's index unchanged), so the '|' at host index 2 is the reported offense.
+        assertEquals(2, forbidden.at)
     }
 }
