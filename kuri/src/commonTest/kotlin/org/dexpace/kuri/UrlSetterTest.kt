@@ -114,4 +114,11 @@ class UrlSetterTest {
     fun `withHash empty removes the fragment`() {
         assertEquals("http://h/", url("http://h/#frag").withHash("").href)
     }
+
+    @Test
+    fun `withHostname parses a mixed-case ipv6 literal and lowercases it`() {
+        // Re-parsing the literal drives the hex-digit decoder over a decimal digit, an upper-case
+        // hex letter (D, B), and a lower-case hex letter (a), then canonicalises to lower-case.
+        assertEquals("http://[2001:db8::a]/", url("http://h/").withHostname("[2001:DB8::a]").href)
+    }
 }

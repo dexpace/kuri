@@ -2,6 +2,7 @@
  * Copyright (c) 2026 dexpace and Omar Aljarrah
  * SPDX-License-Identifier: MIT
  */
+import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
@@ -82,11 +83,16 @@ detekt {
     )
 }
 
+// Coverage floors (see :kuri for the rationale). Line: 99% — the single residual line is
+// PlanCompiler's defensive `else -> null`, unreachable because `bindingAnnotation` only ever yields a
+// known marker. Branch: 88% (actual ~91%) — floored below the line coverage and with headroom, as the
+// reflective binder's `require`/`check` guards each add an uncoverable failure branch.
 kover {
     reports {
         verify {
             rule {
-                minBound(80)
+                minBound(99, CoverageUnit.LINE)
+                minBound(88, CoverageUnit.BRANCH)
             }
         }
     }

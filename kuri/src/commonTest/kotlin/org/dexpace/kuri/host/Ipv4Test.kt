@@ -118,6 +118,21 @@ class Ipv4Test {
     }
 
     @Test
+    fun `Uri profile rejects octets that break the dec-octet grammar`() {
+        // A non-digit part, an over-long four-digit part, and an empty part each fail the exact
+        // RFC 3986 dec-octet rule (§7.3.2 [HOST-24]) with Ipv4NonNumeric.
+        listOf("1a.2.3.4", "1234.2.3.4", "1..2.3").forEach { input ->
+            val result = parseUri(input)
+            assertIs<ParseResult.Err>(result, "expected Err for '$input'")
+            assertEquals(
+                HostError.Ipv4NonNumeric,
+                (result.error as UriParseError.InvalidHost).reason,
+                "input '$input'",
+            )
+        }
+    }
+
+    @Test
     fun `serialize emits high-to-low octets for boundary values`() {
         assertEquals("0.0.0.0", Ipv4.serialize(0))
         assertEquals("255.255.255.255", Ipv4.serialize(-1))

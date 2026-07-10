@@ -9,6 +9,7 @@ import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -65,6 +66,27 @@ class Ipv6Test {
     @Test
     fun `parse accepts the all-zero unspecified address`() {
         assertEquals("::", roundTrip("::"))
+    }
+
+    @Test
+    fun `serialize rejects a piece list that is not eight long`() {
+        // The size precondition ([HOST-15]) guards the serializer against a malformed piece list.
+        assertFailsWith<IllegalArgumentException> { Ipv6.serialize(listOf(1, 2, 3)) }
+    }
+
+    @Test
+    fun `serialize rejects a piece value outside the 16-bit range`() {
+        // 0x10000 is one past MAX_PIECE_VALUE, so the range precondition rejects it.
+        assertFailsWith<IllegalArgumentException> {
+            Ipv6.serialize(listOf(0, 0, 0, 0, 0, 0, 0, 0x10000))
+        }
+    }
+
+    @Test
+    fun `parse slides a leading compression down to the first piece`() {
+        // A leading '::' followed by seven pieces relocates the written pieces all the way to
+        // the high end; the single inserted zero is not a run of two, so it is rendered literally.
+        assertEquals("0:1:2:3:4:5:6:7", roundTrip("::1:2:3:4:5:6:7"))
     }
 
     @Test

@@ -310,6 +310,29 @@ class UriDxTest {
     }
 
     @Test
+    fun `relativize returns null when the target is not under the base directory`() {
+        // Same scheme and authority, so the two share a hierarchy, but the target path lies outside the
+        // base's directory, so no rootless suffix reaches it.
+        val base = parseOk("http://h/a/")
+        val target = parseOk("http://h/x")
+
+        assertNull(base.relativize(target))
+    }
+
+    @Test
+    fun `relativize yields a dot reference when the target is the base directory`() {
+        // The target equals the base's own directory, so the reference is "." rather than an empty
+        // suffix (which would re-inherit the base query on resolution).
+        val base = parseOk("http://h/a/b")
+        val target = parseOk("http://h/a/")
+
+        val relative = assertNotNull(base.relativize(target))
+
+        assertEquals(".", relative.uriString)
+        assertEquals(target, base.resolveOrThrow(relative.uriString))
+    }
+
+    @Test
     fun `relativize round-trips for an IPv6-authority base`() {
         // The structured resolver re-serializes the inherited base authority; an IPv6 literal is the
         // non-trivial authority case, so pin that it still round-trips through resolve.
@@ -521,6 +544,13 @@ class UriDxTest {
     }
 
     @Test
+    fun `isOpaquePath is false for a scheme with a rooted authority-less path`() {
+        // A scheme and no authority, but the path is rooted ("/a/b"), so it is hierarchical rather than
+        // the rootless opaque shape; this exercises the non-rootless arm of the opaque-path test.
+        assertFalse(parseOk("foo:/a/b").isOpaquePath())
+    }
+
+    @Test
     fun `effectivePort falls back to the scheme default then null`() {
         assertEquals(80, parseOk("http://h/").effectivePort())
         assertEquals(8080, parseOk("http://h:8080/").effectivePort())
@@ -546,5 +576,40 @@ class UriDxTest {
     fun `withFragment and withoutFragment rewrite the fragment`() {
         assertEquals("x", parseOk("http://h/p").withFragment("x").fragment)
         assertNull(parseOk("http://h/p#x").withoutFragment().fragment)
+    }
+
+    @Test
+    fun `relativize returns null across different schemes`() {
+        // The authorities match, but a differing scheme fails the shared-hierarchy check, so there is no
+        // relative form even though the paths align; this exercises the scheme-mismatch arm.
+        val base = parseOk("http://h/a/b/")
+        val target = parseOk("https://h/a/b/c")
+
+        assertNull(base.relativize(target))
+    }
+
+    @Test
+    fun `isOpaquePath is false for a scheme with an empty path`() {
+        // A scheme, no authority, and an empty rootless path: the first-segment lookup finds nothing, so
+        // the rootless-opaque test returns false rather than treating it as opaque.
+        assertFalse(parseOk("foo:").isOpaquePath())
+    }
+
+    @Test
+    fun `userInfo and authority reconstruct an empty-username credential`() {
+        // An empty username with a present password takes the else arm of the userinfo reconstruction.
+        val uri = parseOk("http://:pass@h:8/p")
+
+        assertEquals(":pass", uri.userInfo)
+        assertEquals(":pass@h:8", uri.authority)
+    }
+
+    @Test
+    fun `authority reconstructs a host with no userinfo and no port`() {
+        // No userinfo folds to the empty-credentials arm and the absent port folds to the empty-port arm.
+        val uri = parseOk("http://h/p")
+
+        assertNull(uri.userInfo)
+        assertEquals("h", uri.authority)
     }
 }

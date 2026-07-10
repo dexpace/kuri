@@ -622,4 +622,24 @@ class UriBuilderTest {
         assertEquals("a=9&c=4", uri.query)
         assertEquals("http://h/p?a=9&c=4", uri.uriString)
     }
+
+    @Test
+    fun `port rejects a negative value`() {
+        // The Uri profile applies no upper cap but still requires a non-negative port.
+        assertFailsWith<IllegalArgumentException> { Uri.Builder().port(-1) }
+    }
+
+    @Test
+    fun `a null scheme is accepted and yields a relative reference`() {
+        // scheme(null) takes the null short-circuit arm of the scheme validation and clears any scheme.
+        val uri =
+            Uri
+                .Builder()
+                .scheme(null)
+                .encodedPath("/p")
+                .build()
+
+        assertNull(uri.scheme)
+        assertEquals("/p", uri.encodedPath)
+    }
 }

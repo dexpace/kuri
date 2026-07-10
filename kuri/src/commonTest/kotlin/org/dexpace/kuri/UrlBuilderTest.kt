@@ -8,6 +8,7 @@ import org.dexpace.kuri.error.UriSyntaxException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.fail
 
 class UrlBuilderTest {
@@ -409,5 +410,20 @@ class UrlBuilderTest {
 
         assertEquals("a=9&c=4", url.query)
         assertEquals("https://h/?a=9&c=4", url.href)
+    }
+
+    @Test
+    fun `port rejects a negative value`() {
+        // The WHATWG profile bounds the port to 0..65535; a negative value is a programmer error.
+        assertFailsWith<IllegalArgumentException> { Url.Builder().port(-1) }
+    }
+
+    @Test
+    fun `a null port clears the explicit port`() {
+        // port(null) takes the null short-circuit arm of the range check and elides the port.
+        val rebuilt = parseOk("https://example.com:8443/").newBuilder().port(null).build()
+
+        assertEquals("https://example.com/", rebuilt.href)
+        assertNull(rebuilt.port)
     }
 }

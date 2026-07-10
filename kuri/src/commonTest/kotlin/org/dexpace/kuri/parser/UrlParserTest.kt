@@ -164,4 +164,95 @@ class UrlParserTest {
         val result = UrlParser.parse("http://")
         assertTrue(result is ParseResult.Err, "expected Err, was $result")
     }
+
+    @Test
+    fun `resolves a fragment-only reference against an opaque base`() {
+        val base = parsed("mailto:x@y")
+        val url = parsed("#frag", base)
+        assertEquals("mailto", url.scheme)
+        assertEquals(UrlPath.Opaque("x@y"), url.path)
+        assertEquals("frag", url.fragment)
+    }
+
+    @Test
+    fun `records a backslash after a relative slash for a special base`() {
+        val base = parsed("http://a/b/c")
+        val url = parsed("/\\x", base)
+        assertEquals(Host.RegName("x"), url.host)
+        assertTrue(ValidationError.BACKSLASH_AS_SOLIDUS in url.validationErrors)
+    }
+
+    @Test
+    fun `records missing authority slashes for a single-slash special scheme`() {
+        val url = parsed("http:/x")
+        assertEquals(Host.RegName("x"), url.host)
+        assertTrue(ValidationError.MISSING_AUTHORITY_SLASHES in url.validationErrors)
+    }
+
+    @Test
+    fun `records a backslash after a file scheme`() {
+        val url = parsed("file:\\p")
+        assertEquals("file", url.scheme)
+        assertTrue(ValidationError.BACKSLASH_AS_SOLIDUS in url.validationErrors)
+    }
+
+    @Test
+    fun `records a backslash in the file-slash state`() {
+        val url = parsed("file:/\\p")
+        assertEquals("file", url.scheme)
+        assertTrue(ValidationError.BACKSLASH_AS_SOLIDUS in url.validationErrors)
+    }
+
+    @Test
+    fun `carries a base drive letter into a rooted file reference`() {
+        val base = parsed("file:///C:/y")
+        val url = parsed("/x", base)
+        assertEquals(listOf("C:", "x"), segments(url))
+    }
+
+    @Test
+    fun `does not carry a non-drive base segment into a rooted file reference`() {
+        // The file-slash base carry-over appends the base's first segment only when it is a
+        // normalized Windows drive letter; a non-drive first segment ("foo") is the false arm, so
+        // nothing is prepended and the rooted reference keeps only its own segment.
+        val base = parsed("file:///foo/bar")
+        val url = parsed("/x", base)
+        assertEquals(Host.Empty, url.host)
+        assertEquals(listOf("x"), segments(url))
+    }
+
+    @Test
+    fun `keeps a windows drive when shortening a file path`() {
+        val url = parsed("file:///C:/..")
+        assertEquals(listOf("C:", ""), segments(url))
+    }
+
+    @Test
+    fun `ends a file host scan at a query delimiter`() {
+        val url = parsed("file://host?q")
+        assertEquals(Host.RegName("host"), url.host)
+        assertEquals("q", url.query)
+    }
+
+    @Test
+    fun `ends a file host scan at a backslash`() {
+        val url = parsed("file://h\\x")
+        assertEquals(Host.RegName("h"), url.host)
+        assertEquals(listOf("x"), segments(url))
+    }
+
+    @Test
+    fun `keeps a port on a non-special scheme with no default`() {
+        val url = parsed("sc://h:1/")
+        // A non-special scheme parses its host as an opaque host, and the explicit port is kept
+        // because a non-special scheme has no default port to elide against.
+        assertEquals(Host.Opaque("h"), url.host)
+        assertEquals(1, url.port)
+    }
+
+    @Test
+    fun `rejects an out-of-range port`() {
+        val result = UrlParser.parse("https://h:99999/")
+        assertTrue(result is ParseResult.Err, "expected Err, was $result")
+    }
 }

@@ -146,9 +146,59 @@ class PercentCodecTest {
     }
 
     @Test
+    fun `decodeNonAscii ends a run at a trailing bare percent sign`() {
+        // The non-ascii run decodes; the dangling % that has no hex pair ends the run and stays literal.
+        assertEquals(Char(0x00FC).toString() + "%", PercentCodec.decodeNonAscii("%C3%BC%"))
+    }
+
+    @Test
+    fun `encode maps a supplementary code point to utf8 triplets even with spaceAsPlus enabled`() {
+        // A surrogate pair (step 2) short-circuits the spaceAsPlus branch and encodes as UTF-8 octets.
+        assertEquals(
+            "%F0%9F%8D%A9",
+            PercentCodec.encode("🍩", PercentEncodeSets.FORM_URLENCODED, spaceAsPlus = true),
+        )
+    }
+
+    @Test
     fun `decodeNonAscii decodes a genuinely encoded replacement character`() {
         // U+FFFD encodes to the well-formed UTF-8 run %EF%BF%BD, so it round-trips and must decode.
         assertEquals(replacement, PercentCodec.decodeNonAscii("%EF%BF%BD"))
         assertEquals("a${replacement}b", PercentCodec.decodeNonAscii("a%EF%BF%BDb"))
+    }
+
+    @Test
+    fun `decode does not rescan a decoded percent sign per PCT-23`() {
+        // %25 decodes to a literal '%' in a single pass; the following "41"/"30" stay as text and are
+        // never re-interpreted as a fresh triplet, so decode is single-pass.
+        assertEquals("%41", PercentCodec.decode("%2541"))
+        assertEquals("%30", PercentCodec.decode("%2530"))
+    }
+
+    @Test
+    fun `decode keeps a bare percent after a valid run literal per PCT-23`() {
+        // The valid triplet run decodes; the trailing '%' with no hex pair ends the run and stays literal.
+        assertEquals("A%", PercentCodec.decode("%41%"))
+        assertEquals("z%1p", PercentCodec.decode("%7A%1p"))
+    }
+
+    @Test
+    fun `decode with plusAsSpace flushes a triplet run around a plus per PCT-28`() {
+        // Each %C3%A9 run decodes to U+00E9 and the intervening '+' flushes to a space.
+        val eacute = Char(0x00E9).toString()
+        assertEquals(eacute + " " + eacute, PercentCodec.decode("%C3%A9+%C3%A9", plusAsSpace = true))
+    }
+
+    @Test
+    fun `decode maps a truncated utf8 run at end of input to the replacement character per PCT-26`() {
+        // %E2%98 is a truncated 3-byte sequence with no trailing octet; the run decodes to U+FFFD.
+        assertEquals(replacement, PercentCodec.decode("%E2%98"))
+    }
+
+    @Test
+    fun `decode decodes two non-contiguous non-ascii runs around literal text per PCT-25`() {
+        // Literal "aa" between two runs bounds each run; both snowmen decode on their own.
+        val snowman = Char(0x2603).toString()
+        assertEquals(snowman + "aa" + snowman, PercentCodec.decode("%E2%98%83aa%E2%98%83"))
     }
 }

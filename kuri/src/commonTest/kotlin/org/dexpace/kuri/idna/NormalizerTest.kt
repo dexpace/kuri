@@ -101,6 +101,38 @@ class NormalizerTest {
         assertEquals("퓛", Normalizer.nfc("퓛"))
     }
 
+    @Test
+    fun `nfc leaves an L jamo followed by a non-vowel uncomposed`() {
+        // U+1100 (L jamo) then U+0041 A: hangulCompose sees a leading jamo but no following V jamo,
+        // so the LV composition arm rejects it and both code points survive unchanged.
+        val input = charArrayOf(Char(0x1100), Char(0x0041)).concatToString()
+        assertEquals(input, Normalizer.nfc(input))
+    }
+
+    @Test
+    fun `nfc leaves an LV syllable followed by a non-trailing base uncomposed`() {
+        // U+AC00 (LV syllable GA) then U+0041 A: hangulCompose sees an LV syllable but no following T
+        // jamo, so the LV+T composition arm rejects it and the syllable stays separate from the A.
+        val input = charArrayOf(Char(0xAC00), Char(0x0041)).concatToString()
+        assertEquals(input, Normalizer.nfc(input))
+    }
+
+    @Test
+    fun `nfc leaves an L jamo followed by an out-of-range vowel uncomposed`() {
+        // U+1100 (L jamo) then U+1176 (an old vowel one past the composable V range): the LV arm's vowel
+        // bound check fails on the upper side, so neither the Hangul algorithm nor the table composes them.
+        val input = charArrayOf(Char(0x1100), Char(0x1176)).concatToString()
+        assertEquals(input, Normalizer.nfc(input))
+    }
+
+    @Test
+    fun `nfc leaves an LV syllable followed by an out-of-range trailing jamo uncomposed`() {
+        // U+AC00 (LV syllable) then U+11C3 (a trailing jamo one past the composable T range): the LV+T arm's
+        // trailing bound check fails on the upper side, so the syllable and the jamo stay separate.
+        val input = charArrayOf(Char(0xAC00), Char(0x11C3)).concatToString()
+        assertEquals(input, Normalizer.nfc(input))
+    }
+
     private fun describe(case: NfcCase?): String {
         if (case == null) {
             return "none"

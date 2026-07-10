@@ -226,6 +226,13 @@ class QueryParametersTest {
     }
 
     @Test
+    fun `equals is false for a value that is not a QueryParameters`() {
+        val params = QueryParameters.parse("a=1")
+        // The `other is QueryParameters` guard rejects a foreign type (a String with identical text).
+        assertFalse(params.equals("a=1"))
+    }
+
+    @Test
     fun `toString renders the raw query string`() {
         val params = QueryParameters.parse("a=1&b=2")
         assertEquals("QueryParameters(a=1&b=2)", params.toString())
@@ -387,5 +394,29 @@ class QueryParametersTest {
         // %2C decodes to ',' during parse, so an encoded delimiter is not protected from the split.
         val params = QueryParameters.parse("roles=a%2Cb")
         assertEquals(listOf("a", "b"), params.split("roles", ','))
+    }
+
+    @Test
+    fun `lookup matches a whole name and never a substring prefix or suffix`() {
+        val params = QueryParameters.parse("qq=foo")
+        assertNull(params.get("q"))
+        assertFalse(params.has("q"))
+        assertNull(params.get("oo"))
+        assertEquals("foo", params.get("qq"))
+    }
+
+    @Test
+    fun `names collapses duplicates and empty sentinels into first-appearance order`() {
+        val params = QueryParameters.parse("a=bar&b=bar&c=&&d=baz&e&f&g=buzz&&&a&b=bar&h")
+        assertEquals(listOf("a", "b", "c", "", "d", "e", "f", "g", "h"), params.names().toList())
+    }
+
+    @Test
+    fun `percent-encoded names are decoded before matching`() {
+        val params = QueryParameters.parse("a%20b=foo&c%20d=")
+        assertEquals("foo", params.get("a b"))
+        assertTrue(params.has("a b"))
+        assertContains(params.names(), "a b")
+        assertContains(params.names(), "c d")
     }
 }

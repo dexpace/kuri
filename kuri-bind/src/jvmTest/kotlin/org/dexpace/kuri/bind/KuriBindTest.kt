@@ -8,8 +8,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.dexpace.kuri.Uri as KuriUri
 import org.dexpace.kuri.Url as KuriUrl
 
 @Url
@@ -133,5 +135,51 @@ class KuriBindTest {
         // document that boundary — the reflective wrapping is what keeps an accessor fault out of null.
         val error = assertFails { KuriBind.toUrlOrNull(IaeHost()) }
         assertTrue(error !is IllegalArgumentException)
+    }
+
+    @Test
+    fun `bindInto uri builder uses default options when omitted`() {
+        val builder = KuriBind.bindInto(KuriUri.Builder(), UriAbsolute(host = "example.com"))
+        assertEquals("https://example.com", builder.build().toString())
+    }
+
+    @Test
+    fun `toUrlBuilder uses default options when omitted`() {
+        val builder = KuriBind.toUrlBuilder(Absolute(host = "example.com"))
+        assertEquals("https://example.com/", builder.build().toString())
+    }
+
+    @Test
+    fun `toUrlBuilderOrNull uses default options when omitted`() {
+        val builder = KuriBind.toUrlBuilderOrNull(Absolute(host = "example.com"))
+        assertNotNull(builder)
+        assertEquals("https://example.com/", builder.build().toString())
+    }
+
+    @Test
+    fun `toUriBuilder uses default options when omitted`() {
+        val builder = KuriBind.toUriBuilder(UriAbsolute(host = "example.com"))
+        assertEquals("https://example.com", builder.build().toString())
+    }
+
+    @Test
+    fun `toUriBuilderOrNull uses default options when omitted`() {
+        val builder = KuriBind.toUriBuilderOrNull(UriAbsolute(host = "example.com"))
+        assertNotNull(builder)
+        assertEquals("https://example.com", builder.build().toString())
+    }
+
+    @Test
+    fun `toUrlOrNull returns a url when binding succeeds`() {
+        val url = KuriBind.toUrlOrNull(Absolute(host = "example.com"))
+        assertNotNull(url)
+        assertEquals("https://example.com/", url.toString())
+    }
+
+    @Test
+    fun `toUriOrNull returns a uri when binding succeeds`() {
+        val uri = KuriBind.toUriOrNull(UriAbsolute(host = "example.com"))
+        assertNotNull(uri)
+        assertEquals("https://example.com", uri.toString())
     }
 }

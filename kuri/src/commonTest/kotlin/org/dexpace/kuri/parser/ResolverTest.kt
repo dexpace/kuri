@@ -7,10 +7,12 @@ package org.dexpace.kuri.parser
 import org.dexpace.kuri.ParseOptions
 import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.serialize.Serializer
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
 /**
  * RFC 3986 §5 reference-resolution tests: the §5.2.4 remove_dot_segments unit cases and the full
@@ -93,6 +95,73 @@ internal class ResolverTest {
     }
 
     @Test
+    fun `removeDotSegments discards bare and leading relative dot segments`() {
+        // Cases A/D of §5.2.4 that the resolve tables never feed removeDotSegments directly: a
+        // leading "../" or "./" complete dot-segment is dropped, and a bare "." or ".." consumes all.
+        val cases =
+            listOf(
+                "../g" to "g",
+                "./g" to "g",
+                "." to "",
+                ".." to "",
+            )
+        for ((input, expected) in cases) {
+            assertEquals(expected, Resolver.removeDotSegments(input), "removeDotSegments(\"$input\")")
+        }
+    }
+
+    @Test
+    fun `resolve forwards a fatal base parse error`() {
+        val result = Resolver.resolve("http://h/%2", "g")
+
+        assertIs<ParseResult.Err>(result)
+    }
+
+    @Test
+    fun `resolve forwards a fatal reference parse error`() {
+        val result = Resolver.resolve("http://h/p", "%2")
+
+        assertIs<ParseResult.Err>(result)
+    }
+
+    @Test
+    fun `resolve rejects a base with no scheme`() {
+        val result = Resolver.resolve("//host/path", "g")
+
+        val err = assertIs<ParseResult.Err>(result)
+        assertEquals(UriParseError.MissingScheme, err.error)
+    }
+
+    @Test
+    fun `resolve merges a relative reference onto an empty-authority base path`() {
+        // base authority present with an empty base path: §5.2.3 prepends a single "/" to the ref.
+        val result = Resolver.resolve("http://a", "g").getOrThrow()
+
+        assertEquals("http://a/g", result)
+    }
+
+    @Test
+    fun `resolve merges a relative reference onto a rootless base path`() {
+        // base has no authority and a rootless path with no "/": mergeOntoBase keeps an empty prefix.
+        val result = Resolver.resolve("foo:bar", "g").getOrThrow()
+
+        assertEquals("foo:g", result)
+    }
+
+    @Test
+    fun `structured resolve enables zone parsing from a zoned reference`() {
+        // Only the reference carries an RFC 6874 zone id, so structuredOptions opts in via its right
+        // operand (the base host has none).
+        val zoneOptions = ParseOptions.Builder().allowIpv6ZoneId(true).build()
+        val base = UriParser.parse("http://a/b", zoneOptions).getOrThrow()
+        val reference = UriParser.parse("foo://[fe80::1%25eth0]/x", zoneOptions).getOrThrow()
+
+        val resolved = Resolver.resolve(base, reference).getOrThrow()
+
+        assertEquals(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0"), resolved.host)
+    }
+
+    @Test
     fun `structured resolve preserves a rootless scheme reference`() {
         // The structured overload reads the path back through pathString; a rooted reference scheme
         // path (mailto:x@y) must stay rootless rather than gaining a leading slash ("mailto:/x@y").
@@ -116,6 +185,33 @@ internal class ResolverTest {
     }
 
     @Test
+    fun `structured resolve inherits a base username-only userinfo`() {
+        // Pins the userinfoPrefix username-only branch: a base with a username but no password is
+        // inherited by a relative reference that supplies neither scheme nor authority.
+        val base = UriParser.parse("http://user@host/a/b").getOrThrow()
+        val reference = UriParser.parse("x").getOrThrow()
+
+        val resolved = Resolver.resolve(base, reference).getOrThrow()
+
+        assertEquals("user", resolved.username)
+        assertEquals("", resolved.password)
+        assertEquals("http://user@host/a/x", Serializer.serialize(resolved, ParseProfile.URI))
+    }
+
+    @Test
+    fun `structured resolve inherits a base username and password userinfo`() {
+        // Pins the userinfoPrefix username-and-password branch.
+        val base = UriParser.parse("http://user:pass@host/a/b").getOrThrow()
+        val reference = UriParser.parse("x").getOrThrow()
+
+        val resolved = Resolver.resolve(base, reference).getOrThrow()
+
+        assertEquals("user", resolved.username)
+        assertEquals("pass", resolved.password)
+        assertEquals("http://user:pass@host/a/x", Serializer.serialize(resolved, ParseProfile.URI))
+    }
+
+    @Test
     fun `structured resolve preserves a zoned base`() {
         val zoneOptions = ParseOptions.Builder().allowIpv6ZoneId(true).build()
         val base = UriParser.parse("foo://[fe80::1%25eth0]/a/b", zoneOptions).getOrThrow()
@@ -125,6 +221,34 @@ internal class ResolverTest {
 
         assertEquals(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0"), resolved.host)
         assertEquals("foo://[fe80::1%25eth0]/a/x", Serializer.serialize(resolved, ParseProfile.URI))
+    }
+
+    @Test
+    fun `structured resolve inherits a base port`() {
+        // Pins the authorityOf port branch: a base authority carrying an explicit port is
+        // re-serialized (":8080") when a relative reference inherits the base authority.
+        val base = UriParser.parse("http://h:8080/a/b").getOrThrow()
+        val reference = UriParser.parse("x").getOrThrow()
+
+        val resolved = Resolver.resolve(base, reference).getOrThrow()
+
+        assertEquals(8080, resolved.port)
+        assertEquals("http://h:8080/a/x", Serializer.serialize(resolved, ParseProfile.URI))
+    }
+
+    @Test
+    fun `structured resolve inherits an empty-username password userinfo`() {
+        // Pins the userinfoPrefix branch where the username is empty but the password is present:
+        // the first arm's second condition (password.isEmpty()) is false, so the prefix is ":pass@"
+        // rather than the both-present "u:p@" form.
+        val base = UriParser.parse("http://:pass@h/a/b").getOrThrow()
+        val reference = UriParser.parse("x").getOrThrow()
+
+        val resolved = Resolver.resolve(base, reference).getOrThrow()
+
+        assertEquals("", resolved.username)
+        assertEquals("pass", resolved.password)
+        assertEquals("http://:pass@h/a/x", Serializer.serialize(resolved, ParseProfile.URI))
     }
 
     private fun assertResolves(cases: List<Pair<String, String>>) {

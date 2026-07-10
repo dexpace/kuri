@@ -122,6 +122,43 @@ internal class ParseResultTest {
     }
 
     @Test
+    fun `an Ok holding a null value hashes to zero`() {
+        // arrange: exercises the null arm of value?.hashCode() ?: 0
+        val result: ParseResult<String?> = ParseResult.Ok(null)
+
+        // act + assert
+        assertEquals(0, result.hashCode())
+    }
+
+    @Test
+    fun `fold runs onOk for an Ok and onErr for an Err`() {
+        // arrange: cover both arms of the fold when-expression at one call site
+        val ok: ParseResult<Int> = ParseResult.Ok(3)
+        val err: ParseResult<Int> = ParseResult.Err(UriParseError.MissingScheme)
+
+        // act
+        val fromOk = ok.fold(onOk = { it + 1 }, onErr = { -1 })
+        val fromErr = err.fold(onOk = { it + 1 }, onErr = { -1 })
+
+        // assert
+        assertEquals(4, fromOk)
+        assertEquals(-1, fromErr)
+    }
+
+    @Test
+    fun `fold takes both arms at one call site over a mixed sequence`() {
+        // arrange: a single fold call site fed both variants, so the one inlined when hits both arms
+        val results: List<ParseResult<Int>> =
+            listOf(ParseResult.Ok(3), ParseResult.Err(UriParseError.MissingScheme))
+
+        // act
+        val folded = results.map { result -> result.fold(onOk = { "ok:$it" }, onErr = { "err:$it" }) }
+
+        // assert
+        assertEquals(listOf("ok:3", "err:MissingScheme"), folded)
+    }
+
+    @Test
     fun `Err equals another Err with an equal error and differs on an unequal error`() {
         // arrange
         val port: ParseResult<Nothing> = ParseResult.Err(UriParseError.InvalidPort("99999"))

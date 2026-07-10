@@ -78,6 +78,18 @@ private class MergesTemplatedChild(
     @Url val child: TemplatedChild,
 )
 
+// A self-merging type reachable from a templated root: hole-provider collection must bound the
+// per-branch type recursion so a self-referential merge type does not loop forever during compile.
+private class CycleMerge(
+    @Url val self: CycleMerge? = null,
+)
+
+@PathTemplateAnn("/x/{id}")
+private class TemplWithCycleMerge(
+    @Path("id") val id: String,
+    @Url val node: CycleMerge,
+)
+
 class PlanCompilerTemplateTest {
     private val compiler = PlanCompiler(KotlinReflectMemberScanner())
 
@@ -135,6 +147,14 @@ class PlanCompilerTemplateTest {
     fun `rejects a merge member whose type declares a @PathTemplate`() {
         val failure = assertFailsWith<KuriBindException> { compiler.compile(MergesTemplatedChild::class) }
         assertTrue(failure.message.orEmpty().contains("@PathTemplate"))
+    }
+
+    @Test
+    fun `bounds hole-provider recursion through a self-merging type`() {
+        val plan = compiler.compile(TemplWithCycleMerge::class)
+        assertNotNull(plan.template)
+        val holes = plan.steps.filterIsInstance<BindStep.Hole>().map { it.name }
+        assertEquals(listOf("id"), holes)
     }
 
     private fun rebuild(t: PathTemplate): String =

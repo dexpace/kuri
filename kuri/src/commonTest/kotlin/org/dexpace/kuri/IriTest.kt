@@ -184,4 +184,56 @@ class IriTest {
 
         assertEquals("http://h/" + Char(0xFFFD), Iri.toUnicode(uri))
     }
+
+    @Test
+    fun `emits an ipv6 literal host verbatim with its port for display`() {
+        // A non-reg-name host takes the non-Idna arm of hostDisplay: the bracketed literal and port
+        // are shown exactly as serialized, never run through ToUnicode.
+        val uri = Uri.parse("http://[::1]:8080/p").getOrThrow()
+
+        assertEquals("http://[::1]:8080/p", Iri.toUnicode(uri))
+    }
+
+    @Test
+    fun `renders a hostless opaque uri unchanged for display`() {
+        // No authority means the display transform skips the authority section entirely.
+        val uri = Uri.parse("mailto:user@example.com").getOrThrow()
+
+        assertEquals("mailto:user@example.com", Iri.toUnicode(uri))
+    }
+
+    @Test
+    fun `renders a scheme-relative authority with userinfo and port for display`() {
+        // A scheme-less reference exercises the no-scheme arm while still emitting userinfo and port.
+        val uri = Uri.parse("//user@h:9/p").getOrThrow()
+
+        assertEquals("//user@h:9/p", Iri.toUnicode(uri))
+    }
+
+    @Test
+    fun `emits an ipv4 literal host verbatim for display`() {
+        // An Ipv4 host takes the non-reg-name arm of hostDisplay: the dotted-decimal literal is shown
+        // exactly as serialized, never run through IDNA ToUnicode.
+        val uri = Uri.parse("http://192.168.0.1/p").getOrThrow()
+
+        assertEquals("http://192.168.0.1/p", Iri.toUnicode(uri))
+    }
+
+    @Test
+    fun `emits an ipvfuture literal host verbatim for display`() {
+        // An IPvFuture host also takes the non-reg-name arm; the bracketed literal is emitted as-is.
+        val uri = Uri.parse("foo://[v1.fe]/p").getOrThrow()
+
+        assertEquals("foo://[v1.fe]/p", Iri.toUnicode(uri))
+    }
+
+    @Test
+    fun `maps a supplementary-plane host label to its punycode form`() {
+        // A supplementary code point in the host drives the surrogate-pair arm of the code-point scan;
+        // UTS-46 maps the emoji label to its ASCII (Punycode) form rather than rejecting it.
+        val uri = Iri.toUri("http://$grinning.example/").getOrThrow()
+        val host = assertIs<Host.RegName>(uri.host)
+        assertTrue(host.value.startsWith("xn--"), "the emoji label becomes a Punycode label")
+        assertTrue(host.value.endsWith(".example"), "the trailing ascii label is preserved")
+    }
 }
