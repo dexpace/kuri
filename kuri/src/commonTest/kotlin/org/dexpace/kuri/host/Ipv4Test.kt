@@ -4,7 +4,6 @@
  */
 package org.dexpace.kuri.host
 
-import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.error.HostError
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
@@ -20,9 +19,9 @@ import kotlin.test.assertTrue
  * ([CONF-37]..[CONF-41]).
  */
 class Ipv4Test {
-    private fun parseUrl(input: String): ParseResult<Host.Ipv4> = Ipv4.parse(input, ParseProfile.URL)
+    private fun parseUrl(input: String): ParseResult<Host.Ipv4> = Ipv4Whatwg.parse(input)
 
-    private fun parseUri(input: String): ParseResult<Host.Ipv4> = Ipv4.parse(input, ParseProfile.URI)
+    private fun parseUri(input: String): ParseResult<Host.Ipv4> = Ipv4Rfc3986.parse(input)
 
     /** Parses under the `Url` profile and re-serializes, the canonical round trip. */
     private fun canonicalUrl(input: String): String {

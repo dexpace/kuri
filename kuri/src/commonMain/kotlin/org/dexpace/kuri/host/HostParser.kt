@@ -128,7 +128,7 @@ internal object HostParser {
         return when {
             forbiddenAt != NOT_FOUND ->
                 ParseResult.Err(UriParseError.ForbiddenHostCodePoint(asciiDomain[forbiddenAt].code, forbiddenAt))
-            Ipv4.endsInANumber(asciiDomain) -> Ipv4.parse(asciiDomain, ParseProfile.URL)
+            Ipv4.endsInANumber(asciiDomain) -> Ipv4Whatwg.parse(asciiDomain)
             else -> ParseResult.Ok(Host.RegName(asciiDomain))
         }
     }
@@ -152,7 +152,7 @@ internal object HostParser {
     /** A `Uri` non-bracket host is an `IPv4address` when it parses as one, else an RFC reg-name. */
     private fun parseUriHostNonBracket(input: String): ParseResult<Host> {
         require(input.isNotEmpty()) { "empty host reached the IPv4/reg-name split" }
-        val asIpv4 = Ipv4.parse(input, ParseProfile.URI)
+        val asIpv4 = Ipv4Rfc3986.parse(input)
         return if (asIpv4.isOk()) asIpv4 else validateRegNameRfc(input)
     }
 
