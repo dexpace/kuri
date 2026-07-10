@@ -66,6 +66,41 @@ private class SelfRef(
     @BindUrl var self: SelfRef?,
 )
 
+// A nullable-element list joined by a comma delimiter: covers the join, null-skip, empty, all-null,
+// single-element, and order-preservation scenarios with one shared fixture.
+private class DelimitedRoles(
+    @Scheme val scheme: String,
+    @Host val host: String,
+    @Query("roles", ',') val roles: List<String?>,
+)
+
+private class DelimitedPerms(
+    @Scheme val scheme: String,
+    @Host val host: String,
+    @Query("perm", '|') val perms: List<String>,
+)
+
+private class ScalarWithDelimiter(
+    @Scheme val scheme: String,
+    @Host val host: String,
+    @Query("x", ',') val x: String,
+)
+
+// An unset delimiter (the default): must still fan out into repeated params, unchanged.
+private class FanOutRoles(
+    @Scheme val scheme: String,
+    @Host val host: String,
+    @Query("roles") val roles: List<String>,
+)
+
+private enum class Role { ADMIN, USER }
+
+private class DelimitedEnumRoles(
+    @Scheme val scheme: String,
+    @Host val host: String,
+    @Query("roles", ',') val roles: List<Role>,
+)
+
 class BindingExecutorTest {
     private val executor = BindingExecutor(PlanCompiler(KotlinReflectMemberScanner()))
 
@@ -120,5 +155,65 @@ class BindingExecutorTest {
         assertFailsWith<KuriBindException> {
             bind(node)
         }
+    }
+
+    @Test
+    fun `joins a delimited query list into one comma separated parameter`() {
+        val target = DelimitedRoles("https", "h", listOf("admin", "user"))
+        assertEquals("https://h/?roles=admin,user", bind(target).build().toString())
+    }
+
+    @Test
+    fun `joins a delimited query list with a pipe delimiter`() {
+        val target = DelimitedPerms("https", "h", listOf("read", "write"))
+        assertEquals("https://h/?perm=read|write", bind(target).build().toString())
+    }
+
+    @Test
+    fun `skips a null element when joining a delimited query list`() {
+        val target = DelimitedRoles("https", "h", listOf("admin", null, "user"))
+        assertEquals("https://h/?roles=admin,user", bind(target).build().toString())
+    }
+
+    @Test
+    fun `emits no parameter for an empty delimited query list`() {
+        val target = DelimitedRoles("https", "h", emptyList())
+        assertEquals("https://h/", bind(target).build().toString())
+    }
+
+    @Test
+    fun `emits no parameter for an all null delimited query list`() {
+        val target = DelimitedRoles("https", "h", listOf(null))
+        assertEquals("https://h/", bind(target).build().toString())
+    }
+
+    @Test
+    fun `joins a single element delimited query list without a trailing delimiter`() {
+        val target = DelimitedRoles("https", "h", listOf("solo"))
+        assertEquals("https://h/?roles=solo", bind(target).build().toString())
+    }
+
+    @Test
+    fun `preserves element order when joining a delimited query list`() {
+        val target = DelimitedRoles("https", "h", listOf("user", "admin"))
+        assertEquals("https://h/?roles=user,admin", bind(target).build().toString())
+    }
+
+    @Test
+    fun `ignores the delimiter on a scalar query field`() {
+        val target = ScalarWithDelimiter("https", "h", "solo")
+        assertEquals("https://h/?x=solo", bind(target).build().toString())
+    }
+
+    @Test
+    fun `still fans out a query list with an unset delimiter`() {
+        val target = FanOutRoles("https", "h", listOf("admin", "user"))
+        assertEquals("https://h/?roles=admin&roles=user", bind(target).build().toString())
+    }
+
+    @Test
+    fun `joins enum elements by name in a delimited query list`() {
+        val target = DelimitedEnumRoles("https", "h", listOf(Role.ADMIN, Role.USER))
+        assertEquals("https://h/?roles=ADMIN,USER", bind(target).build().toString())
     }
 }

@@ -13,4 +13,9 @@ class AnnotationsJvmTest {
     fun `query name defaults to empty for member-name fallback`() {
         assertEquals("", Query::class.java.getMethod("value").defaultValue)
     }
+
+    @Test
+    fun `query delimiter defaults to the nul sentinel for member-name fallback`() {
+        assertEquals('\u0000', Query::class.java.getMethod("delimiter").defaultValue)
+    }
 }

@@ -500,6 +500,15 @@ private class PercentValue(
     @Query("q") val q: String = "a%2Bb",
 )
 
+// A delimited `@Query` list: its elements join into one comma-separated parameter value instead of
+// fanning out, and `QueryParameters.split` (core, `feat/query-value-split`) is its read-side inverse.
+@Url
+private class DelimitedTagsRequest(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Query("roles", ',') val roles: List<String>,
+)
+
 // A data class mixing primary-constructor `@Path` props with a body-declared one: constructor order
 // first (zeta), then the name-sorted remainder (alpha).
 @Url
@@ -921,5 +930,17 @@ class IntegrationTest {
     @Test
     fun `binds a mixed constructor and body path in constructor-then-name order`() {
         assertEquals(listOf("z", "a"), KuriBind.toUrl(MixedOrder()).pathSegments)
+    }
+
+    @Test
+    fun `binds a delimited query list into one joined parameter`() {
+        val url = KuriBind.toUrl(DelimitedTagsRequest(roles = listOf("admin", "user")))
+        assertEquals(listOf("admin,user"), url.queryParameters.getAll("roles"))
+    }
+
+    @Test
+    fun `round trips a delimited query list through split`() {
+        val url = KuriBind.toUrl(DelimitedTagsRequest(roles = listOf("admin", "user")))
+        assertEquals(listOf("admin", "user"), url.queryParameters.split("roles", ','))
     }
 }

@@ -92,7 +92,8 @@ internal class BindingExecutor(
         ctx: WalkContext,
     ) {
         if ((step.op == LeafOp.QUERY || step.op == LeafOp.PATH) && runtimeValueIsBindable(value, compiler)) {
-            applyRecurse(BindStep.Recurse(step.member, scopeFor(step.op)), value, ctx)
+            val scope = if (step.op == LeafOp.QUERY) Scope.QUERY else Scope.PATH
+            applyRecurse(BindStep.Recurse(step.member, scope), value, ctx)
         } else {
             LeafBinder.apply(step, value, ctx.sink)
         }
@@ -219,7 +220,7 @@ private object LeafBinder {
             LeafOp.PORT -> sink.setPort(convertPort(value, path), path)
             LeafOp.FRAGMENT -> sink.setFragment(scalarText(value), path)
             LeafOp.PATH -> applyPath(value, sink)
-            LeafOp.QUERY -> addQueryValues(step.queryName ?: path, value, sink)
+            LeafOp.QUERY -> addQueryValues(step.queryName ?: path, value, sink, step.queryDelimiter)
             LeafOp.QUERY_MAP -> applyQueryMap(value, sink, path)
             // Userinfo leaves are paired into one contribution by UserInfoBinder, never applied here.
             LeafOp.USERINFO, LeafOp.USERNAME, LeafOp.PASSWORD -> Unit
@@ -248,24 +249,33 @@ private object LeafBinder {
     ) {
         val name = key?.let(::scalarText) ?: return
         if (name.isEmpty()) throw KuriBindException("query parameter name must not be empty", path)
-        addQueryValues(name, value, sink)
+        // A `@QueryMap` entry never joins: delimiter is a `@Query`-only concept, so a collection entry
+        // value always fans out, regardless of any delimiter the enclosing `@Query` might carry.
+        addQueryValues(name, value, sink, delimiter = null)
     }
 
-    // Contributes a `@Query` value under [name]: a collection fans out into one parameter per element
-    // (a null element yields a valueless parameter), any other value becomes a single scalar parameter.
-    // The direct `@Query` leaf and each `@QueryMap` entry share this; they differ only in how [name] is
-    // derived. [value] is nullable only so a `@QueryMap` entry's null value can pass through as a
-    // valueless parameter; the direct `@Query` path always reads a non-null value first.
+    // Contributes a `@Query` value under [name]. A collection either fans out into one parameter per
+    // element (a null element yields a valueless parameter, the default) or, when [delimiter] is set,
+    // joins its non-null elements' scalar text into a single parameter value (an empty/all-null
+    // collection then emits no parameter, matching the fan-out's empty-collection behavior). Any other
+    // value becomes a single scalar parameter, [delimiter] ignored. The direct `@Query` leaf and each
+    // `@QueryMap` entry share this; they differ only in how [name] is derived and that `@QueryMap`
+    // always passes a null [delimiter]. [value] is nullable only so a `@QueryMap` entry's null value can
+    // pass through as a valueless parameter; the direct `@Query` path always reads a non-null value first.
     private fun addQueryValues(
         name: String,
         value: Any?,
         sink: ComponentSink,
+        delimiter: Char?,
     ) {
         val iterable = value?.let(::asIterableOrNull)
-        if (iterable != null) {
-            iterable.forEach { sink.addQueryParameter(name, it?.let(::scalarText)) }
-        } else {
-            sink.addQueryParameter(name, value?.let(::scalarText))
+        when {
+            iterable != null && delimiter != null -> {
+                val tokens = scalarTokens(iterable)
+                if (tokens.isNotEmpty()) sink.addQueryParameter(name, tokens.joinToString("$delimiter"))
+            }
+            iterable != null -> iterable.forEach { sink.addQueryParameter(name, it?.let(::scalarText)) }
+            else -> sink.addQueryParameter(name, value?.let(::scalarText))
         }
     }
 }
@@ -364,9 +374,6 @@ private fun runtimeValueIsBindable(
     return compiler.planFor(value::class).steps.isNotEmpty()
 }
 
-/** The recursion scope matching a scalar-scoped leaf op. */
-private fun scopeFor(op: LeafOp): Scope = if (op == LeafOp.QUERY) Scope.QUERY else Scope.PATH
-
 /** Whether this op feeds the single userinfo slot and is therefore paired by [UserInfoBinder]. */
 private fun LeafOp.isUserInfo(): Boolean = this == LeafOp.USERINFO || this == LeafOp.USERNAME || this == LeafOp.PASSWORD
 
@@ -415,7 +422,7 @@ private fun appendCatchAllSegments(
 ) {
     val iterable = asIterableOrNull(value)
     if (iterable != null) {
-        into.addAll(iterable.filterNotNull().map { scalarText(it) })
+        into.addAll(scalarTokens(iterable))
     } else {
         into.addAll(splitPathSegments(scalarText(value)))
     }
@@ -423,3 +430,13 @@ private fun appendCatchAllSegments(
 
 /** Splits a raw slash-path into its non-empty segments, dropping the root and separator empties. */
 private fun splitPathSegments(raw: String): List<String> = raw.split('/').filter { it.isNotEmpty() }
+
+/**
+ * The non-null elements of [iterable] rendered to scalar text, in appearance order.
+ *
+ * Shared by a delimited `@Query` join ([BindingExecutor.addQueryValues]) and a `{name...}` catch-all
+ * path hole ([appendCatchAllSegments]): both need "drop nulls, render each element to its scalar text"
+ * and differ only in how the resulting tokens are combined (joined by a delimiter vs. appended as
+ * separate path segments).
+ */
+private fun scalarTokens(iterable: Iterable<Any?>): List<String> = iterable.filterNotNull().map(::scalarText)

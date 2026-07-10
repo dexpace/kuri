@@ -20,6 +20,7 @@ internal sealed interface BindStep {
         override val member: ScannedMember,
         val op: LeafOp,
         val queryName: String?,
+        val queryDelimiter: Char? = null,
     ) : BindStep
 
     data class Recurse(
