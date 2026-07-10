@@ -49,6 +49,16 @@ val generators: List<Triple<String, String, String>> =
             "conformance",
             "Regenerate the IDNA conformance fixture from the WPT IdnaTestV2 and toascii corpora.",
         ),
+        Triple(
+            "generateSetterTestData",
+            "setters",
+            "Regenerate the WPT setters_tests conformance fixture from the vendored ada WPT corpus.",
+        ),
+        Triple(
+            "generatePercentEncodingTestData",
+            "percent-encoding",
+            "Regenerate the WPT percent-encoding conformance fixture from the vendored ada WPT corpus.",
+        ),
     )
 
 val codegenTasks: List<TaskProvider<Exec>> =

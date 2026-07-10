@@ -39,7 +39,10 @@ internal fun isAuthorityTerminator(
 
 /**
  * True when [ch] (or EOF, `null`) ends the current path segment (SPEC §8.3 PATH
- * [PARSE-39]): EOF, `/`, `?`, or — for special schemes — `\` ([PARSE-49]).
+ * [PARSE-39]): EOF, `/`, or — for special schemes — `\` ([PARSE-49]); `?` joins that list only
+ * when no state override is active. A `pathname` setter value is parsed in isolation (WHATWG
+ * "state override is not given and c is U+003F (?)"), so under an override a literal `?` is
+ * ordinary path text to percent-encode, not a query-opening boundary.
  */
 internal fun isPathSegmentEnd(
     state: UrlParserState,
@@ -48,7 +51,8 @@ internal fun isPathSegmentEnd(
     if (ch == null) {
         return true
     }
-    return ch == '/' || ch == '?' || (state.special && ch == '\\')
+    val queryOpens = ch == '?' && state.stateOverride == null
+    return ch == '/' || queryOpens || (state.special && ch == '\\')
 }
 
 /**

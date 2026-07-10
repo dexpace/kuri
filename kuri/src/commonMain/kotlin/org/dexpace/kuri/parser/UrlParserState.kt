@@ -6,6 +6,7 @@ package org.dexpace.kuri.parser
 
 import org.dexpace.kuri.error.ValidationError
 import org.dexpace.kuri.host.Host
+import org.dexpace.kuri.scheme.Scheme
 
 /**
  * The single mutable work area threaded through the §8.3 state machine (WHATWG basic URL parser
@@ -36,6 +37,9 @@ internal class UrlParserState(
 
     /** The current state; the loop dispatches on this each iteration. */
     var state: UrlState = UrlState.SCHEME_START
+
+    /** The active setter override, or `null` for a full parse; gates the override-only branches. */
+    var stateOverride: StateOverride? = null
 
     /** Scratch accumulator for the scheme and per-segment buffers (WHATWG `buffer`). */
     val buffer: StringBuilder = StringBuilder()
@@ -72,6 +76,34 @@ internal class UrlParserState(
 
     /** WHATWG `atSignSeen`: whether a userinfo `@` was consumed in the authority (§8.4). */
     var atSignSeen: Boolean = false
+
+    /**
+     * Seeds the work area from an existing [seed] for a setter [override] run (WHATWG "set url to
+     * this's URL" then run the parser with a state override). The [value] is the component input;
+     * [base] is always `null` and the fragment is carried by the setter (not re-parsed here).
+     */
+    internal constructor(
+        value: String,
+        seed: ParsedComponents,
+        override: StateOverride,
+        errors: MutableList<ValidationError>,
+    ) : this(value, base = null, fragmentRaw = null, errors = errors) {
+        scheme = seed.scheme
+        special = seed.scheme?.let { Scheme.isSpecial(it) } ?: false
+        username = seed.username
+        password = seed.password
+        host = seed.host
+        port = seed.port
+        when (val seedPath = seed.path) {
+            is UrlPath.Opaque -> {
+                isOpaque = true
+                opaque = seedPath.path
+            }
+            is UrlPath.Segments -> path.addAll(seedPath.segments)
+        }
+        query = seed.query
+        stateOverride = override
+    }
 
     /** The current code point as a [Char], or `null` at EOF (`pos == length`, [PARSE-10]). */
     fun currentChar(): Char? = if (pos < input.length) input[pos] else null

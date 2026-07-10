@@ -31,4 +31,18 @@ internal sealed interface UrlTransition {
     data class Fail(
         val error: UriParseError,
     ) : UrlTransition
+
+    /**
+     * A state-override run finished successfully at the boundary of its component ([SET-*];
+     * WHATWG "if state override is given … return"). The loop commits the seeded state and
+     * terminates without consuming further input.
+     */
+    data object Done : UrlTransition
+
+    /**
+     * A state-override run hit a WHATWG no-op guard (e.g. special↔non-special scheme change,
+     * a port on a hostless URL). The seeded state is discarded and the setter returns its
+     * receiver unchanged; never an error, never a throw.
+     */
+    data object Abort : UrlTransition
 }

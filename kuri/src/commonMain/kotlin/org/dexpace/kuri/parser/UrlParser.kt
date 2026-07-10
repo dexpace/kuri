@@ -55,6 +55,109 @@ internal object UrlParser {
         return if (failure != null) ParseResult.Err(failure) else ParseResult.Ok(finalize(state))
     }
 
+    /**
+     * Runs the state machine with a setter [override] over [value], seeded from [seed] (WHATWG
+     * URL §5 "basic URL parser with … state override"). Unlike [parse], the leading/trailing
+     * C0-or-space trim and the fragment prune are skipped (the value is a single component); only
+     * tab/newline removal applies. Returns [ParseResult.Err] on a fatal component error and — via
+     * the [UrlTransition.Abort] path — signals a WHATWG no-op by returning the seed unchanged.
+     */
+    internal fun parseWithOverride(
+        value: String,
+        seed: ParsedComponents,
+        override: StateOverride,
+    ): ParseResult<ParsedComponents> {
+        val errors = mutableListOf<ValidationError>()
+        val stripped = stripTabAndNewline(value, errors)
+        val state = UrlParserState(stripped, seed, override, errors)
+        // WHATWG pathname setter step "empty this's URL's path" before re-entering path-start
+        // (WHATWG URL §5); the seeded segments must not survive into the re-parse.
+        if (override == StateOverride.PATHNAME) state.path.clear()
+        // WHATWG search setter step "set this's URL's query to the empty string" (URL §5); the
+        // QUERY state handler appends to the seeded query, so it must be reset here or a
+        // withSearch call would concatenate onto the old query instead of replacing it.
+        if (override == StateOverride.QUERY) state.query = ""
+        // Map each override to the UrlState the basic URL parser re-enters (WHATWG URL §5 setters).
+        state.state =
+            when (override) {
+                StateOverride.PROTOCOL -> UrlState.SCHEME_START
+                StateOverride.HOST, StateOverride.HOSTNAME -> UrlState.HOST
+                StateOverride.PORT -> UrlState.PORT
+                StateOverride.PATHNAME -> UrlState.PATH_START
+                StateOverride.QUERY -> UrlState.QUERY
+            }
+        // The finalized components carry only the validation errors from this override run, not the
+        // seed URL's original parse errors -- `errors` is a fresh list, and validationErrors is a
+        // per-operation diagnostic, so a setter result's errors reflect the setter, never a cumulative
+        // history. (The fragment is untouched by every override, so it is carried straight from seed.)
+        return when (val outcome = runOverride(state)) {
+            OverrideOutcome.ABORT -> ParseResult.Ok(seed)
+            OverrideOutcome.OK -> ParseResult.Ok(finalize(state).copy(fragment = seed.fragment))
+            is OverrideOutcome.Fail -> ParseResult.Err(outcome.error)
+        }
+    }
+
+    /** The three terminal outcomes of an override run. */
+    private sealed interface OverrideOutcome {
+        data object OK : OverrideOutcome
+
+        data object ABORT : OverrideOutcome
+
+        data class Fail(
+            val error: UriParseError,
+        ) : OverrideOutcome
+    }
+
+    /**
+     * Drives the override loop. Terminates on [UrlTransition.Done]/[UrlTransition.Abort], on a
+     * fatal [UrlTransition.Fail], or when an [UrlTransition.Advance]/[UrlTransition.Reconsume]
+     * reaches EOF — the natural end of a single-component value. A fixed iteration bound guards any
+     * reconsume chain.
+     */
+    private fun runOverride(state: UrlParserState): OverrideOutcome {
+        val maxIterations = (state.input.length + 1).toLong() * MAX_REENTRIES_PER_CODE_POINT
+        var iterations = 0L
+        var outcome: OverrideOutcome? = null
+        while (outcome == null) {
+            check(iterations++ < maxIterations) { "override state machine exceeded its iteration bound" }
+            outcome = stepOverride(state, STATE_HANDLERS.getValue(state.state)(state))
+        }
+        return outcome
+    }
+
+    /**
+     * Applies one [transition] under an override run, returning the terminal [OverrideOutcome] or
+     * `null` to continue the loop. Mirrors [runStateMachine]'s handling exactly: [Reconsume] never
+     * inspects [UrlParserState.pos] itself — it only changes state and lets the loop re-invoke the
+     * new state's handler, even at EOF, since that handler is what finalizes a component (e.g. PATH
+     * appending the root segment, or FILE_HOST clearing an empty host). Only [Advance] terminates on
+     * EOF (after the *current* state has already run once, having just consumed the final code
+     * point), the natural end of a single-component value.
+     */
+    private fun stepOverride(
+        state: UrlParserState,
+        transition: UrlTransition,
+    ): OverrideOutcome? =
+        when (transition) {
+            is UrlTransition.Done -> OverrideOutcome.OK
+            is UrlTransition.Abort -> OverrideOutcome.ABORT
+            is UrlTransition.Fail -> OverrideOutcome.Fail(transition.error)
+            is UrlTransition.Reconsume -> {
+                state.state = transition.next
+                null
+            }
+            is UrlTransition.Advance -> {
+                state.state = transition.next
+                when {
+                    state.pos >= state.input.length -> OverrideOutcome.OK
+                    else -> {
+                        state.pos += 1
+                        null
+                    }
+                }
+            }
+        }
+
     /** The dispatch table mapping each [UrlState] to its single state function (§8.3). */
     private val STATE_HANDLERS: Map<UrlState, (UrlParserState) -> UrlTransition> =
         mapOf(
@@ -103,6 +206,8 @@ internal object UrlParser {
                     if (state.pos == state.input.length) return null
                     state.pos += 1
                 }
+                is UrlTransition.Done, is UrlTransition.Abort ->
+                    error("Done/Abort are override-only transitions")
             }
         }
     }
