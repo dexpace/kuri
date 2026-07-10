@@ -13,6 +13,7 @@ import org.dexpace.kuri.bind.Port
 import org.dexpace.kuri.bind.Query
 import org.dexpace.kuri.bind.QueryMap
 import org.dexpace.kuri.bind.Scheme
+import org.dexpace.kuri.bind.Uri
 import org.dexpace.kuri.bind.Url
 import org.dexpace.kuri.bind.UserInfo
 import org.dexpace.kuri.bind.Username
@@ -61,6 +62,12 @@ private class NonMapQueryMap(
     @QueryMap val notAMap: String,
 )
 
+// A `@Query` member typed `Double`: exercises the `Double` arm of the scalar-type table, so it compiles
+// to a scalar QUERY leaf rather than recursing.
+private class DoubleQuery(
+    @Query("d") val d: Double,
+)
+
 // A non-binding annotation used to prove the compiler ignores annotations outside the marker set.
 @Retention(AnnotationRetention.RUNTIME)
 private annotation class NotBinding
@@ -70,6 +77,29 @@ private annotation class NotBinding
 private class NonBindingMemberHolder(
     @Host val h: String,
     @NotBinding val note: String,
+)
+
+// A merge member marked with `@Uri` rather than `@Url`: the compiler treats both markers as a MERGE
+// step, so this exercises the `@Uri` arm of the marker dispatch alongside the `@Url` arm above.
+private class UriMemberParent(
+    @Uri val sub: SubMerge,
+)
+
+// `@Url` on a collection / map member: like a scalar, neither carries mergeable components, so both are
+// rejected at compile.
+private class UrlOnList(
+    @Url val many: List<SubMerge>,
+)
+
+private class UrlOnMap(
+    @Url val m: Map<String, SubMerge>,
+)
+
+// `@Query` collections whose element type is itself a collection or a map: the element is not a
+// bindable object, so each member stays a scalar leaf rather than recursing.
+private class NestedCollections(
+    @Query("a") val a: List<List<String>>,
+    @Query("b") val b: List<Map<String, String>>,
 )
 
 class PlanCompilerFlatTest {
@@ -124,5 +154,51 @@ class PlanCompilerFlatTest {
         val plan = compiler.compile(NonBindingMemberHolder::class)
         val ops = plan.steps.filterIsInstance<BindStep.Leaf>().map { it.op }
         assertEquals(listOf(LeafOp.HOST), ops)
+    }
+
+    @Test
+    fun `compiles a @Uri merge member as a merge step`() {
+        val recurse =
+            compiler
+                .compile(UriMemberParent::class)
+                .steps
+                .filterIsInstance<BindStep.Recurse>()
+                .single()
+        assertEquals(Scope.MERGE, recurse.scope)
+    }
+
+    @Test
+    fun `rejects @Url on a collection member`() {
+        val failure = assertFailsWith<KuriBindException> { compiler.compile(UrlOnList::class) }
+        assertTrue(failure.message.orEmpty().contains("complex object"))
+    }
+
+    @Test
+    fun `rejects @Url on a map member`() {
+        val failure = assertFailsWith<KuriBindException> { compiler.compile(UrlOnMap::class) }
+        assertTrue(failure.message.orEmpty().contains("complex object"))
+    }
+
+    @Test
+    fun `rejects compiling Any`() {
+        assertFailsWith<IllegalArgumentException> { compiler.compile(Any::class) }
+    }
+
+    @Test
+    fun `treats a double query member as a scalar leaf`() {
+        val step = compiler.compile(DoubleQuery::class).steps.single()
+        assertTrue(step is BindStep.Leaf)
+        assertEquals(LeafOp.QUERY, (step as BindStep.Leaf).op)
+    }
+
+    @Test
+    fun `treats collections of collections and maps as leaf query members`() {
+        val ops =
+            compiler
+                .compile(NestedCollections::class)
+                .steps
+                .filterIsInstance<BindStep.Leaf>()
+                .map { it.op }
+        assertEquals(listOf(LeafOp.QUERY, LeafOp.QUERY), ops)
     }
 }

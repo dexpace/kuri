@@ -52,6 +52,24 @@ class PathTemplateTest {
     }
 
     @Test
+    fun `parses adjacent holes with no literal between them`() {
+        val t = PathTemplate.parse("/{a}{b}")
+        assertEquals(listOf("a", "b"), t.holes.map { it.name })
+    }
+
+    @Test
+    fun `rejects a lone closing brace`() {
+        assertFailsWith<KuriBindException> { PathTemplate.parse("a}b") }
+    }
+
+    @Test
+    fun `parses a literal-only template with no holes`() {
+        val t = PathTemplate.parse("/static/path")
+        assertEquals(0, t.holes.size)
+        assertEquals(listOf(PathToken.Literal("/static/path")), t.tokens)
+    }
+
+    @Test
     fun `rejects a nested brace inside a hole name`() {
         // The inner '{' is swallowed into the hole body (indexOf stops at the first '}'), so the
         // parsed hole name "a{b" carries a stray brace and must be rejected.

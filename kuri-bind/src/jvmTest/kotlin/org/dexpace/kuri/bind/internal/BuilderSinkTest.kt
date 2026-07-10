@@ -56,6 +56,22 @@ class BuilderSinkTest {
     }
 
     @Test
+    fun `url sink sets a password-only userinfo with an empty username`() {
+        val b = Url.Builder().scheme("https").host("h")
+        UrlBuilderSink(b).userInfo("", "pw")
+        val url = b.build()
+        assertEquals("", url.username)
+        assertEquals("pw", url.password)
+    }
+
+    @Test
+    fun `uri sink joins a password-only userinfo with an empty username`() {
+        val b = Uri.Builder().scheme("https").host("h")
+        UriBuilderSink(b).userInfo("", "pw")
+        assertEquals(":pw", b.build().userInfo)
+    }
+
+    @Test
     fun `uri sink stores username-only userinfo without colon`() {
         val b = Uri.Builder().scheme("https").host("h")
         val sink = UriBuilderSink(b)

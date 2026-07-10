@@ -48,4 +48,36 @@ class StateOverrideParseTest {
         val c = (UrlParser.parseWithOverride("8080", seed("http://h/"), StateOverride.PORT) as ParseResult.Ok).value
         assertEquals(8080, c.port)
     }
+
+    @Test
+    fun `protocol override commits a same-class scheme`() {
+        val result = UrlParser.parseWithOverride("https:", seed("http://h/"), StateOverride.PROTOCOL)
+        assertEquals("https", (result as ParseResult.Ok).value.scheme)
+    }
+
+    @Test
+    fun `protocol override refuses a special to non-special change`() {
+        val result = UrlParser.parseWithOverride("mailto:", seed("http://h/"), StateOverride.PROTOCOL)
+        assertEquals("http", (result as ParseResult.Ok).value.scheme)
+    }
+
+    @Test
+    fun `protocol override refuses a file scheme when credentials are present`() {
+        val result = UrlParser.parseWithOverride("file:", seed("http://u:p@h/"), StateOverride.PROTOCOL)
+        assertEquals("http", (result as ParseResult.Ok).value.scheme)
+    }
+
+    @Test
+    fun `protocol override elides a new default port`() {
+        val result = UrlParser.parseWithOverride("http:", seed("https://h:80/"), StateOverride.PROTOCOL)
+        val c = (result as ParseResult.Ok).value
+        assertEquals("http", c.scheme)
+        assertEquals(null, c.port)
+    }
+
+    @Test
+    fun `hostname override with an empty value is a no-op when userinfo is present`() {
+        val result = UrlParser.parseWithOverride("", seed("sc://u@h/"), StateOverride.HOSTNAME)
+        assertEquals("h", (result as ParseResult.Ok).value.host?.asText())
+    }
 }

@@ -124,6 +124,21 @@ class QueryParametersBuilderTest {
     }
 
     @Test
+    fun `sort runs the shorter name off each comparison side per QUERY-18`() {
+        // Repeated "m"/"ma" comparisons drive the code-point scan off the end of the shorter name
+        // from both comparison sides, exercising each length-exit arm of the surrogate-aware scan.
+        val params =
+            QueryParametersBuilder()
+                .add("ma", "1")
+                .add("m", "2")
+                .add("ma", "3")
+                .add("m", "4")
+                .sort()
+                .build()
+        assertEquals(listOf("m" to "2", "m" to "4", "ma" to "1", "ma" to "3"), params.entries)
+    }
+
+    @Test
     fun `newBuilder copies the snapshot so the source is untouched per QUERY-19`() {
         val source = QueryParameters.parse("a=1")
         source.newBuilder().add("b", "2").build()

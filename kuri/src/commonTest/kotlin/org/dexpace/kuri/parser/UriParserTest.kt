@@ -260,6 +260,30 @@ class UriParserTest {
     }
 
     @Test
+    fun `parse splits userinfo into username and password`() {
+        val components = parsed("http://user:pw@h/p")
+
+        assertEquals("user", components.username)
+        assertEquals("pw", components.password)
+        assertEquals(Host.RegName("h"), components.host)
+    }
+
+    @Test
+    fun `parse rejects a DEL code point in the path`() {
+        val result = UriParser.parse("http://h/p\u007Fq")
+
+        assertIs<ParseResult.Err>(result)
+        assertIs<UriParseError.InvalidPercentEncoding>(result.error)
+    }
+
+    @Test
+    fun `parse rejects an unterminated IPv6 host literal`() {
+        val result = UriParser.parse("foo://[oops")
+
+        assertIs<ParseResult.Err>(result)
+    }
+
+    @Test
     fun `parse reports the earliest offense when a control and a bad percent coexist`() {
         // The query "%1\u0001" carries a bad percent triplet at query index 0 and a control at index
         // 2; the earlier (index 0) offense wins, exercising the two-offense minimum. The query begins

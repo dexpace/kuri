@@ -3,6 +3,7 @@
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinMultiplatform
 import com.vanniktech.maven.publish.SonatypeHost
+import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
@@ -201,17 +202,20 @@ detekt {
     )
 }
 
-// Enforce a 99% JVM line-coverage floor. koverVerify is automatically wired
-// into check for the total (merged) variant by the Kover plugin — no manual
-// task dependency is needed. The residual < 1% is provably-unreachable defensive
-// code (aggressive `check`/`require` message bodies and exhaustive-`when` `error()`
-// guards whose false arms upstream invariants make impossible), so 99 is the
-// honest ceiling: every reachable line is exercised.
+// JVM coverage floors, wired into `check` for the total (merged) variant by the Kover plugin.
+// Line: 99% — the residual < 1% is provably-unreachable defensive code (aggressive `check`/`require`
+// message bodies and exhaustive-`when` `error()` guards whose false arms upstream invariants make
+// impossible), so 99 is the honest ceiling: every reachable line is exercised.
+// Branch: 85% (actual ~86%) — deliberately lower than the line floor and with headroom, because the
+// same aggressive assertions each contribute an uncoverable failure branch and `check`s over the
+// generated Unicode tables can never take their error arm. The floor guards against gross regression
+// without penalising the addition of new defensive assertions.
 kover {
     reports {
         verify {
             rule {
-                minBound(99)
+                minBound(99, CoverageUnit.LINE)
+                minBound(85, CoverageUnit.BRANCH)
             }
         }
     }

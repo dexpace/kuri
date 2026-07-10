@@ -226,6 +226,13 @@ class QueryParametersTest {
     }
 
     @Test
+    fun `equals is false for a value that is not a QueryParameters`() {
+        val params = QueryParameters.parse("a=1")
+        // The `other is QueryParameters` guard rejects a foreign type (a String with identical text).
+        assertFalse(params.equals("a=1"))
+    }
+
+    @Test
     fun `toString renders the raw query string`() {
         val params = QueryParameters.parse("a=1&b=2")
         assertEquals("QueryParameters(a=1&b=2)", params.toString())

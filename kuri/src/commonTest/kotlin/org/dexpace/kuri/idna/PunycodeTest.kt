@@ -158,6 +158,29 @@ class PunycodeTest {
         assertNull(Punycode.encode(oversized))
     }
 
+    @Test
+    fun `decode returns null when a decoded scalar exceeds the maximum code point`() {
+        // "zz999a" decodes to a single generalized integer near 4.76 million; added to the initial n it
+        // yields a scalar far above U+10FFFF, which the strict decoder rejects (IgnoreInvalidPunycode=false).
+        assertNull(Punycode.decode("zz999a"))
+    }
+
+    @Test
+    fun `decode returns null when the generalized integer overflows the accumulator`() {
+        // "zz999999" drives the running accumulator past Int.MAX_VALUE inside decodeInteger, so decoding
+        // fails on arithmetic overflow before any scalar is produced.
+        assertNull(Punycode.decode("zz999999"))
+    }
+
+    @Test
+    fun `encode and decode round-trip a high astral code point that rescales the bias`() {
+        // U+30000 has a delta large enough that adapt runs its rescaling loop (scaled past the threshold),
+        // exercising the bias-adaptation division branch.
+        val astral = fromCodePoints(0x30000)
+        val encoded = assertNotNull(Punycode.encode(astral))
+        assertEquals(astral, Punycode.decode(encoded))
+    }
+
     private companion object {
         // Chosen so (0x10000 - 0x80) * (count + 1) exceeds Int.MAX_VALUE on the first delta step.
         private const val OVERFLOW_BASIC_COUNT: Int = 34_000

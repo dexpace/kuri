@@ -8,6 +8,7 @@ import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.UriParser
+import org.dexpace.kuri.parser.UrlPath
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -125,6 +126,26 @@ internal class UriNormalizerTest {
         // "." has no authority and remove_dot_segments empties it, so the rendered path stays
         // empty rather than being rooted with a slash.
         assertEquals("", normalizedUri("."))
+    }
+
+    @Test
+    fun `normalize decodes unreserved triplets in the query and fragment`() {
+        // The query and fragment let-branches run normalizeText, uppercasing "%7e" to "%7E"
+        // ([NORM-6]) and decoding it to the unreserved "~" ([NORM-8]) in both components.
+        assertEquals("http://h/?~#~", normalizedUri("http://h/?%7e#%7e"))
+    }
+
+    @Test
+    fun `normalize leaves an opaque path untouched`() {
+        // §6.2.2.3 / [NORM-9]: an opaque path is returned verbatim and is never dot-collapsed.
+        val opaque = UrlPath.Opaque("a@b")
+        val components = ParsedComponents(scheme = "mailto", path = opaque)
+        assertEquals(opaque, UriNormalizer.normalize(components).path)
+    }
+
+    @Test
+    fun `normalize elides an https port equal to the scheme default`() {
+        assertEquals("https://h/", normalizedUri("https://h:443/"))
     }
 
     private fun normalizedHost(host: Host): Host? =

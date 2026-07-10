@@ -87,4 +87,37 @@ internal class UrlPathTest {
         assertEquals(listOf("a", "b"), next.segments)
         assertEquals(PathRooting.DEFERRED, next.rooting)
     }
+
+    @Test
+    fun `addSegments onto existing content keeps the rooting`() {
+        val path = BuilderPath(listOf("a"))
+
+        val next = path.addSegments("b/c") { it }
+
+        assertEquals(listOf("a", "b", "c"), next.segments)
+        assertEquals(PathRooting.ROOTED, next.rooting)
+    }
+
+    @Test
+    fun `pushSegment appends an empty segment onto a non-empty path`() {
+        val path = BuilderPath(listOf("a"))
+
+        val next = path.pushSegment("")
+
+        assertEquals(listOf("a", ""), next.segments)
+    }
+
+    @Test
+    fun `toUriPathString returns an opaque path verbatim`() {
+        val path: UrlPath = UrlPath.Opaque("a@b")
+
+        assertEquals("a@b", path.toUriPathString())
+    }
+
+    @Test
+    fun `decodedSegments yields the single decoded value for an opaque path`() {
+        val result = decodedSegments(UrlPath.Opaque("a%40b")) { it }
+
+        assertEquals(listOf("a%40b"), result)
+    }
 }

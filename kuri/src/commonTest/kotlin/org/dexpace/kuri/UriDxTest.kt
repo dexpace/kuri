@@ -577,4 +577,39 @@ class UriDxTest {
         assertEquals("x", parseOk("http://h/p").withFragment("x").fragment)
         assertNull(parseOk("http://h/p#x").withoutFragment().fragment)
     }
+
+    @Test
+    fun `relativize returns null across different schemes`() {
+        // The authorities match, but a differing scheme fails the shared-hierarchy check, so there is no
+        // relative form even though the paths align; this exercises the scheme-mismatch arm.
+        val base = parseOk("http://h/a/b/")
+        val target = parseOk("https://h/a/b/c")
+
+        assertNull(base.relativize(target))
+    }
+
+    @Test
+    fun `isOpaquePath is false for a scheme with an empty path`() {
+        // A scheme, no authority, and an empty rootless path: the first-segment lookup finds nothing, so
+        // the rootless-opaque test returns false rather than treating it as opaque.
+        assertFalse(parseOk("foo:").isOpaquePath())
+    }
+
+    @Test
+    fun `userInfo and authority reconstruct an empty-username credential`() {
+        // An empty username with a present password takes the else arm of the userinfo reconstruction.
+        val uri = parseOk("http://:pass@h:8/p")
+
+        assertEquals(":pass", uri.userInfo)
+        assertEquals(":pass@h:8", uri.authority)
+    }
+
+    @Test
+    fun `authority reconstructs a host with no userinfo and no port`() {
+        // No userinfo folds to the empty-credentials arm and the absent port folds to the empty-port arm.
+        val uri = parseOk("http://h/p")
+
+        assertNull(uri.userInfo)
+        assertEquals("h", uri.authority)
+    }
 }

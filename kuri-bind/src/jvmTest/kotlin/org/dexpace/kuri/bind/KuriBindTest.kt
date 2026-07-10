@@ -168,4 +168,18 @@ class KuriBindTest {
         assertNotNull(builder)
         assertEquals("https://example.com", builder.build().toString())
     }
+
+    @Test
+    fun `toUrlOrNull returns a url when binding succeeds`() {
+        val url = KuriBind.toUrlOrNull(Absolute(host = "example.com"))
+        assertNotNull(url)
+        assertEquals("https://example.com/", url.toString())
+    }
+
+    @Test
+    fun `toUriOrNull returns a uri when binding succeeds`() {
+        val uri = KuriBind.toUriOrNull(UriAbsolute(host = "example.com"))
+        assertNotNull(uri)
+        assertEquals("https://example.com", uri.toString())
+    }
 }
