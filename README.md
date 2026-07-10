@@ -343,6 +343,18 @@ params["flag"]       // null               — present, but has no '='...
 params.has("flag")   // true               — ...so check has()
 ```
 
+**Multi-value query params.** `split(name, delimiter)` reads every pair for a name and splits each
+value on a delimiter, so a delimited list in one pair *and* repeated pairs both flatten into a single
+list. Splitting is literal and lossless — no trimming, empty tokens kept — and typing is just a `map`.
+
+```kotlin
+val q = Url.parseOrThrow("https://h/?roles=admin,user&perm=read|write&id=1,2&id=3").queryParameters
+q.split("roles", ',')                  // ["admin", "user"]
+q.split("perm", '|')                   // ["read", "write"]
+q.split("id", ',')                     // ["1", "2", "3"]   — pairs and delimiters both flatten
+q.split("id", ',').map(String::toInt)  // [1, 2, 3]         — conversion is just map()
+```
+
 The `Uri` profile computes its query on demand, so there it is a method — `uri.queryParameters()` —
 rather than a property.
 
