@@ -4,12 +4,11 @@
  */
 package org.dexpace.kuri.parser
 
-import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.error.ValidationError
 import org.dexpace.kuri.host.Host
-import org.dexpace.kuri.host.HostParser
+import org.dexpace.kuri.host.UrlHostParser
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSets
 import org.dexpace.kuri.scheme.Scheme
@@ -130,7 +129,7 @@ internal object UrlParserAuthority {
      * HOST (§8.3 [PARSE-29]–[PARSE-31]; WHATWG host/hostname state), forward-scanning.
      *
      * Scans to the first `:` outside brackets (→ PORT) or the first path terminator (→ PATH_START),
-     * isolates the host slice, and delegates classification to [HostParser]. An empty special-scheme
+     * isolates the host slice, and delegates classification to [UrlHostParser]. An empty special-scheme
      * host is fatal ([PARSE-31]).
      */
     internal fun hostState(state: UrlParserState): UrlTransition {
@@ -197,7 +196,7 @@ internal object UrlParserAuthority {
     private fun hasCredentialsOrPort(state: UrlParserState): Boolean =
         state.username.isNotEmpty() || state.password.isNotEmpty() || state.port != null
 
-    /** Parses [hostSlice] via [HostParser] and advances to PORT (on `:`) or PATH_START. */
+    /** Parses [hostSlice] via [UrlHostParser] and advances to PORT (on `:`) or PATH_START. */
     private fun parseAndStoreHost(
         state: UrlParserState,
         hostSlice: String,
@@ -232,9 +231,8 @@ internal object UrlParserAuthority {
         if (hostSlice.isEmpty()) {
             ParseResult.Ok(Host.Empty)
         } else {
-            HostParser.parse(
+            UrlHostParser.parse(
                 hostSlice,
-                ParseProfile.URL,
                 isSpecial = state.special,
                 isFile = false,
             )
@@ -430,7 +428,7 @@ internal object UrlParserAuthority {
         state: UrlParserState,
         base: ParsedComponents,
     ) {
-        val baseSegments = (base.path as? UrlPath.Segments)?.segments ?: emptyList()
+        val baseSegments = (base.path as? ComponentPath.Segments)?.segments ?: emptyList()
         val firstIsDrive = baseSegments.isNotEmpty() && isNormalizedWindowsDrive(baseSegments[0])
         if (!startsWithWindowsDrive(state.fromCurrent()) && firstIsDrive) {
             state.path.add(baseSegments[0])
@@ -491,9 +489,8 @@ internal object UrlParserAuthority {
     ): UrlTransition =
         when (
             val host =
-                HostParser.parse(
+                UrlHostParser.parse(
                     buffer,
-                    ParseProfile.URL,
                     isSpecial = true,
                     isFile = true,
                 )

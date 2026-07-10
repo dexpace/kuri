@@ -116,7 +116,7 @@ internal fun appendPathSegment(
  * fragment-only branch, [PARSE-18]); a `null` base yields an empty list.
  */
 internal fun cloneBasePath(base: ParsedComponents?): MutableList<String> {
-    val segments = (base?.path as? UrlPath.Segments)?.segments ?: emptyList()
+    val segments = (base?.path as? ComponentPath.Segments)?.segments ?: emptyList()
     return segments.toMutableList()
 }
 

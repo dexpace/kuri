@@ -5,7 +5,6 @@
 
 package org.dexpace.kuri.serialize
 
-import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.URL_TEST_CASES
@@ -35,7 +34,7 @@ private const val MIN_PASS_PERCENT: Int = 99
  *
  * Each case resolves [UrlCase.input] against the parsed [UrlCase.base] (the WPT bases always parse,
  * so a base failure is surfaced as a real bug, not skipped), then serializes the resulting
- * [ParsedComponents] under [ParseProfile.URL] and compares against [UrlCase.href]. Only non-failure
+ * [ParsedComponents] via [UrlSerializer] and compares against [UrlCase.href]. Only non-failure
  * cases are in scope -- a required-failure input has no canonical serialization.
  *
  * This target is strictly tighter than the component-getter test in `UrlConformanceTest`: the
@@ -55,7 +54,7 @@ class UrlHrefConformanceTest {
         }
 
     /**
-     * True when [case] round-trips: `parse(input, base)` succeeds and its [ParseProfile.URL]
+     * True when [case] round-trips: `parse(input, base)` succeeds and its [UrlSerializer]
      * serialization equals the WPT [UrlCase.href]. A non-failure input that fails to parse counts
      * as a residual (false), since every in-scope case must yield a canonical serialization.
      */
@@ -64,7 +63,7 @@ class UrlHrefConformanceTest {
         val base = case.base?.let { parseBase(it) }
         return when (val result = UrlParser.parse(case.input, base)) {
             is ParseResult.Err -> false
-            is ParseResult.Ok -> Serializer.serialize(result.value, ParseProfile.URL) == case.href
+            is ParseResult.Ok -> UrlSerializer.serialize(result.value) == case.href
         }
     }
 
@@ -113,14 +112,14 @@ class UrlHrefConformanceTest {
         /**
          * The tracked baseline of non-failure case keys (`input + U+0000 + base`) whose live href
          * round-trip diverges from WPT. The analysis-derived residual is empty: `UrlConformanceTest`
-         * already matches every component getter for all non-failure cases, and the [Serializer]
+         * already matches every component getter for all non-failure cases, and the [UrlSerializer]
          * reproduces the only two stricter-than-getter distinctions (present-but-empty `?`/`#`, the
          * §11.2 [NORM-18] `/.` guard). The decoded-A-label re-validation corners are all
          * required-*failure* inputs and so lie outside this test's non-failure scope.
          *
          * The ratcheting `the known-failures set exactly equals the live failing set` test is the
-         * authority: any genuine serializer corner it surfaces is fixed in the [Serializer] (against
-         * the WHATWG URL serializer), never masked by appending to this baseline.
+         * authority: any genuine serializer corner it surfaces is fixed in the [UrlSerializer]
+         * (against the WHATWG URL serializer), never masked by appending to this baseline.
          */
         private val KNOWN_FAILURES: Set<String> = emptySet()
     }

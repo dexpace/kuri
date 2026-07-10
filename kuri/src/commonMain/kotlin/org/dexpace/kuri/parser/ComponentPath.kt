@@ -49,10 +49,10 @@ package org.dexpace.kuri.parser
  * would leak into the future public surface); the parser/serializer modules that
  * construct them are responsible for upholding the table above.
  */
-internal sealed interface UrlPath {
+internal sealed interface ComponentPath {
     /**
      * A hierarchical path as an ordered list of decoded segments (SPEC §3.7,
-     * [MODEL-26]/[MODEL-27]; WHATWG URL "path" list). See [UrlPath] for the
+     * [MODEL-26]/[MODEL-27]; WHATWG URL "path" list). See [ComponentPath] for the
      * empty-path (`emptyList()`) vs. root-only (`listOf("")`) convention.
      *
      * @property segments the decoded path segments in order; `emptyList()` is the
@@ -65,7 +65,7 @@ internal sealed interface UrlPath {
     data class Segments(
         val segments: List<String>,
         val rooted: Boolean = true,
-    ) : UrlPath
+    ) : ComponentPath
 
     /**
      * A "cannot-be-a-base" / opaque path stored verbatim as one encoded string with
@@ -78,15 +78,15 @@ internal sealed interface UrlPath {
      */
     data class Opaque(
         val path: String,
-    ) : UrlPath
+    ) : ComponentPath
 }
 
 /** The RFC 3986 §3.3 path-segment separator shared by the `Uri`-profile path helpers below. */
 private const val URI_PATH_SEPARATOR: String = "/"
 
 /**
- * Encodes these [UrlPath.Segments] back to their RFC 3986 §5.3 path string: `""` for the empty
- * path, an absolute `/`-prefixed join when [rooted][UrlPath.Segments.rooted], or a bare rootless
+ * Encodes these [ComponentPath.Segments] back to their RFC 3986 §5.3 path string: `""` for the empty
+ * path, an absolute `/`-prefixed join when [rooted][ComponentPath.Segments.rooted], or a bare rootless
  * join otherwise.
  *
  * The empty check comes FIRST so a root-only path (`Segments(listOf(""))`, encoded `"/"`) stays
@@ -94,7 +94,7 @@ private const val URI_PATH_SEPARATOR: String = "/"
  * selects the absolute (`/a/b`) versus rootless (`a/b`) form, so a relative reference (`a/b`) and a
  * scheme-rootless path (`mailto:a@b`) each round-trip unchanged.
  */
-internal fun UrlPath.Segments.toUriPathString(): String =
+internal fun ComponentPath.Segments.toUriPathString(): String =
     when {
         segments.isEmpty() -> ""
         rooted -> URI_PATH_SEPARATOR + segments.joinToString(URI_PATH_SEPARATOR)
@@ -102,20 +102,20 @@ internal fun UrlPath.Segments.toUriPathString(): String =
     }
 
 /**
- * Encodes any [UrlPath] back to its RFC 3986 §5.3 string form: an [Opaque][UrlPath.Opaque] path
- * verbatim (no `/` guard, never dot-collapsed), else the [Segments][UrlPath.Segments] join.
+ * Encodes any [ComponentPath] back to its RFC 3986 §5.3 string form: an [Opaque][ComponentPath.Opaque] path
+ * verbatim (no `/` guard, never dot-collapsed), else the [Segments][ComponentPath.Segments] join.
  *
  * The smart-cast `Segments` receiver dispatches to the more specific [toUriPathString] overload, so
  * this is a dispatch, not a recursion.
  */
-internal fun UrlPath.toUriPathString(): String =
+internal fun ComponentPath.toUriPathString(): String =
     when (this) {
-        is UrlPath.Opaque -> path
-        is UrlPath.Segments -> toUriPathString()
+        is ComponentPath.Opaque -> path
+        is ComponentPath.Segments -> toUriPathString()
     }
 
 /**
- * Splits a raw RFC 3986 path string into [UrlPath.Segments], mirroring the parser's empty-path vs.
+ * Splits a raw RFC 3986 path string into [ComponentPath.Segments], mirroring the parser's empty-path vs.
  * single-empty-segment conventions (SPEC §3.7, [MODEL-26]/[MODEL-27]).
  *
  * An empty path is `emptyList()`; an absolute path drops the leading empty element so root-only `/`
@@ -124,11 +124,11 @@ internal fun UrlPath.toUriPathString(): String =
  * needed; the `rooted` flag records the absolute (leading `/`) versus rootless distinction so the
  * serializer can round-trip it faithfully.
  */
-internal fun splitUriPath(path: String): UrlPath.Segments =
+internal fun splitUriPath(path: String): ComponentPath.Segments =
     when {
-        path.isEmpty() -> UrlPath.Segments(emptyList())
-        path.startsWith(URI_PATH_SEPARATOR) -> UrlPath.Segments(path.substring(1).split('/'), rooted = true)
-        else -> UrlPath.Segments(path.split('/'), rooted = false)
+        path.isEmpty() -> ComponentPath.Segments(emptyList())
+        path.startsWith(URI_PATH_SEPARATOR) -> ComponentPath.Segments(path.substring(1).split('/'), rooted = true)
+        else -> ComponentPath.Segments(path.split('/'), rooted = false)
     }
 
 /**
@@ -158,19 +158,19 @@ internal fun fileExtensionOf(name: String): String {
 
 /**
  * The decoded path segments of [path], each percent-decoded through [decode]; an
- * [Opaque][UrlPath.Opaque] path has no segment structure and yields its single decoded value as a
+ * [Opaque][ComponentPath.Opaque] path has no segment structure and yields its single decoded value as a
  * one-element list. Shared by the `Uri`/`Url` `pathSegments` projections.
  *
  * Takes the decoder as a lambda so this helper stays free of the percent-codec dependency, the same
  * convention [appendPathSegments] follows with its `encode` lambda.
  */
 internal fun decodedSegments(
-    path: UrlPath,
+    path: ComponentPath,
     decode: (String) -> String,
 ): List<String> =
     when (path) {
-        is UrlPath.Opaque -> listOf(decode(path.path))
-        is UrlPath.Segments -> path.segments.map(decode)
+        is ComponentPath.Opaque -> listOf(decode(path.path))
+        is ComponentPath.Segments -> path.segments.map(decode)
     }
 
 /**
@@ -239,7 +239,7 @@ internal enum class PathRooting {
  * mutating a segment list while separately threading the rooting back out. Path lengths are small, so
  * copying the segment list on each transform is cheap.
  *
- * See [UrlPath] for the empty-path (`emptyList()`) versus root-only (`listOf("")`) segment convention, and
+ * See [ComponentPath] for the empty-path (`emptyList()`) versus root-only (`listOf("")`) segment convention, and
  * [PathRooting] for how [rooting] resolves to a leading `/` at build time.
  *
  * @property segments the decoded path segments in order; `emptyList()` is the empty path and every empty
@@ -352,10 +352,10 @@ internal data class BuilderPath(
      */
     fun effectivePath(hasHost: Boolean): String =
         when (rooting) {
-            PathRooting.ROOTED -> UrlPath.Segments(segments, rooted = true).toUriPathString()
-            PathRooting.ROOTLESS -> UrlPath.Segments(segments, rooted = false).toUriPathString()
+            PathRooting.ROOTED -> ComponentPath.Segments(segments, rooted = true).toUriPathString()
+            PathRooting.ROOTLESS -> ComponentPath.Segments(segments, rooted = false).toUriPathString()
             PathRooting.DEFERRED -> {
-                val rootless = UrlPath.Segments(segments, rooted = false).toUriPathString()
+                val rootless = ComponentPath.Segments(segments, rooted = false).toUriPathString()
                 if (hasHost) URI_PATH_SEPARATOR + rootless else rootless
             }
         }

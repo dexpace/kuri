@@ -5,9 +5,9 @@
 package org.dexpace.kuri.serialize
 
 import org.dexpace.kuri.host.Host
+import org.dexpace.kuri.parser.ComponentPath
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.Resolver
-import org.dexpace.kuri.parser.UrlPath
 import org.dexpace.kuri.parser.splitUriPath
 import org.dexpace.kuri.parser.toUriPathString
 import org.dexpace.kuri.scheme.Scheme
@@ -18,9 +18,6 @@ import org.dexpace.kuri.text.percentByteAt
 
 /** Length of a percent-encoded triplet `%XY`; hoisted so the triplet scanners carry no bare `3`. */
 private const val TRIPLET_LENGTH: Int = 3
-
-/** Path-segment separator used when re-stringifying and re-splitting a hierarchical path. */
-private const val SLASH: String = "/"
 
 /**
  * The RFC 3986 §6.2 syntax-based and scheme-based normalizations for the `Uri` profile (SPEC §11.1
@@ -164,19 +161,19 @@ internal object UriNormalizer {
 
     /** §6.2.2.3 / [NORM-9]: normalizes a hierarchical path; an opaque path is never dot-collapsed. */
     private fun normalizePath(
-        path: UrlPath,
+        path: ComponentPath,
         hasAuthority: Boolean,
-    ): UrlPath =
+    ): ComponentPath =
         when (path) {
-            is UrlPath.Opaque -> path
-            is UrlPath.Segments -> normalizeSegments(path, hasAuthority)
+            is ComponentPath.Opaque -> path
+            is ComponentPath.Segments -> normalizeSegments(path, hasAuthority)
         }
 
     /** Normalizes the path string (triplets, then [Resolver.removeDotSegments]) and re-splits it. */
     private fun normalizeSegments(
-        path: UrlPath.Segments,
+        path: ComponentPath.Segments,
         hasAuthority: Boolean,
-    ): UrlPath {
+    ): ComponentPath {
         val cleaned = Resolver.removeDotSegments(normalizeText(path.toUriPathString()))
         val rendered = if (cleaned.isEmpty() && hasAuthority) SLASH else cleaned
         check(!(hasAuthority && rendered.isEmpty())) { "an authority path must render as at least /" }

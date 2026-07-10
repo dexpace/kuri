@@ -10,10 +10,10 @@ import org.dexpace.kuri.error.ValidationError
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.parser.BuilderPath
+import org.dexpace.kuri.parser.ComponentPath
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.StateOverride
 import org.dexpace.kuri.parser.UrlParser
-import org.dexpace.kuri.parser.UrlPath
 import org.dexpace.kuri.parser.decodedSegments
 import org.dexpace.kuri.parser.fileExtensionOf
 import org.dexpace.kuri.parser.fileNameOf
@@ -25,7 +25,7 @@ import org.dexpace.kuri.query.QueryParametersBuilder
 import org.dexpace.kuri.query.QueryState
 import org.dexpace.kuri.query.applyParameterEdit
 import org.dexpace.kuri.scheme.Scheme
-import org.dexpace.kuri.serialize.Serializer
+import org.dexpace.kuri.serialize.UrlSerializer
 import org.dexpace.kuri.serialize.serializeAuthority
 import org.dexpace.kuri.serialize.serializeUrlPath
 import kotlin.jvm.JvmName
@@ -214,7 +214,7 @@ public class Url internal constructor(
     public fun hasOpaqueOrigin(): Boolean = origin == OPAQUE_ORIGIN
 
     /** Cached canonical serialization, computed once (permits caching an immutable value). */
-    private val canonicalHref: String by lazy { Serializer.serialize(components, ParseProfile.URL) }
+    private val canonicalHref: String by lazy { UrlSerializer.serialize(components) }
 
     /** Path/query projections, each computed once; every value is immutable, mirroring [canonicalHref]. */
     private val decodedPathSegments: List<String> by lazy {
@@ -356,7 +356,7 @@ public class Url internal constructor(
      *
      * @return the last non-empty decoded segment, or `""` when there is none or the path is opaque.
      */
-    public fun fileName(): String = if (components.path is UrlPath.Opaque) "" else fileNameOf(pathSegments)
+    public fun fileName(): String = if (components.path is ComponentPath.Opaque) "" else fileNameOf(pathSegments)
 
     /**
      * The extension of [fileName]: the text after its last `.`, or `""` when it has none (SPEC §3.3).
@@ -416,7 +416,7 @@ public class Url internal constructor(
      * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
      */
     public fun withPathname(value: String): Url {
-        if (components.path is UrlPath.Opaque) return this
+        if (components.path is ComponentPath.Opaque) return this
         return applyOverride(value, StateOverride.PATHNAME)
     }
 
@@ -527,7 +527,7 @@ public class Url internal constructor(
      * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
      */
     public fun withHost(value: String): Url {
-        if (components.path is UrlPath.Opaque) return this
+        if (components.path is ComponentPath.Opaque) return this
         return applyOverride(value, StateOverride.HOST)
     }
 
@@ -540,7 +540,7 @@ public class Url internal constructor(
      * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
      */
     public fun withHostname(value: String): Url {
-        if (components.path is UrlPath.Opaque) return this
+        if (components.path is ComponentPath.Opaque) return this
         return applyOverride(value, StateOverride.HOSTNAME)
     }
 

@@ -4,7 +4,6 @@
  */
 package org.dexpace.kuri.serialize
 
-import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.parser.UriParser
 import org.dexpace.kuri.parser.UrlParser
 import kotlin.test.Test
@@ -37,11 +36,11 @@ internal class IdempotencyTest {
 
     private fun serializeUrl(input: String): String {
         val parsed = requireNotNull(UrlParser.parse(input).getOrNull()) { "expected a parseable Url: $input" }
-        return Serializer.serialize(parsed, ParseProfile.URL)
+        return UrlSerializer.serialize(parsed)
     }
 
     private fun serializeUri(input: String): String {
         val parsed = requireNotNull(UriParser.parse(input).getOrNull()) { "expected a parseable Uri: $input" }
-        return Serializer.serialize(parsed, ParseProfile.URI)
+        return UriSerializer.serialize(parsed)
     }
 }

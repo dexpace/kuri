@@ -30,7 +30,7 @@ class UriParserTest {
 
     private fun segments(components: ParsedComponents): List<String> {
         val path = components.path
-        assertIs<UrlPath.Segments>(path, "expected a segmented path")
+        assertIs<ComponentPath.Segments>(path, "expected a segmented path")
         return path.segments
     }
 
@@ -55,7 +55,7 @@ class UriParserTest {
         assertEquals("urn", components.scheme)
         assertNull(components.host)
         assertEquals(listOf("example:animal:ferret:nose"), segments(components))
-        assertEquals(false, (components.path as UrlPath.Segments).rooted)
+        assertEquals(false, (components.path as ComponentPath.Segments).rooted)
         assertNull(components.query)
         assertNull(components.fragment)
     }
@@ -67,7 +67,7 @@ class UriParserTest {
         assertEquals("mailto", components.scheme)
         assertNull(components.host)
         assertEquals(listOf("John.Doe@example.com"), segments(components))
-        assertEquals(false, (components.path as UrlPath.Segments).rooted)
+        assertEquals(false, (components.path as ComponentPath.Segments).rooted)
     }
 
     // --- authority presence and relative references ([PARSE-19]/[PARSE-50]) ----------------------
@@ -88,7 +88,7 @@ class UriParserTest {
         assertNull(components.scheme)
         assertNull(components.host)
         assertEquals(listOf("relative", "path"), segments(components))
-        assertEquals(true, (components.path as UrlPath.Segments).rooted)
+        assertEquals(true, (components.path as ComponentPath.Segments).rooted)
     }
 
     @Test
@@ -98,7 +98,7 @@ class UriParserTest {
         assertNull(components.scheme)
         assertNull(components.host)
         assertEquals(listOf("a", "b", "c"), segments(components))
-        assertEquals(false, (components.path as UrlPath.Segments).rooted)
+        assertEquals(false, (components.path as ComponentPath.Segments).rooted)
     }
 
     @Test

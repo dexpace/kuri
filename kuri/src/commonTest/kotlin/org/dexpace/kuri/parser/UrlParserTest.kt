@@ -32,7 +32,7 @@ class UrlParserTest {
 
     private fun segments(components: ParsedComponents): List<String> {
         val path = components.path
-        assertIs<UrlPath.Segments>(path, "expected a segment path, was $path")
+        assertIs<ComponentPath.Segments>(path, "expected a segment path, was $path")
         return path.segments
     }
 
@@ -113,7 +113,7 @@ class UrlParserTest {
         val url = parsed("mailto:a@b")
         assertEquals("mailto", url.scheme)
         assertNull(url.host)
-        assertEquals(UrlPath.Opaque("a@b"), url.path)
+        assertEquals(ComponentPath.Opaque("a@b"), url.path)
     }
 
     @Test
@@ -170,7 +170,7 @@ class UrlParserTest {
         val base = parsed("mailto:x@y")
         val url = parsed("#frag", base)
         assertEquals("mailto", url.scheme)
-        assertEquals(UrlPath.Opaque("x@y"), url.path)
+        assertEquals(ComponentPath.Opaque("x@y"), url.path)
         assertEquals("frag", url.fragment)
     }
 

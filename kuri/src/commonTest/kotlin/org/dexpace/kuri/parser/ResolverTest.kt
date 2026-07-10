@@ -5,11 +5,10 @@
 package org.dexpace.kuri.parser
 
 import org.dexpace.kuri.ParseOptions
-import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.host.Host
-import org.dexpace.kuri.serialize.Serializer
+import org.dexpace.kuri.serialize.UriSerializer
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -170,7 +169,7 @@ internal class ResolverTest {
 
         val resolved = Resolver.resolve(base, reference).getOrThrow()
 
-        assertEquals("mailto:x@y", Serializer.serialize(resolved, ParseProfile.URI))
+        assertEquals("mailto:x@y", UriSerializer.serialize(resolved))
     }
 
     @Test
@@ -181,7 +180,7 @@ internal class ResolverTest {
 
         val resolved = Resolver.resolve(base, reference).getOrThrow()
 
-        assertEquals("http://h/a/g/x", Serializer.serialize(resolved, ParseProfile.URI))
+        assertEquals("http://h/a/g/x", UriSerializer.serialize(resolved))
     }
 
     @Test
@@ -195,7 +194,7 @@ internal class ResolverTest {
 
         assertEquals("user", resolved.username)
         assertEquals("", resolved.password)
-        assertEquals("http://user@host/a/x", Serializer.serialize(resolved, ParseProfile.URI))
+        assertEquals("http://user@host/a/x", UriSerializer.serialize(resolved))
     }
 
     @Test
@@ -208,7 +207,7 @@ internal class ResolverTest {
 
         assertEquals("user", resolved.username)
         assertEquals("pass", resolved.password)
-        assertEquals("http://user:pass@host/a/x", Serializer.serialize(resolved, ParseProfile.URI))
+        assertEquals("http://user:pass@host/a/x", UriSerializer.serialize(resolved))
     }
 
     @Test
@@ -220,7 +219,7 @@ internal class ResolverTest {
         val resolved = Resolver.resolve(base, reference).getOrThrow()
 
         assertEquals(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0"), resolved.host)
-        assertEquals("foo://[fe80::1%25eth0]/a/x", Serializer.serialize(resolved, ParseProfile.URI))
+        assertEquals("foo://[fe80::1%25eth0]/a/x", UriSerializer.serialize(resolved))
     }
 
     @Test
@@ -233,7 +232,7 @@ internal class ResolverTest {
         val resolved = Resolver.resolve(base, reference).getOrThrow()
 
         assertEquals(8080, resolved.port)
-        assertEquals("http://h:8080/a/x", Serializer.serialize(resolved, ParseProfile.URI))
+        assertEquals("http://h:8080/a/x", UriSerializer.serialize(resolved))
     }
 
     @Test
@@ -248,7 +247,7 @@ internal class ResolverTest {
 
         assertEquals("", resolved.username)
         assertEquals("pass", resolved.password)
-        assertEquals("http://:pass@h/a/x", Serializer.serialize(resolved, ParseProfile.URI))
+        assertEquals("http://:pass@h/a/x", UriSerializer.serialize(resolved))
     }
 
     private fun assertResolves(cases: List<Pair<String, String>>) {

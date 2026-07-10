@@ -23,8 +23,8 @@ import org.dexpace.kuri.host.Host
  *   present but the host is the empty string ([MODEL-15]).
  * - [port] `null` = unspecified or (`Url` profile) elided default ([MODEL-23],
  *   [MODEL-25]); never a `-1`/`0` sentinel.
- * - [path] never `null` ([MODEL-26]); the empty path is `UrlPath.Segments(emptyList())`
- *   (see [UrlPath] for the empty-vs-root convention).
+ * - [path] never `null` ([MODEL-26]); the empty path is `ComponentPath.Segments(emptyList())`
+ *   (see [ComponentPath] for the empty-vs-root convention).
  * - [query] `null` = no `?`; `""` = `?` present with empty content ([MODEL-30]).
  * - [fragment] `null` = no `#`; `""` = `#` present with empty content ([PARSE-8]).
  *
@@ -34,7 +34,7 @@ import org.dexpace.kuri.host.Host
  * the userinfo percent-encode set on serialization (§5).
  *
  * As a value record this type performs no inline validation — the §7/§8 modules that
- * populate it own the component invariants (mirroring [Host] and [UrlPath]).
+ * populate it own the component invariants (mirroring [Host] and [ComponentPath]).
  *
  * @property scheme the parsed scheme (lowercased for storage in the `Url` profile),
  *   or `null` for a `Uri` relative reference.
@@ -57,7 +57,7 @@ internal data class ParsedComponents(
     val password: String = "",
     val host: Host? = null,
     val port: Int? = null,
-    val path: UrlPath = UrlPath.Segments(emptyList()),
+    val path: ComponentPath = ComponentPath.Segments(emptyList()),
     val query: String? = null,
     val fragment: String? = null,
     val validationErrors: List<ValidationError> = emptyList(),

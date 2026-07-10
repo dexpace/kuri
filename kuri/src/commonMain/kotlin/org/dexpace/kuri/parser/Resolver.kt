@@ -58,7 +58,7 @@ private const val SEGMENT_DOTDOT: String = ".."
  *
  * The string entry point splits each input into its raw five parts directly (Appendix B) and resolves
  * over those raw path strings, where the absolute (`/g`) versus rootless (`g`) distinction that is
- * load-bearing for §5.2.2 is plainly visible. [UrlPath.Segments] now records that same distinction via
+ * load-bearing for §5.2.2 is plainly visible. [ComponentPath.Segments] now records that same distinction via
  * its `rooted` flag, so the structured component form preserves it too; the raw-string path is kept
  * because it operates directly on the input as Appendix B specifies and remains correct. [UriParser]
  * is still run on both inputs first so the resolution shares the parser's validation and absolute-base
@@ -121,7 +121,7 @@ internal object Resolver {
      * Resolves [reference] against the absolute [base] on the structured component model (§5.2),
      * the form the future public `Uri.resolve` builds on.
      *
-     * [UrlPath.Segments] records the absolute-vs-rootless distinction of a path via its `rooted` flag
+     * [ComponentPath.Segments] records the absolute-vs-rootless distinction of a path via its `rooted` flag
      * (`/g` is rooted, `g` is not), so [toUriPathString] reproduces each form faithfully and this structured
      * resolution preserves the distinction through to the recomposed target.
      *

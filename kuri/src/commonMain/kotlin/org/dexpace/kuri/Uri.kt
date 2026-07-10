@@ -9,10 +9,10 @@ import org.dexpace.kuri.error.UriSyntaxException
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.parser.BuilderPath
+import org.dexpace.kuri.parser.ComponentPath
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.Resolver
 import org.dexpace.kuri.parser.UriParser
-import org.dexpace.kuri.parser.UrlPath
 import org.dexpace.kuri.parser.decodedSegments
 import org.dexpace.kuri.parser.fileExtensionOf
 import org.dexpace.kuri.parser.fileNameOf
@@ -25,8 +25,8 @@ import org.dexpace.kuri.query.QueryParametersBuilder
 import org.dexpace.kuri.query.QueryState
 import org.dexpace.kuri.query.applyParameterEdit
 import org.dexpace.kuri.scheme.Scheme
-import org.dexpace.kuri.serialize.Serializer
 import org.dexpace.kuri.serialize.UriNormalizer
+import org.dexpace.kuri.serialize.UriSerializer
 import org.dexpace.kuri.serialize.guardRecomposedUriPath
 import kotlin.jvm.JvmName
 import kotlin.jvm.JvmOverloads
@@ -187,7 +187,7 @@ public class Uri internal constructor(
     public fun fileExtension(): String = fileExtensionOf(fileName())
 
     /** Cached canonical-but-unnormalized serialization, computed once. */
-    private val canonicalUri: String by lazy { Serializer.serialize(components, ParseProfile.URI) }
+    private val canonicalUri: String by lazy { UriSerializer.serialize(components) }
 
     /**
      * The canonical-but-UNNORMALIZED RFC 3986 §5.3 serialization; the basis of equality.
@@ -444,7 +444,7 @@ public class Uri internal constructor(
      *
      * @return `true` iff this URI is absolute with an authority-less, rootless (opaque) path.
      */
-    public fun isOpaquePath(): Boolean = components.path is UrlPath.Opaque || hasRootlessSchemePath()
+    public fun isOpaquePath(): Boolean = components.path is ComponentPath.Opaque || hasRootlessSchemePath()
 
     /**
      * The port a consumer should connect to: the explicit [port], else this scheme's default.
@@ -534,13 +534,14 @@ public class Uri internal constructor(
      * Reuses the already-decoded [decodedPathSegments] rather than decoding every segment a second
      * time: an opaque path is that single decoded value, and a segment path rejoins the decoded
      * segments through [toUriPathString] so the empty-vs-root-only and rooted-vs-rootless ordering
-     * keeps its single source of truth (UrlPath.kt). Reading [decodedPathSegments] here is safe —
+     * keeps its single source of truth (ComponentPath.kt). Reading [decodedPathSegments] here is safe —
      * it does not read [decodedPath], so there is no lazy cycle.
      */
     private fun computeDecodedPath(): String =
         when (val storedPath = components.path) {
-            is UrlPath.Opaque -> decodedPathSegments.single()
-            is UrlPath.Segments -> UrlPath.Segments(decodedPathSegments, storedPath.rooted).toUriPathString()
+            is ComponentPath.Opaque -> decodedPathSegments.single()
+            is ComponentPath.Segments ->
+                ComponentPath.Segments(decodedPathSegments, storedPath.rooted).toUriPathString()
         }
 
     /** The decoded segments backing [pathSegments]; an opaque path yields its single decoded value. */
@@ -550,7 +551,7 @@ public class Uri internal constructor(
     /**
      * True for the RFC 3986 opaque shape: an absolute URI with no authority and a rootless path.
      *
-     * Reads the structured [UrlPath.Segments.rooted] flag rather than re-serializing the path and
+     * Reads the structured [ComponentPath.Segments.rooted] flag rather than re-serializing the path and
      * inspecting its first character. A rootless path serializes with a leading `/` only when its first
      * segment is empty, so a non-empty first segment is the same condition as `!startsWith("/")` —
      * without the `O(path)` string build on every [isOpaquePath]/[relativize] call.
@@ -558,7 +559,7 @@ public class Uri internal constructor(
     private fun hasRootlessSchemePath(): Boolean {
         if (scheme == null || components.host != null) return false
         val storedPath = components.path
-        return storedPath is UrlPath.Segments &&
+        return storedPath is ComponentPath.Segments &&
             !storedPath.rooted &&
             storedPath.segments.firstOrNull()?.isNotEmpty() == true
     }
