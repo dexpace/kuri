@@ -1,4 +1,7 @@
-@file:OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
+@file:OptIn(
+    org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class,
+    kotlinx.validation.ExperimentalBCVApi::class,
+)
 
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinMultiplatform
@@ -218,6 +221,17 @@ kover {
                 minBound(85, CoverageUnit.BRANCH)
             }
         }
+    }
+}
+
+// Enforce the native (KLIB) public ABI, not only the JVM/Android one. binary-compatibility-validator's
+// klib validation is experimental and off by default, so `apiCheck` was already compiling every native
+// klib but then skipping the comparison — wasted work that guaranteed nothing. Enabling it makes
+// `apiDump` emit the merged `api/kuri.klib.api` snapshot and `apiCheck` diff each native target's ABI
+// against it, so a source-compatible but ABI-breaking change to the native surface fails the build.
+apiValidation {
+    klib {
+        enabled = true
     }
 }
 
