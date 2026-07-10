@@ -509,6 +509,19 @@ private class DelimitedTagsRequest(
     @Query("roles", ',') val roles: List<String>,
 )
 
+// A delimited `@Query` list nested inside a scoped `@Query` object: QUERY-scoped recursion must still
+// honor the join, collapsing the nested list to one comma-joined parameter rather than fanning it out.
+private class DelimitedRoleFilter(
+    @Query("roles", ',') val roles: List<String>,
+)
+
+@Url
+private class ScopedDelimitedRequest(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Query val filter: DelimitedRoleFilter,
+)
+
 // A data class mixing primary-constructor `@Path` props with a body-declared one: constructor order
 // first (zeta), then the name-sorted remainder (alpha).
 @Url
@@ -942,5 +955,11 @@ class IntegrationTest {
     fun `round trips a delimited query list through split`() {
         val url = KuriBind.toUrl(DelimitedTagsRequest(roles = listOf("admin", "user")))
         assertEquals(listOf("admin", "user"), url.queryParameters.split("roles", ','))
+    }
+
+    @Test
+    fun `joins a delimited query list nested in a scoped query object`() {
+        val request = ScopedDelimitedRequest(filter = DelimitedRoleFilter(listOf("admin", "user")))
+        assertEquals(listOf("admin,user"), KuriBind.toUrl(request).queryParameters.getAll("roles"))
     }
 }

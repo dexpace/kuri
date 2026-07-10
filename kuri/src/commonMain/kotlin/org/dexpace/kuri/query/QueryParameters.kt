@@ -122,7 +122,7 @@ public class QueryParameters internal constructor(
      * The decoded values of every pair named [name], each split on [delimiter] and concatenated in
      * appearance order (SPEC §10.3).
      *
-     * Splitting is lazy (the snapshot is never modified), literal, and lossless: it applies
+     * Splitting is derived on demand (the snapshot is never modified), literal, and lossless: it applies
      * [String.split] to each value with no trimming and no empty-token dropping, so `a,,b` yields
      * `["a", "", "b"]` and `x=` yields `[""]`. Pairs with no `=` (a `null` value) contribute nothing,
      * since there is no value string to partition; the null-vs-empty distinction stays observable via

@@ -188,6 +188,18 @@ class BindingExecutorTest {
     }
 
     @Test
+    fun `retains an empty string element when joining a delimited query list`() {
+        val target = DelimitedRoles("https", "h", listOf("", "user"))
+        assertEquals("https://h/?roles=,user", bind(target).build().toString())
+    }
+
+    @Test
+    fun `joins a single empty string element into an empty valued parameter`() {
+        val target = DelimitedRoles("https", "h", listOf(""))
+        assertEquals("https://h/?roles=", bind(target).build().toString())
+    }
+
+    @Test
     fun `joins a single element delimited query list without a trailing delimiter`() {
         val target = DelimitedRoles("https", "h", listOf("solo"))
         assertEquals("https://h/?roles=solo", bind(target).build().toString())
