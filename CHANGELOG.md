@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). While kuri is in the `0.x`
 series the public API is not yet frozen and may change between minor releases.
 
+## [0.1.0-alpha.4](https://github.com/dexpace/kuri/compare/v0.1.0-alpha.3...v0.1.0-alpha.4) (2026-07-10)
+
+
+### Added
+
+* delimited multi-value query params — QueryParameters.split and @Query(delimiter) ([#56](https://github.com/dexpace/kuri/issues/56)) ([cce1fb7](https://github.com/dexpace/kuri/commit/cce1fb74528909d272bbbccd9c76a7c5b2d314d8))
+* WHATWG URL component setters and expanded conformance test coverage ([#54](https://github.com/dexpace/kuri/issues/54)) ([45058b1](https://github.com/dexpace/kuri/commit/45058b1497f11761ce617d682b30527735bd314e))
+
+
+### Performance
+
+* memoize derived path/query projections on Uri and Url ([#52](https://github.com/dexpace/kuri/issues/52)) ([babc746](https://github.com/dexpace/kuri/commit/babc746f9ab3c466f863d17052eef50ecf420345))
+
 ## [0.1.0-alpha.3](https://github.com/dexpace/kuri/compare/v0.1.0-alpha.2...v0.1.0-alpha.3) (2026-07-07)
 
 
