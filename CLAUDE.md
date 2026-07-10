@@ -67,8 +67,8 @@ conventions are wired into the build and are authoritative:
   (synchronized pins carrier threads under Loom). Blocking calls must respect
   `Thread.interrupt()` — catch `InterruptedException`, restore the interrupt flag, and
   throw `InterruptedIOException` (or attach the interrupt as suppressed).
-- **Commit style:** `feat:` / `test:` / `docs:` / `chore:` prefixes (`merge:` for merge
-  commits). **PR titles follow the same prefixed style** (e.g. `docs: add CLAUDE.md`).
+- **Commit style:** `feat:` / `test:` / `docs:` / `chore:` / `refactor:` prefixes (`merge:`
+  for merge commits). **PR titles follow the same prefixed style** (e.g. `docs: add CLAUDE.md`).
 
 ## Generated data & codegen
 
