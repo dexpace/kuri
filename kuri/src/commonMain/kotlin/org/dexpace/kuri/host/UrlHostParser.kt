@@ -9,12 +9,6 @@ import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.idna.Idna
 import org.dexpace.kuri.percent.PercentCodec
 
-/** Opening delimiter of an IP-literal; a host beginning with it dispatches to §7.2. */
-private const val BRACKET_OPEN: Char = '['
-
-/** Closing delimiter an IP-literal MUST carry ([HOST-4]). */
-private const val BRACKET_CLOSE: Char = ']'
-
 /** Sentinel for "no offending index found" returned by the host scanners. */
 private const val NOT_FOUND: Int = -1
 

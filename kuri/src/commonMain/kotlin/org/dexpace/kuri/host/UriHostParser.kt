@@ -11,12 +11,6 @@ import org.dexpace.kuri.text.hasPercentHexPairAt
 import org.dexpace.kuri.text.isAsciiHexDigit
 import org.dexpace.kuri.text.isUnreserved
 
-/** Opening delimiter of an IP-literal; a host beginning with it dispatches to §7.2/§7.8. */
-private const val BRACKET_OPEN: Char = '['
-
-/** Closing delimiter an IP-literal MUST carry ([HOST-5]). */
-private const val BRACKET_CLOSE: Char = ']'
-
 /** Sentinel for "no offending index found" returned by the host scanners. */
 private const val NOT_FOUND: Int = -1
 

@@ -9,6 +9,15 @@ import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 
 /**
+ * Opening delimiter of an IP-literal; a host beginning with it dispatches to the IPv6/IPvFuture
+ * grammars. Shared by [UriHostParser] and [UrlHostParser] ([HOST-4]/[HOST-5]).
+ */
+internal const val BRACKET_OPEN: Char = '['
+
+/** Closing delimiter an IP-literal MUST carry ([HOST-4]/[HOST-5]); shared by both host parsers. */
+internal const val BRACKET_CLOSE: Char = ']'
+
+/**
  * Strips the surrounding `[`/`]`, returning the bracket contents ([HOST-4]/[HOST-5]).
  *
  * Shared by both the WHATWG ([UrlHostParser]) and RFC 3986 ([UriHostParser]) bracketed-literal
