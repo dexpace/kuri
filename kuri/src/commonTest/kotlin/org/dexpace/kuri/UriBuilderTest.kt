@@ -622,4 +622,10 @@ class UriBuilderTest {
         assertEquals("a=9&c=4", uri.query)
         assertEquals("http://h/p?a=9&c=4", uri.uriString)
     }
+
+    @Test
+    fun `port rejects a negative value`() {
+        // The Uri profile applies no upper cap but still requires a non-negative port.
+        assertFailsWith<IllegalArgumentException> { Uri.Builder().port(-1) }
+    }
 }

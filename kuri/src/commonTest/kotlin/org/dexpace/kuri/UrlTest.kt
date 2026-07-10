@@ -207,4 +207,44 @@ class UrlTest {
         val cause = assertIs<UriParseError.InvalidHost>(err.error)
         assertEquals(HostError.ZoneIdRejected, cause.reason)
     }
+
+    @Test
+    fun `authority is null for a hostless url`() {
+        // A non-special scheme yields an opaque, authority-less URL, so the authority projection is null
+        // rather than a serialized string.
+        assertNull(parseOk("mailto:a@b.example").authority)
+    }
+
+    @Test
+    fun `equals is false against a non-url value`() {
+        val notAUrl: Any = "http://h/"
+
+        assertFalse(parseOk("http://h/").equals(notAUrl))
+    }
+
+    @Test
+    fun `an interior empty path segment is preserved rather than collapsed`() {
+        // WHATWG keeps consecutive slashes as an empty segment; kuri does not fold them out.
+        val url = parseOk("http://h/a//b")
+
+        assertEquals(listOf("a", "", "b"), url.pathSegments)
+        assertEquals("/a//b", url.encodedPath)
+    }
+
+    @Test
+    fun `a trailing empty path segment from a trailing slash is preserved`() {
+        val url = parseOk("http://h/a/b/")
+
+        assertEquals(listOf("a", "b", ""), url.pathSegments)
+        assertEquals("/a/b/", url.encodedPath)
+    }
+
+    @Test
+    fun `the trailing dot of a reg-name host is preserved`() {
+        // A non-IPv4 domain keeps its FQDN trailing dot; only a dotted-quad IPv4 host strips it.
+        val url = parseOk("http://google.com./")
+
+        assertEquals(Host.RegName("google.com."), url.host)
+        assertEquals("google.com.", url.hostName)
+    }
 }

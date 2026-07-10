@@ -73,6 +73,33 @@ class IdnaValidityTest {
     }
 
     @Test
+    fun `rejects a ZWNJ whose preceding side is not a joiner`() {
+        // ASCII 'z' (Non_Joining) precedes the ZWNJ, so the left scan finds no L or D joiner while it is
+        // still in bounds (a distinct arm from the off-the-end preceding case).
+        assertFalse(IdnaValidity.checkJoiners("z\u200c\u062c"))
+    }
+
+    @Test
+    fun `rejects a leading ZWNJ at the start of the label`() {
+        // The ZWNJ is the first code point: the left scan cursor falls below zero with no joiner found.
+        assertFalse(IdnaValidity.checkJoiners("\u200c\u062c"))
+    }
+
+    @Test
+    fun `rejects a trailing ZWNJ after a left-joining letter`() {
+        // U+0628 BEH (Dual_Joining) then a ZWNJ at the end: the right scan runs off the end of the label
+        // without finding an R or D joiner.
+        assertFalse(IdnaValidity.checkJoiners("\u0628\u200c"))
+    }
+
+    @Test
+    fun `accepts ZWNJ when Transparent marks separate it from the right joiner`() {
+        // U+0628 BEH (D) ZWNJ U+064B FATHATAN (Transparent) U+062C JEEM (D): the right scan skips the
+        // Transparent mark and reaches the dual-joining JEEM.
+        assertTrue(IdnaValidity.checkJoiners("\u0628\u200c\u064b\u062c"))
+    }
+
+    @Test
     fun `accepts a label with no join controls`() {
         assertTrue(IdnaValidity.checkJoiners("example"))
     }
@@ -112,6 +139,25 @@ class IdnaValidityTest {
     }
 
     @Test
+    fun `accepts an Arabic-letter label ending in an Arabic letter`() {
+        // U+0627 ALEF and U+0628 BEH are both AL: the AL first code point selects the RTL conditions and
+        // the AL end satisfies condition 3.
+        assertTrue(IdnaValidity.checkBidi("\u0627\u0628"))
+    }
+
+    @Test
+    fun `accepts a right-to-left label ending in an Arabic number`() {
+        // U+0627 ALEF (AL) then U+0667 ARABIC-INDIC DIGIT SEVEN (AN): condition 3 permits an AN end.
+        assertTrue(IdnaValidity.checkBidi("\u0627\u0667"))
+    }
+
+    @Test
+    fun `rejects a Bidi label starting with an Arabic number`() {
+        // U+0667 (AN) makes the label RTL yet condition 1 requires an L R or AL first code point.
+        assertFalse(IdnaValidity.checkBidi("\u0667\u0627"))
+    }
+
+    @Test
     fun `rejects a Bidi label starting with a European number`() {
         // '1' is EN, U+0627 ARABIC ALEF is AL: condition 1 requires an L, R, or AL first code point.
         assertFalse(IdnaValidity.checkBidi("1\u0627"))
@@ -131,8 +177,8 @@ class IdnaValidityTest {
 
     @Test
     fun `rejects a right-to-left label ending in a separator`() {
-        // U+05D0 ALEF (R) then U+002D HYPHEN-MINUS (ES): condition 3 requires the last non-NSM code
-        // point to be R, AL, EN, or AN, so an ES end (permitted mid-label by condition 2) is rejected.
+        // U+05D0 ALEF (R) then U+002D HYPHEN-MINUS (ES): condition 3 requires the last non-NSM code point
+        // to be R, AL, EN, or AN, so an ES end (permitted mid-label by condition 2) is rejected.
         assertFalse(IdnaValidity.checkBidi("\u05d0-"))
     }
 }

@@ -270,4 +270,52 @@ class UriTest {
         assertEquals(Host.Ipv6(listOf(0xFE80, 0, 0, 0, 0, 0, 0, 1), zoneId = "eth0"), resolved.host)
         assertEquals("foo://[fe80::1%25eth0]/a/x", resolved.uriString)
     }
+
+    @Test
+    fun `equals is false against a non-uri value`() {
+        val notAUri: Any = "http://h/p"
+
+        assertFalse(parseOk("http://h/p").equals(notAUri))
+    }
+
+    @Test
+    fun `a credential-less authority reports a null userinfo and omits it from the authority`() {
+        // Reconstructs the authority with no userinfo but an explicit port: userInfo folds an
+        // empty username and password to null, and the authority carries only host:port.
+        val uri = parseOk("http://h:80/")
+
+        assertNull(uri.userInfo)
+        assertEquals("h:80", uri.authority)
+    }
+
+    @Test
+    fun `the trailing dot of a reg-name host is preserved`() {
+        // A non-IPv4 reg-name keeps its FQDN trailing dot verbatim ('.' is unreserved); a dotted-quad
+        // IPv4 host would strip it instead.
+        val uri = parseOk("foo://google.com./")
+
+        assertEquals(Host.RegName("google.com."), uri.host)
+        assertEquals("google.com.", uri.hostName)
+    }
+
+    @Test
+    fun `an authority with two at-signs splits userinfo at the last at-sign`() {
+        // RFC 3986 §3.2 splits userinfo from host at the LAST '@'; the earlier '@' stays in the userinfo.
+        val uri = parseOk("foo://a@b@c/p")
+
+        assertEquals("a@b", uri.userInfo)
+        assertEquals(Host.RegName("c"), uri.host)
+        assertEquals("c", uri.hostName)
+        assertEquals("a@b@c", uri.authority)
+    }
+
+    @Test
+    fun `a question mark after the hash is fragment content not a query`() {
+        // The fragment is split off at the first '#' before any '?' scan runs so a later '?' is fragment data.
+        val uri = parseOk("foo:bar#?bob")
+
+        assertNull(uri.query)
+        assertEquals("?bob", uri.fragment)
+        assertEquals("bar", uri.path)
+    }
 }

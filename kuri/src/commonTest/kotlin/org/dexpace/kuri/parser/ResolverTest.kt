@@ -116,6 +116,33 @@ internal class ResolverTest {
     }
 
     @Test
+    fun `structured resolve inherits a base username-only userinfo`() {
+        // Pins the userinfoPrefix username-only branch: a base with a username but no password is
+        // inherited by a relative reference that supplies neither scheme nor authority.
+        val base = UriParser.parse("http://user@host/a/b").getOrThrow()
+        val reference = UriParser.parse("x").getOrThrow()
+
+        val resolved = Resolver.resolve(base, reference).getOrThrow()
+
+        assertEquals("user", resolved.username)
+        assertEquals("", resolved.password)
+        assertEquals("http://user@host/a/x", Serializer.serialize(resolved, ParseProfile.URI))
+    }
+
+    @Test
+    fun `structured resolve inherits a base username and password userinfo`() {
+        // Pins the userinfoPrefix username-and-password branch.
+        val base = UriParser.parse("http://user:pass@host/a/b").getOrThrow()
+        val reference = UriParser.parse("x").getOrThrow()
+
+        val resolved = Resolver.resolve(base, reference).getOrThrow()
+
+        assertEquals("user", resolved.username)
+        assertEquals("pass", resolved.password)
+        assertEquals("http://user:pass@host/a/x", Serializer.serialize(resolved, ParseProfile.URI))
+    }
+
+    @Test
     fun `structured resolve preserves a zoned base`() {
         val zoneOptions = ParseOptions.Builder().allowIpv6ZoneId(true).build()
         val base = UriParser.parse("foo://[fe80::1%25eth0]/a/b", zoneOptions).getOrThrow()

@@ -5,6 +5,7 @@
 package org.dexpace.kuri.serialize
 
 import org.dexpace.kuri.ParseProfile
+import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.parser.ParsedComponents
 import org.dexpace.kuri.parser.UriParser
 import kotlin.test.Test
@@ -69,6 +70,65 @@ internal class UriNormalizerTest {
         // this is the literal algorithm outcome, not a rootless-preservation guarantee.
         assertEquals("/b", normalizedUri("a/../b"))
     }
+
+    @Test
+    fun `normalize leaves an Ipv4 host untouched`() {
+        val host = Host.Ipv4(0x7F000001)
+        assertEquals(host, normalizedHost(host))
+    }
+
+    @Test
+    fun `normalize leaves an Ipv6 host untouched`() {
+        val host = Host.Ipv6(listOf(0, 0, 0, 0, 0, 0, 0, 1))
+        assertEquals(host, normalizedHost(host))
+    }
+
+    @Test
+    fun `normalize leaves an IpFuture host untouched`() {
+        val host = Host.IpFuture("v9.ABC")
+        assertEquals(host, normalizedHost(host))
+    }
+
+    @Test
+    fun `normalize leaves an Opaque host untouched and does not lowercase it`() {
+        // Only reg-name letters are folded ([NORM-5]); an opaque host keeps its uppercase verbatim.
+        val host = Host.Opaque("EXAMPLE")
+        assertEquals(host, normalizedHost(host))
+    }
+
+    @Test
+    fun `normalize leaves an Empty host untouched`() {
+        assertEquals(Host.Empty, normalizedHost(Host.Empty))
+    }
+
+    @Test
+    fun `normalize copies a reg-name percent triplet verbatim while lowercasing the letters`() {
+        // The triplet "%2f" is copied verbatim by the host-char scanner ([NORM-5] host case),
+        // then uppercased to "%2F" ([NORM-6]); "2F" is reserved so it is not decoded.
+        assertEquals(Host.RegName("a%2Fb"), normalizedHost(Host.RegName("A%2fb")))
+    }
+
+    @Test
+    fun `normalize lowercases a lone percent that is not a valid reg-name triplet`() {
+        // A bare "%" not followed by two hex digits fails the triplet guard, so it is copied
+        // through the single-char lowercasing branch untouched alongside the folded letter.
+        assertEquals(Host.RegName("a%zz"), normalizedHost(Host.RegName("A%zz")))
+    }
+
+    @Test
+    fun `normalize keeps a non-default explicit port`() {
+        assertEquals("http://h:8080/", normalizedUri("http://h:8080/"))
+    }
+
+    @Test
+    fun `normalize collapses a bare dot relative reference to the empty path`() {
+        // "." has no authority and remove_dot_segments empties it, so the rendered path stays
+        // empty rather than being rooted with a slash.
+        assertEquals("", normalizedUri("."))
+    }
+
+    private fun normalizedHost(host: Host): Host? =
+        UriNormalizer.normalize(ParsedComponents(scheme = "http", host = host)).host
 
     private fun normalizedUri(input: String): String {
         val parsed = requireNotNull(UriParser.parse(input).getOrNull()) { "expected a parseable Uri: $input" }

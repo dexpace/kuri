@@ -12,6 +12,7 @@ import org.dexpace.kuri.parser.UrlParser
 import org.dexpace.kuri.parser.UrlPath
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 /**
  * §11.2 serializer tests: WHATWG URL recomposition (round-trip, default-port elision, opaque and
@@ -89,6 +90,19 @@ internal class SerializerTest {
     fun `serialize keeps a trailing slash on a rootless path`() {
         // The trailing "" segment and the missing leading slash must both survive the rootless join.
         assertEquals("a/b/", Serializer.serialize(parseUri("a/b/"), ParseProfile.URI))
+    }
+
+    @Test
+    fun `serialize rejects a Url profile value that carries no scheme`() {
+        // The WHATWG serializer asserts the scheme is present; a Url always has one.
+        val components = ParsedComponents(host = Host.RegName("h"), path = UrlPath.Segments(listOf("")))
+        assertFailsWith<IllegalArgumentException> { Serializer.serialize(components, ParseProfile.URL) }
+    }
+
+    @Test
+    fun `serializeAuthority rejects components with no host`() {
+        // Authority serialization requires a non-null host; callers only reach it behind that guard.
+        assertFailsWith<IllegalArgumentException> { serializeAuthority(ParsedComponents(host = null)) }
     }
 
     private fun parseUrl(input: String): ParsedComponents =

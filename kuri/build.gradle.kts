@@ -201,14 +201,17 @@ detekt {
     )
 }
 
-// Enforce an 80% JVM line-coverage floor. koverVerify is automatically wired
+// Enforce a 99% JVM line-coverage floor. koverVerify is automatically wired
 // into check for the total (merged) variant by the Kover plugin — no manual
-// task dependency is needed.
+// task dependency is needed. The residual < 1% is provably-unreachable defensive
+// code (aggressive `check`/`require` message bodies and exhaustive-`when` `error()`
+// guards whose false arms upstream invariants make impossible), so 99 is the
+// honest ceiling: every reachable line is exercised.
 kover {
     reports {
         verify {
             rule {
-                minBound(80)
+                minBound(99)
             }
         }
     }

@@ -126,4 +126,27 @@ class IdnaTest {
         val uLabel = "b" + Char(0x00FC) + "cher"
         assertTrue(Idna.isValidDecodedALabel(uLabel))
     }
+
+    @Test
+    fun `keeps a disallowed code point verbatim in ToUnicode`() {
+        // ToUnicode is best-effort: mapping fails on the disallowed U+0080, so mapAll returns null and
+        // domainToUnicode reuses the original text rather than raising an error.
+        val disallowed = Char(0x0080).toString()
+        assertEquals(disallowed, Idna.domainToUnicode(disallowed))
+    }
+
+    @Test
+    fun `fails with IdnaFailed when a valid label overflows Punycode encoding`() {
+        // A long run of ASCII letters followed by a single astral scalar (U+10000) passes validation but
+        // overflows the RFC 3492 delta accumulator, so re-encoding the label to ASCII fails fatally.
+        val astral = charArrayOf(Char(0xD800), Char(0xDC00)).concatToString() // U+10000
+        val label = "a".repeat(OVERFLOW_LABEL_LENGTH) + astral
+        val expected = ParseResult.Err(UriParseError.InvalidHost(label, HostError.IdnaFailed))
+        assertEquals(expected, Idna.domainToAscii(label))
+    }
+
+    private companion object {
+        // (0x10000 - 0x80) * (length + 1) exceeds Int.MAX_VALUE, forcing the Punycode overflow path.
+        private const val OVERFLOW_LABEL_LENGTH: Int = 34_000
+    }
 }

@@ -82,11 +82,14 @@ detekt {
     )
 }
 
+// A 99% line-coverage floor (see :kuri for the rationale). The single residual line
+// is PlanCompiler's defensive `else -> null`, unreachable because `bindingAnnotation`
+// only ever yields a known marker; keeping the guard costs one uncoverable line.
 kover {
     reports {
         verify {
             rule {
-                minBound(80)
+                minBound(99)
             }
         }
     }

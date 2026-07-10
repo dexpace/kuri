@@ -388,4 +388,28 @@ class QueryParametersTest {
         val params = QueryParameters.parse("roles=a%2Cb")
         assertEquals(listOf("a", "b"), params.split("roles", ','))
     }
+
+    @Test
+    fun `lookup matches a whole name and never a substring prefix or suffix`() {
+        val params = QueryParameters.parse("qq=foo")
+        assertNull(params.get("q"))
+        assertFalse(params.has("q"))
+        assertNull(params.get("oo"))
+        assertEquals("foo", params.get("qq"))
+    }
+
+    @Test
+    fun `names collapses duplicates and empty sentinels into first-appearance order`() {
+        val params = QueryParameters.parse("a=bar&b=bar&c=&&d=baz&e&f&g=buzz&&&a&b=bar&h")
+        assertEquals(listOf("a", "b", "c", "", "d", "e", "f", "g", "h"), params.names().toList())
+    }
+
+    @Test
+    fun `percent-encoded names are decoded before matching`() {
+        val params = QueryParameters.parse("a%20b=foo&c%20d=")
+        assertEquals("foo", params.get("a b"))
+        assertTrue(params.has("a b"))
+        assertContains(params.names(), "a b")
+        assertContains(params.names(), "c d")
+    }
 }

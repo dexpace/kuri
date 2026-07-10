@@ -310,6 +310,29 @@ class UriDxTest {
     }
 
     @Test
+    fun `relativize returns null when the target is not under the base directory`() {
+        // Same scheme and authority, so the two share a hierarchy, but the target path lies outside the
+        // base's directory, so no rootless suffix reaches it.
+        val base = parseOk("http://h/a/")
+        val target = parseOk("http://h/x")
+
+        assertNull(base.relativize(target))
+    }
+
+    @Test
+    fun `relativize yields a dot reference when the target is the base directory`() {
+        // The target equals the base's own directory, so the reference is "." rather than an empty
+        // suffix (which would re-inherit the base query on resolution).
+        val base = parseOk("http://h/a/b")
+        val target = parseOk("http://h/a/")
+
+        val relative = assertNotNull(base.relativize(target))
+
+        assertEquals(".", relative.uriString)
+        assertEquals(target, base.resolveOrThrow(relative.uriString))
+    }
+
+    @Test
     fun `relativize round-trips for an IPv6-authority base`() {
         // The structured resolver re-serializes the inherited base authority; an IPv6 literal is the
         // non-trivial authority case, so pin that it still round-trips through resolve.
@@ -518,6 +541,13 @@ class UriDxTest {
         assertTrue(parseOk("urn:isbn:0451450523").isOpaquePath())
         assertFalse(parseOk("http://h/p").isOpaquePath())
         assertFalse(parseOk("/rel").isOpaquePath())
+    }
+
+    @Test
+    fun `isOpaquePath is false for a scheme with a rooted authority-less path`() {
+        // A scheme and no authority, but the path is rooted ("/a/b"), so it is hierarchical rather than
+        // the rootless opaque shape; this exercises the non-rootless arm of the opaque-path test.
+        assertFalse(parseOk("foo:/a/b").isOpaquePath())
     }
 
     @Test

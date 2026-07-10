@@ -101,6 +101,15 @@ private class DelimitedEnumRoles(
     @Query("roles", ',') val roles: List<Role>,
 )
 
+// A `@Query` member declared as `Any` compiles to a leaf (its erased declared type carries no
+// binding members), but a bindable runtime value must recurse under the QUERY scope rather than
+// stringify — exercising the runtime value-class dispatch on an otherwise leaf-compiled member.
+private class ErasedQueryHolder(
+    @Scheme val scheme: String,
+    @Host val host: String,
+    @Query val filters: Any,
+)
+
 class BindingExecutorTest {
     private val executor = BindingExecutor(PlanCompiler(KotlinReflectMemberScanner()))
 
@@ -227,5 +236,11 @@ class BindingExecutorTest {
     fun `joins enum elements by name in a delimited query list`() {
         val target = DelimitedEnumRoles("https", "h", listOf(Role.ADMIN, Role.USER))
         assertEquals("https://h/?roles=ADMIN,USER", bind(target).build().toString())
+    }
+
+    @Test
+    fun `recurses an erased query leaf when its runtime value is bindable`() {
+        val target = ErasedQueryHolder("https", "h", QueryFilters("red", "large"))
+        assertEquals("https://h/?color=red&size=large", bind(target).build().toString())
     }
 }

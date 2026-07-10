@@ -227,6 +227,50 @@ class HostParserTest {
         assertIs<ParseResult.Err>(result)
     }
 
+    @Test
+    fun `parse accepts an uppercase V IPvFuture version marker`() {
+        // The version marker is 'v' or 'V'; the uppercase form reaches the same production ([HOST-42]).
+        val result = HostParser.parse("[V1.fe]", ParseProfile.URI, isSpecial = false)
+
+        assertEquals(ParseResult.Ok(Host.IpFuture("V1.fe")), result)
+    }
+
+    @Test
+    fun `parse accepts colon and sub-delim code points in an IPvFuture payload`() {
+        // The IPvFuture payload admits unreserved / sub-delims / ':' ([HOST-42]).
+        assertEquals(
+            ParseResult.Ok(Host.IpFuture("v1.a:b")),
+            HostParser.parse("[v1.a:b]", ParseProfile.URI, isSpecial = false),
+        )
+        assertEquals(
+            ParseResult.Ok(Host.IpFuture("v1.a!b")),
+            HostParser.parse("[v1.a!b]", ParseProfile.URI, isSpecial = false),
+        )
+    }
+
+    @Test
+    fun `parse rejects IPvFuture literals that break the grammar`() {
+        // No '.' separator, a non-hex version digit, an empty payload, and an out-of-set payload
+        // code point each fail the IPvFuture production ([HOST-42]).
+        listOf("[v1eF]", "[vG1.fe]", "[v1.]", "[v1.a/b]").forEach { input ->
+            val result = HostParser.parse(input, ParseProfile.URI, isSpecial = false)
+            val err = assertIs<ParseResult.Err>(result, "expected Err for '$input'")
+            val cause = assertIs<UriParseError.InvalidHost>(err.error)
+            assertEquals(HostError.Ipv6Malformed, cause.reason, "input '$input'")
+        }
+    }
+
+    @Test
+    fun `parse rejects a malformed percent triplet in a Uri reg-name`() {
+        // A '%' not followed by two hex digits is not a valid pct-encoded reg-name unit ([HOST-33]).
+        val result = HostParser.parse("a%2g", ParseProfile.URI, isSpecial = false)
+
+        val err = assertIs<ParseResult.Err>(result)
+        val cause = assertIs<UriParseError.ForbiddenHostCodePoint>(err.error)
+        assertEquals('%'.code, cause.codePoint)
+        assertEquals(1, cause.at)
+    }
+
     // --- RFC 6874 zone identifiers ([HOST-17]/[HOST-18]) -----------------------------
 
     @Test

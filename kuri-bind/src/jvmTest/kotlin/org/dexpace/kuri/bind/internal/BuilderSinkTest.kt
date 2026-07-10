@@ -72,4 +72,13 @@ class BuilderSinkTest {
         val uri = b.build()
         assertEquals("x%20y", uri.fragment)
     }
+
+    @Test
+    fun `uri sink appends a query parameter to the builder`() {
+        val b = Uri.Builder().scheme("https").host("h")
+        val sink = UriBuilderSink(b)
+        sink.addQueryParameter("k", "v")
+        val uri = b.build()
+        assertEquals("https://h?k=v", uri.toString())
+    }
 }

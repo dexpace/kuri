@@ -142,6 +142,27 @@ class PunycodeTest {
         assertNull(Punycode.decode(truncated))
     }
 
+    @Test
+    fun `decode accepts uppercase base-36 digits in the payload`() {
+        // Punycode digits are case-insensitive: an uppercase suffix decodes the same as its lowercase
+        // form, exercising the 'A'..'Z' digit-mapping arm of codePointToDigit.
+        assertEquals(Punycode.decode("bcher-kva"), Punycode.decode("bcher-KVA"))
+        assertEquals("bücher", Punycode.decode("bcher-KVA"))
+    }
+
+    @Test
+    fun `encode returns null when the delta accumulator would overflow`() {
+        // A vast run of basic code points followed by a single astral scalar drives the RFC 3492
+        // delta past Int.MAX_VALUE on the first non-basic pass, so encode reports overflow as null.
+        val oversized = "a".repeat(OVERFLOW_BASIC_COUNT) + fromCodePoints(0x10000)
+        assertNull(Punycode.encode(oversized))
+    }
+
+    private companion object {
+        // Chosen so (0x10000 - 0x80) * (count + 1) exceeds Int.MAX_VALUE on the first delta step.
+        private const val OVERFLOW_BASIC_COUNT: Int = 34_000
+    }
+
     private fun fromCodePoints(vararg codePoints: Int): String =
         buildString {
             for (codePoint in codePoints) {

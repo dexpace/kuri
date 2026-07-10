@@ -61,6 +61,17 @@ private class NonMapQueryMap(
     @QueryMap val notAMap: String,
 )
 
+// A non-binding annotation used to prove the compiler ignores annotations outside the marker set.
+@Retention(AnnotationRetention.RUNTIME)
+private annotation class NotBinding
+
+// One member carries a component marker, another carries only a non-binding annotation: the latter
+// must produce no bind step (its stray annotation is not a marker), leaving just the `@Host` leaf.
+private class NonBindingMemberHolder(
+    @Host val h: String,
+    @NotBinding val note: String,
+)
+
 class PlanCompilerFlatTest {
     private val compiler = PlanCompiler(KotlinReflectMemberScanner())
 
@@ -106,5 +117,12 @@ class PlanCompilerFlatTest {
     fun `rejects @QueryMap on a non-map member at compile`() {
         val failure = assertFailsWith<KuriBindException> { compiler.compile(NonMapQueryMap::class) }
         assertTrue(failure.message.orEmpty().contains("@QueryMap requires a Map"))
+    }
+
+    @Test
+    fun `skips a member carrying only a non-binding annotation`() {
+        val plan = compiler.compile(NonBindingMemberHolder::class)
+        val ops = plan.steps.filterIsInstance<BindStep.Leaf>().map { it.op }
+        assertEquals(listOf(LeafOp.HOST), ops)
     }
 }

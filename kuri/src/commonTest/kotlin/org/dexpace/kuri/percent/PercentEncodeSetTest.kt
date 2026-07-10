@@ -5,6 +5,7 @@
 package org.dexpace.kuri.percent
 
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -122,5 +123,33 @@ class PercentEncodeSetTest {
         val set = PercentEncodeSets.FORM_URLENCODED
         assertEncodes(set, ' ', '"', '#', '%', '&', '+', '=', '?', '/', ':', '@', '!', '~', '\'')
         assertIdentity(set, 'a', 'Z', '0', '9', '*', '-', '.', '_')
+    }
+
+    @Test
+    fun `shouldEncode rejects a negative code point`() {
+        assertFailsWith<IllegalArgumentException> {
+            PercentEncodeSets.PATH.shouldEncode(-1)
+        }
+    }
+
+    @Test
+    fun `including rejects an empty addition list`() {
+        assertFailsWith<IllegalArgumentException> {
+            PercentEncodeSets.QUERY.including()
+        }
+    }
+
+    @Test
+    fun `including rejects a control code point below printable ascii`() {
+        assertFailsWith<IllegalArgumentException> {
+            PercentEncodeSets.QUERY.including(Char(0x00))
+        }
+    }
+
+    @Test
+    fun `including rejects the del code point above printable ascii`() {
+        assertFailsWith<IllegalArgumentException> {
+            PercentEncodeSets.QUERY.including(Char(0x7F))
+        }
     }
 }

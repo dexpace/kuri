@@ -410,4 +410,10 @@ class UrlBuilderTest {
         assertEquals("a=9&c=4", url.query)
         assertEquals("https://h/?a=9&c=4", url.href)
     }
+
+    @Test
+    fun `port rejects a negative value`() {
+        // The WHATWG profile bounds the port to 0..65535; a negative value is a programmer error.
+        assertFailsWith<IllegalArgumentException> { Url.Builder().port(-1) }
+    }
 }

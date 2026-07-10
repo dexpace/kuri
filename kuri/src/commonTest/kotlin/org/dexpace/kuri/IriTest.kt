@@ -184,4 +184,29 @@ class IriTest {
 
         assertEquals("http://h/" + Char(0xFFFD), Iri.toUnicode(uri))
     }
+
+    @Test
+    fun `emits an ipv6 literal host verbatim with its port for display`() {
+        // A non-reg-name host takes the non-Idna arm of hostDisplay: the bracketed literal and port
+        // are shown exactly as serialized, never run through ToUnicode.
+        val uri = Uri.parse("http://[::1]:8080/p").getOrThrow()
+
+        assertEquals("http://[::1]:8080/p", Iri.toUnicode(uri))
+    }
+
+    @Test
+    fun `renders a hostless opaque uri unchanged for display`() {
+        // No authority means the display transform skips the authority section entirely.
+        val uri = Uri.parse("mailto:user@example.com").getOrThrow()
+
+        assertEquals("mailto:user@example.com", Iri.toUnicode(uri))
+    }
+
+    @Test
+    fun `renders a scheme-relative authority with userinfo and port for display`() {
+        // A scheme-less reference exercises the no-scheme arm while still emitting userinfo and port.
+        val uri = Uri.parse("//user@h:9/p").getOrThrow()
+
+        assertEquals("//user@h:9/p", Iri.toUnicode(uri))
+    }
 }

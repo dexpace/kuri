@@ -50,4 +50,11 @@ class PathTemplateTest {
     fun `rejects an empty template`() {
         assertFailsWith<KuriBindException> { PathTemplate.parse("") }
     }
+
+    @Test
+    fun `rejects a nested brace inside a hole name`() {
+        // The inner '{' is swallowed into the hole body (indexOf stops at the first '}'), so the
+        // parsed hole name "a{b" carries a stray brace and must be rejected.
+        assertFailsWith<KuriBindException> { PathTemplate.parse("/{a{b}") }
+    }
 }
