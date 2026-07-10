@@ -4,7 +4,6 @@
  */
 package org.dexpace.kuri.serialize
 
-import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.parser.ComponentPath
 import org.dexpace.kuri.parser.ParsedComponents
@@ -154,6 +153,6 @@ internal class UriNormalizerTest {
     private fun normalizedUri(input: String): String {
         val parsed = requireNotNull(UriParser.parse(input).getOrNull()) { "expected a parseable Uri: $input" }
         val normalized: ParsedComponents = UriNormalizer.normalize(parsed)
-        return Serializer.serialize(normalized, ParseProfile.URI)
+        return UriSerializer.serialize(normalized)
     }
 }

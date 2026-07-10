@@ -25,7 +25,7 @@ import org.dexpace.kuri.query.QueryParametersBuilder
 import org.dexpace.kuri.query.QueryState
 import org.dexpace.kuri.query.applyParameterEdit
 import org.dexpace.kuri.scheme.Scheme
-import org.dexpace.kuri.serialize.Serializer
+import org.dexpace.kuri.serialize.UrlSerializer
 import org.dexpace.kuri.serialize.serializeAuthority
 import org.dexpace.kuri.serialize.serializeUrlPath
 import kotlin.jvm.JvmName
@@ -214,7 +214,7 @@ public class Url internal constructor(
     public fun hasOpaqueOrigin(): Boolean = origin == OPAQUE_ORIGIN
 
     /** Cached canonical serialization, computed once (permits caching an immutable value). */
-    private val canonicalHref: String by lazy { Serializer.serialize(components, ParseProfile.URL) }
+    private val canonicalHref: String by lazy { UrlSerializer.serialize(components) }
 
     /** Path/query projections, each computed once; every value is immutable, mirroring [canonicalHref]. */
     private val decodedPathSegments: List<String> by lazy {

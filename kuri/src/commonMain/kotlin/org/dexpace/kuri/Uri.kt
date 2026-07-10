@@ -25,8 +25,8 @@ import org.dexpace.kuri.query.QueryParametersBuilder
 import org.dexpace.kuri.query.QueryState
 import org.dexpace.kuri.query.applyParameterEdit
 import org.dexpace.kuri.scheme.Scheme
-import org.dexpace.kuri.serialize.Serializer
 import org.dexpace.kuri.serialize.UriNormalizer
+import org.dexpace.kuri.serialize.UriSerializer
 import org.dexpace.kuri.serialize.guardRecomposedUriPath
 import kotlin.jvm.JvmName
 import kotlin.jvm.JvmOverloads
@@ -187,7 +187,7 @@ public class Uri internal constructor(
     public fun fileExtension(): String = fileExtensionOf(fileName())
 
     /** Cached canonical-but-unnormalized serialization, computed once. */
-    private val canonicalUri: String by lazy { Serializer.serialize(components, ParseProfile.URI) }
+    private val canonicalUri: String by lazy { UriSerializer.serialize(components) }
 
     /**
      * The canonical-but-UNNORMALIZED RFC 3986 §5.3 serialization; the basis of equality.

@@ -19,9 +19,6 @@ import org.dexpace.kuri.text.percentByteAt
 /** Length of a percent-encoded triplet `%XY`; hoisted so the triplet scanners carry no bare `3`. */
 private const val TRIPLET_LENGTH: Int = 3
 
-/** Path-segment separator used when re-stringifying and re-splitting a hierarchical path. */
-private const val SLASH: String = "/"
-
 /**
  * The RFC 3986 §6.2 syntax-based and scheme-based normalizations for the `Uri` profile (SPEC §11.1
  * [NORM-3]..[NORM-10]; RFC 3986 §6.2.2, §6.2.3).
