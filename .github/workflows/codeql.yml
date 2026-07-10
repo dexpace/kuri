@@ -1,0 +1,66 @@
+name: CodeQL
+
+# CodeQL SAST (static application security testing) for the JVM (Java + Kotlin) surface of kuri,
+# plus CodeQL's reliability/maintainability queries — the query suite is set to security-and-quality
+# in .github/codeql/codeql-config.yml. CodeQL only extracts JVM-bytecode-producing compilation; in
+# this KMP project all production code is common + jvm Kotlin (the whole parsing engine lives in
+# commonMain, and the reflective binder in kuri-bind's jvmMain), which the JVM target compiles, so a
+# single traced JVM build covers the entire analysable surface. The native/JS/Wasm targets are
+# outside CodeQL's reach and are covered by the CI test matrix instead.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  schedule:
+    # Weekly re-scan (Mondays 03:19 UTC) so newly published CodeQL queries flag issues even on a
+    # week with no code change. Off-the-hour to avoid the top-of-hour scheduling congestion.
+    - cron: '19 3 * * 1'
+
+# Least privilege by default; the analyze job widens to what code-scanning upload needs.
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (Java/Kotlin)
+    runs-on: ubuntu-latest
+    # A wedged extractor or build should fail fast rather than burn the 6-hour default.
+    timeout-minutes: 30
+    permissions:
+      # Upload the SARIF results to the repository's code-scanning alerts.
+      security-events: write
+      # Read workflow run metadata (required by CodeQL on private repos; harmless here).
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          # Match the CI jobs: Gradle runs on Corretto 21 (the module's jvmToolchain(21)).
+          distribution: corretto
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Initialise the CodeQL tracer BEFORE the build so the Kotlin/Java compilation is extracted.
+      # 'java' is CodeQL's identifier for the Java/Kotlin extractor (it analyses Kotlin too).
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2.26.0
+        with:
+          languages: java
+          # security-and-quality query suite + generated-code exclusions.
+          config-file: ./.github/codeql/codeql-config.yml
+
+      # Manual traced build instead of autobuild: compile only the JVM target of every module
+      # (compileKotlinJvm runs in :kuri and :kuri-bind). Autobuild would run the whole KMP build,
+      # including the native/JS/Wasm targets CodeQL can't extract. --no-build-cache forces a real
+      # compile (the project has the Gradle build cache on, which would otherwise serve cached
+      # classes and leave the tracer nothing to see); --no-daemon keeps compilation in the traced
+      # build process rather than a pre-existing untraced daemon.
+      - name: Compile JVM sources for CodeQL
+        run: ./gradlew compileKotlinJvm --no-daemon --no-build-cache --stacktrace
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v2.26.0
+        with:
+          category: "/language:java"
