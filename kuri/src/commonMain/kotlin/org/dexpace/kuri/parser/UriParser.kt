@@ -5,11 +5,10 @@
 package org.dexpace.kuri.parser
 
 import org.dexpace.kuri.ParseOptions
-import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.host.Host
-import org.dexpace.kuri.host.HostParser
+import org.dexpace.kuri.host.UriHostParser
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.scheme.isSchemeContinuationChar
 import org.dexpace.kuri.scheme.schemeColonIndex
@@ -265,7 +264,7 @@ internal object UriParser {
         val (host, portText) = splitHostPort(hostPort)
         return when (
             val parsed =
-                HostParser.parse(host, ParseProfile.URI, isSpecial = false, allowIpv6ZoneId = options.allowIpv6ZoneId)
+                UriHostParser.parse(host, allowIpv6ZoneId = options.allowIpv6ZoneId)
         ) {
             is ParseResult.Err -> parsed
             is ParseResult.Ok -> attachPort(username, password, parsed.value, portText)

@@ -5,10 +5,9 @@
 
 package org.dexpace.kuri.idna
 
-import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
-import org.dexpace.kuri.host.HostParser
+import org.dexpace.kuri.host.UrlHostParser
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -30,7 +29,7 @@ import kotlin.test.assertTrue
  *
  * That scope is asserted directly, not merely documented: every residual input is shown to be accepted
  * by [Idna.domainToAscii] (so the corpus's required rejection is a host obligation, not a ToASCII one)
- * yet rejected by [HostParser] under the `Url` profile. The suite also ratchets: it fails if any other
+ * yet rejected by [UrlHostParser] under the `Url` profile. The suite also ratchets: it fails if any other
  * case regresses, or if the residual drifts from the live failing set.
  */
 class IdnaConformanceTest {
@@ -95,7 +94,7 @@ class IdnaConformanceTest {
         // Host parsing owns these: each falls to the empty-host rule or the forbidden-host-code-point
         // check the WHATWG host parser applies on top of "domain to ASCII".
         residual.forEach { input ->
-            val result = HostParser.parse(input, ParseProfile.URL, isSpecial = true)
+            val result = UrlHostParser.parse(input, isSpecial = true)
             assertIs<ParseResult.Err>(result, "residual input should be rejected by the host layer: <$input>")
             assertTrue(
                 result.error is UriParseError.EmptyHost || result.error is UriParseError.ForbiddenHostCodePoint,

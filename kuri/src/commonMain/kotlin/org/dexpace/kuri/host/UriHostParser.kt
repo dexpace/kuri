@@ -4,12 +4,9 @@
  */
 package org.dexpace.kuri.host
 
-import org.dexpace.kuri.ParseProfile
 import org.dexpace.kuri.error.HostError
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
-import org.dexpace.kuri.idna.Idna
-import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.text.hasPercentHexPairAt
 import org.dexpace.kuri.text.isAsciiHexDigit
 import org.dexpace.kuri.text.isUnreserved
@@ -17,7 +14,7 @@ import org.dexpace.kuri.text.isUnreserved
 /** Opening delimiter of an IP-literal; a host beginning with it dispatches to §7.2/§7.8. */
 private const val BRACKET_OPEN: Char = '['
 
-/** Closing delimiter an IP-literal MUST carry ([HOST-4]/[HOST-5]). */
+/** Closing delimiter an IP-literal MUST carry ([HOST-5]). */
 private const val BRACKET_CLOSE: Char = ']'
 
 /** Sentinel for "no offending index found" returned by the host scanners. */
@@ -36,112 +33,32 @@ private const val IP_FUTURE_DOT: Char = '.'
 private const val SUB_DELIMS: String = "!\$&'()*+,;="
 
 /**
- * The profile-aware host-parser dispatch of SPEC §7.1 ([HOST-3]).
+ * The RFC 3986 §3.2.2 host parser (SPEC §7.2/§7.5/§7.8, [HOST-3] row 5).
  *
- * Composes the already-implemented host pieces — [Ipv6], [Ipv4], [OpaqueHost],
- * [Idna], the forbidden-code-point tables, and [PercentCodec] — into the single
- * ordered branch selection of [HOST-3], parameterized by [ParseProfile]. The `Url`
- * profile runs the WHATWG host parser (IPv6 literal, opaque host, or the special
- * domain/IPv4 pipeline); the `Uri` profile runs the RFC 3986 §3.2.2 grammar
- * (`IP-literal` / `IPvFuture` / `IPv4address` / `reg-name`). No piece is
- * reimplemented here; this layer only selects and validates.
+ * Composes the already-implemented host pieces — [Ipv6], [Ipv4], the forbidden-code-point tables —
+ * into the RFC grammar (`IP-literal` / `IPvFuture` / `IPv4address` / `reg-name`): a `[`-prefixed
+ * literal first, then an empty host, then the IPv4/reg-name split. No piece is reimplemented here;
+ * this layer only selects and validates.
  *
- * The two profile pipelines are each a short ordered procedure; they are decomposed
- * into single-purpose helpers (each well under the line/return budgets), which is the
- * intent of the "small functions" rule and legitimately exceeds the per-object count.
+ * The pipeline is a short ordered procedure decomposed into single-purpose helpers (each well under
+ * the line/return budgets), which is the intent of the "small functions" rule and legitimately
+ * exceeds the per-object count.
  */
 @Suppress("TooManyFunctions")
-internal object HostParser {
+internal object UriHostParser {
     /**
-     * Parses [input] (the host substring, brackets retained) into a [Host] under [profile] (§7.1).
+     * Parses [input] (the host substring, brackets retained) into a [Host] under the RFC 3986 rules.
      *
-     * The branch is selected by [HOST-3]: a `[`-prefixed literal first, then empty/opaque/domain
-     * per profile and specialness. Failures are returned as [ParseResult.Err] rather than thrown
-     * ([ERR-1]).
+     * The branch is selected by [HOST-3]: a `[`-prefixed literal first, then empty, then the
+     * IPv4/reg-name split. Failures are returned as [ParseResult.Err] rather than thrown ([ERR-1]).
      *
      * @param input the host text isolated by the authority splitter (§8), `[`/`]` still present.
-     * @param profile selects the WHATWG (`Url`) or RFC 3986 (`Uri`) acceptance rules.
-     * @param isSpecial whether the scheme is special; gates the `Url` domain/IPv4 pipeline ([HOST-3]).
-     * @param isFile whether the scheme is `file`; an empty `file` host is permitted ([HOST-39]).
-     * @param allowIpv6ZoneId whether an RFC 6874 `%25` IPv6 zone id is accepted (default off, [HOST-18]);
-     *   honored by the `Uri` profile only. The `Url` profile ignores it and always rejects a zone id,
-     *   since the WHATWG URL parser has no zone-id production ([HOST-17]).
+     * @param allowIpv6ZoneId whether an RFC 6874 `%25` IPv6 zone id is accepted (default off, [HOST-18]).
      * @return the parsed [Host], or a [UriParseError]-tagged failure.
      */
     internal fun parse(
         input: String,
-        profile: ParseProfile,
-        isSpecial: Boolean,
-        isFile: Boolean = false,
         allowIpv6ZoneId: Boolean = false,
-    ): ParseResult<Host> =
-        if (profile.isWhatwg) {
-            parseUrlHost(input, isSpecial, isFile)
-        } else {
-            parseUriHost(input, allowIpv6ZoneId)
-        }
-
-    // --- Url profile (WHATWG host parser, §7.2/§7.4/§7.5/§7.7) ------------------------
-
-    /** Ordered `Url`-profile dispatch ([HOST-3] rows 1–4): literal, opaque, empty, then domain. */
-    private fun parseUrlHost(
-        input: String,
-        isSpecial: Boolean,
-        isFile: Boolean,
-    ): ParseResult<Host> =
-        when {
-            input.firstOrNull() == BRACKET_OPEN -> parseBracketedUrl(input)
-            !isSpecial -> OpaqueHost.parse(input)
-            input.isEmpty() -> if (isFile) ParseResult.Ok(Host.Empty) else ParseResult.Err(UriParseError.EmptyHost)
-            else -> parseSpecialDomain(input)
-        }
-
-    /** Parses a `Url` `[`…`]` literal strictly as IPv6, rejecting any zone id; a missing `]` is fatal ([HOST-4]). */
-    private fun parseBracketedUrl(input: String): ParseResult<Host> =
-        if (input.endsWith(BRACKET_CLOSE)) {
-            Ipv6.parse(bracketInterior(input))
-        } else {
-            bracketError(input)
-        }
-
-    /**
-     * The special-scheme domain pipeline (§7.4): UTF-8 percent-decode, run the WHATWG "domain to
-     * ASCII" wrapper ([Idna.domainToAsciiForUrl] — UTS-46 with the ASCII fast-path and empty-result
-     * rule), then classify the ASCII domain. A domain-to-ASCII failure propagates unchanged ([HOST-26]).
-     */
-    private fun parseSpecialDomain(input: String): ParseResult<Host> {
-        require(input.isNotEmpty()) { "empty domain reached the IDNA pipeline" }
-        val decoded = PercentCodec.decode(input)
-        return when (val ascii = Idna.domainToAsciiForUrl(decoded)) {
-            is ParseResult.Err -> ascii
-            is ParseResult.Ok -> classifyAsciiDomain(ascii.value)
-        }
-    }
-
-    /**
-     * Classifies the produced ASCII domain ([HOST-29]/[HOST-30]): a forbidden-domain code point is
-     * fatal, an ends-in-a-number host parses as IPv4, otherwise it is a lowercase-ASCII [Host.RegName].
-     */
-    private fun classifyAsciiDomain(asciiDomain: String): ParseResult<Host> {
-        val forbiddenAt = firstForbiddenDomainIndex(asciiDomain)
-        check(forbiddenAt == NOT_FOUND || forbiddenAt in asciiDomain.indices) { "bad index: $forbiddenAt" }
-        return when {
-            forbiddenAt != NOT_FOUND ->
-                ParseResult.Err(UriParseError.ForbiddenHostCodePoint(asciiDomain[forbiddenAt].code, forbiddenAt))
-            Ipv4.endsInANumber(asciiDomain) -> Ipv4Whatwg.parse(asciiDomain)
-            else -> ParseResult.Ok(Host.RegName(asciiDomain))
-        }
-    }
-
-    /** Index of the first forbidden-domain code point in [domain] (§7.6 [HOST-37]), or [NOT_FOUND] (`-1`). */
-    private fun firstForbiddenDomainIndex(domain: String): Int = domain.indexOfFirst { isForbiddenDomainCodePoint(it) }
-
-    // --- Uri profile (RFC 3986 §3.2.2 host grammar, §7.2/§7.5/§7.8) -------------------
-
-    /** Ordered `Uri`-profile dispatch ([HOST-3] row 5): IP-literal, empty host, then IPv4/reg-name. */
-    private fun parseUriHost(
-        input: String,
-        allowIpv6ZoneId: Boolean,
     ): ParseResult<Host> =
         when {
             input.firstOrNull() == BRACKET_OPEN -> parseBracketedUri(input, allowIpv6ZoneId)
@@ -250,18 +167,6 @@ internal object HostParser {
             else -> 0
         }
     }
-
-    // --- shared helpers --------------------------------------------------------------
-
-    /** Strips the surrounding `[`/`]`, returning the bracket contents ([HOST-4]/[HOST-5]). */
-    private fun bracketInterior(input: String): String {
-        require(input.length >= 2) { "bracketed literal too short: $input" }
-        return input.substring(1, input.length - 1)
-    }
-
-    /** The malformed-literal failure for a bracketed host that does not close ([HOST-4]/[HOST-5]). */
-    private fun bracketError(input: String): ParseResult<Host> =
-        ParseResult.Err(UriParseError.InvalidHost(input, HostError.Ipv6Malformed))
 
     /** True when [c] is an RFC 3986 `sub-delims` code point. */
     private fun isSubDelim(c: Char): Boolean = c in SUB_DELIMS

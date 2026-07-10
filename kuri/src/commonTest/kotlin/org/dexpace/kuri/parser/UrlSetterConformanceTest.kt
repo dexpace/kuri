@@ -124,14 +124,14 @@ class UrlSetterConformanceTest {
         // one commented entry per line explaining why kuri's immutable model diverges from the
         // JS mutable-setter fixture.
         //
-        // Both entries are the same underlying gap, not a setter-plumbing bug: HostParser accepts
+        // Both entries are the same underlying gap, not a setter-plumbing bug: UrlHostParser accepts
         // the ACE label "xn--" (an `xn--` prefix with no encoded suffix, which Punycode decodes to
         // the empty string) as a plain RegName instead of rejecting it as an invalid domain label.
         // A *full* parse of "https://xn--/" reproduces the identical acceptance (verified directly
-        // against HostParser.parse and Url.parse, not just through the setter), so this is IDNA
+        // against UrlHostParser.parse and Url.parse, not just through the setter), so this is IDNA
         // domain-validity depth kuri's host pipeline doesn't yet cover -- not something introduced
         // or fixable by the setter/override plumbing this suite exercises. Fixing it means teaching
-        // HostParser/the domain-to-ASCII step to validate an `xn--` label's Punycode round-trip,
+        // UrlHostParser/the domain-to-ASCII step to validate an `xn--` label's Punycode round-trip,
         // which is IDNA runtime this task is explicitly scoped out of touching.
         private val KNOWN_FAILURES: Set<String> =
             setOf(
