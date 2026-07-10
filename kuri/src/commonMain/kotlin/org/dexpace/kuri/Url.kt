@@ -383,7 +383,7 @@ public class Url internal constructor(
      * @throws IllegalArgumentException when [port] is outside `0..65535` and a port can attach.
      */
     public fun withPort(port: Int?): Url {
-        if (host == null || host == Host.Empty || scheme.equals(FILE_SCHEME, ignoreCase = true)) return this
+        if (!canHaveCredentialsOrPort()) return this
         return newBuilder().port(port).build()
     }
 
@@ -546,12 +546,17 @@ public class Url internal constructor(
 
     /** WHATWG "cannot have a username/password/port": no host, empty host, or `file` scheme. */
     private fun canHaveCredentialsOrPort(): Boolean {
-        val h = components.host
-        return h != null && h != Host.Empty && !scheme.equals(FILE_SCHEME, ignoreCase = true)
+        val currentHost = components.host
+        return currentHost != null && currentHost != Host.Empty && !scheme.equals(FILE_SCHEME, ignoreCase = true)
     }
 
     /** A copy carrying [next], or `this` when [next] already equals the current components (a no-op). */
-    private fun withComponents(next: ParsedComponents): Url = if (next == components) this else Url(next)
+    private fun withComponents(next: ParsedComponents): Url {
+        // The one invariant every setter funnels through here must preserve: a Url always carries a
+        // scheme (the `scheme` getter and the Builder both rely on it), so no setter may strip it.
+        check(next.scheme != null) { "a setter must never strip the scheme" }
+        return if (next == components) this else Url(next)
+    }
 
     /** Runs a setter [override] over [value], returning `this` on any error or WHATWG no-op. */
     private fun applyOverride(

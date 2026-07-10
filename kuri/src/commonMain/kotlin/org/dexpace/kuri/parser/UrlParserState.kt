@@ -94,12 +94,12 @@ internal class UrlParserState(
         password = seed.password
         host = seed.host
         port = seed.port
-        when (val p = seed.path) {
+        when (val seedPath = seed.path) {
             is UrlPath.Opaque -> {
                 isOpaque = true
-                opaque = p.path
+                opaque = seedPath.path
             }
-            is UrlPath.Segments -> path.addAll(p.segments)
+            is UrlPath.Segments -> path.addAll(seedPath.segments)
         }
         query = seed.query
         stateOverride = override

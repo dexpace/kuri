@@ -99,6 +99,13 @@ class UrlSetterConformanceTest {
     }
 
     @Test
+    fun `every tracked known failure is a real corpus case`() {
+        val keys = SETTER_TEST_CASES.map { key(it) }.toSet()
+        val orphans = KNOWN_FAILURES - keys
+        assertTrue(orphans.isEmpty(), "known failures absent from the corpus: $orphans")
+    }
+
+    @Test
     fun `the setter corpus is substantial`() {
         assertTrue(SETTER_TEST_CASES.size > MIN_CORPUS_SIZE, "corpus too small: ${SETTER_TEST_CASES.size}")
     }

@@ -86,6 +86,10 @@ internal object UrlParser {
                 StateOverride.PATHNAME -> UrlState.PATH_START
                 StateOverride.QUERY -> UrlState.QUERY
             }
+        // The finalized components carry only the validation errors from this override run, not the
+        // seed URL's original parse errors -- `errors` is a fresh list, and validationErrors is a
+        // per-operation diagnostic, so a setter result's errors reflect the setter, never a cumulative
+        // history. (The fragment is untouched by every override, so it is carried straight from seed.)
         return when (val outcome = runOverride(state)) {
             OverrideOutcome.ABORT -> ParseResult.Ok(seed)
             OverrideOutcome.OK -> ParseResult.Ok(finalize(state).copy(fragment = seed.fragment))
