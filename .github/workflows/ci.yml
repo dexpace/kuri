@@ -52,9 +52,30 @@ jobs:
           distribution: corretto
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
+      # Restore the Kotlin/Native toolchain (~1 GB: compiler bundle + LLVM/sysroot/gcc deps under
+      # ~/.konan). setup-gradle caches ~/.gradle but not ~/.konan, and apiCheck's KLIB ABI validation
+      # compiles every native klib here, so without this the whole bundle re-downloads each run.
+      # Restore runs on every branch (PRs reuse main's cache); only main writes it (see the save step
+      # below). The key tracks the version catalog; restore-keys give a partial hit when it changes.
+      - name: Restore Kotlin/Native toolchain
+        id: konan-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.konan
+          key: ${{ runner.os }}-konan-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: ${{ runner.os }}-konan-
       - name: ktlint, detekt, binary-compatibility and JVM coverage floor
         # koverVerify pulls in jvmTest and enforces the 80% line-coverage rule.
         run: ./gradlew ktlintCheck detekt apiCheck jvmTest koverVerify --stacktrace
+      # Write the toolchain cache only from main, and only when the restore was not an exact hit
+      # (GitHub caches are write-once per key). PRs never write, so parallel branches can't evict
+      # main's warm cache.
+      - name: Save Kotlin/Native toolchain
+        if: github.ref == 'refs/heads/main' && steps.konan-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.konan
+          key: ${{ runner.os }}-konan-${{ hashFiles('gradle/libs.versions.toml') }}
 
   web:
     name: JS · Wasm tests (Linux x64)
@@ -117,8 +138,26 @@ jobs:
           distribution: corretto
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
+      # Restore the Kotlin/Native toolchain (~1 GB under ~/.konan) that this native job compiles and
+      # links against; setup-gradle caches ~/.gradle but not ~/.konan. runner.os in the key keeps the
+      # Linux/Windows/macOS legs separate. Restore runs on every branch; only main writes it (below).
+      - name: Restore Kotlin/Native toolchain
+        id: konan-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.konan
+          key: ${{ runner.os }}-konan-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: ${{ runner.os }}-konan-
       - name: ${{ matrix.name }}
         run: ./gradlew ${{ matrix.tasks }} --stacktrace
+      # Write the toolchain cache only from main, and only on a non-exact restore (caches are
+      # write-once per key), so PR legs never evict main's warm per-OS cache.
+      - name: Save Kotlin/Native toolchain
+        if: github.ref == 'refs/heads/main' && steps.konan-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.konan
+          key: ${{ runner.os }}-konan-${{ hashFiles('gradle/libs.versions.toml') }}
 
   android-unit:
     name: Android unit tests (Linux x64)
@@ -131,8 +170,6 @@ jobs:
         with:
           distribution: corretto
           java-version: '21'
-      # AGP needs an Android SDK at configuration time; this installs it and accepts licenses.
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
       - name: Android host (JVM) unit tests
         # Runs commonTest compiled for the Android target on the JVM — no emulator.
@@ -157,6 +194,35 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      # Restore the cached AVD (system image, created device, boot snapshot) under ~/.android so a run
+      # can skip the image download, AVD creation and cold boot and load a warm snapshot instead.
+      # Restore runs on every branch (PRs reuse main's snapshot); only main writes it (see save below).
+      # The key pins every coordinate that affects the snapshot; bump the -v suffix if the emulator
+      # options change, since GitHub caches are write-once per key.
+      - name: Restore AVD snapshot
+        id: avd-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-30-aosp_atd-x86_64-pixel6-v1
+      # On main with no cached snapshot, boot once to create the AVD and write a clean boot snapshot
+      # for the cache. Emulator options match the test run so the snapshot stays valid. Gated to main
+      # because only main persists it — on PRs the test step below just cold-boots instead of booting
+      # twice.
+      - name: Create AVD and generate snapshot for caching
+        if: github.ref == 'refs/heads/main' && steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: aosp_atd
+          arch: x86_64
+          profile: pixel_6
+          force-avd-creation: false
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: echo "Generated AVD snapshot for caching."
       - name: Android instrumented tests on an emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -164,10 +230,21 @@ jobs:
           target: aosp_atd
           arch: x86_64
           profile: pixel_6
+          force-avd-creation: false
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # -no-snapshot-save: boot from the cached snapshot but don't rewrite it on exit.
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save -camera-back none
           # Installs and runs the androidDeviceTest instrumentation (an ART smoke test) on the emulator.
           script: ./gradlew :kuri:connectedAndroidDeviceTest --stacktrace
+      # Persist the AVD snapshot for later runs — only from main, and only on a non-exact restore.
+      - name: Save AVD snapshot
+        if: github.ref == 'refs/heads/main' && steps.avd-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-30-aosp_atd-x86_64-pixel6-v1
 
   # Aggregate gate: a single check to require in branch protection. Green only when every
   # job above succeeded; fails if any was skipped, cancelled or failed.
