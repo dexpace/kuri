@@ -55,6 +55,8 @@ jobs:
       # Restore the Kotlin/Native toolchain (~1 GB: compiler bundle + LLVM/sysroot/gcc deps under
       # ~/.konan). setup-gradle caches ~/.gradle but not ~/.konan, and apiCheck's KLIB ABI validation
       # compiles every native klib here, so without this the whole bundle re-downloads each run.
+      # The key is scoped `-gate-` (the native job below uses `-native-`) so the two Linux jobs each
+      # cache the toolchain subset they actually pull and never race to write one shared key on main.
       # Restore runs on every branch (PRs reuse main's cache); only main writes it (see the save step
       # below). The key tracks the version catalog; restore-keys give a partial hit when it changes.
       - name: Restore Kotlin/Native toolchain
@@ -62,8 +64,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/.konan
-          key: ${{ runner.os }}-konan-${{ hashFiles('gradle/libs.versions.toml') }}
-          restore-keys: ${{ runner.os }}-konan-
+          key: ${{ runner.os }}-konan-gate-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: ${{ runner.os }}-konan-gate-
       - name: ktlint, detekt, binary-compatibility and JVM coverage floor
         # koverVerify pulls in jvmTest and enforces the 80% line-coverage rule.
         run: ./gradlew ktlintCheck detekt apiCheck jvmTest koverVerify --stacktrace
@@ -75,7 +77,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/.konan
-          key: ${{ runner.os }}-konan-${{ hashFiles('gradle/libs.versions.toml') }}
+          key: ${{ runner.os }}-konan-gate-${{ hashFiles('gradle/libs.versions.toml') }}
 
   web:
     name: JS · Wasm tests (Linux x64)
@@ -140,14 +142,15 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       # Restore the Kotlin/Native toolchain (~1 GB under ~/.konan) that this native job compiles and
       # links against; setup-gradle caches ~/.gradle but not ~/.konan. runner.os in the key keeps the
-      # Linux/Windows/macOS legs separate. Restore runs on every branch; only main writes it (below).
+      # Linux/Windows/macOS legs separate, and the `-native-` scope keeps the Linux leg from colliding
+      # with the quality-gate job's `-gate-` cache. Restore runs on every branch; only main writes it.
       - name: Restore Kotlin/Native toolchain
         id: konan-cache
         uses: actions/cache/restore@v4
         with:
           path: ~/.konan
-          key: ${{ runner.os }}-konan-${{ hashFiles('gradle/libs.versions.toml') }}
-          restore-keys: ${{ runner.os }}-konan-
+          key: ${{ runner.os }}-konan-native-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: ${{ runner.os }}-konan-native-
       - name: ${{ matrix.name }}
         run: ./gradlew ${{ matrix.tasks }} --stacktrace
       # Write the toolchain cache only from main, and only on a non-exact restore (caches are
@@ -157,7 +160,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/.konan
-          key: ${{ runner.os }}-konan-${{ hashFiles('gradle/libs.versions.toml') }}
+          key: ${{ runner.os }}-konan-native-${{ hashFiles('gradle/libs.versions.toml') }}
 
   android-unit:
     name: Android unit tests (Linux x64)
@@ -209,8 +212,8 @@ jobs:
           key: avd-30-aosp_atd-x86_64-pixel6-v1
       # On main with no cached snapshot, boot once to create the AVD and write a clean boot snapshot
       # for the cache. Emulator options match the test run so the snapshot stays valid. Gated to main
-      # because only main persists it — on PRs the test step below just cold-boots instead of booting
-      # twice.
+      # because only main persists it — PRs skip this create-and-snapshot step and run the test step
+      # below once, warm-booting from main's cached snapshot when present (a single boot, not two).
       - name: Create AVD and generate snapshot for caching
         if: github.ref == 'refs/heads/main' && steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2

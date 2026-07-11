@@ -5,8 +5,9 @@ name: CodeQL
 # in .github/codeql/codeql-config.yml. CodeQL only extracts JVM-bytecode-producing compilation; in
 # this KMP project all production code is common + jvm Kotlin (the whole parsing engine lives in
 # commonMain, and the reflective binder in kuri-bind's jvmMain), which the JVM target compiles, so a
-# single traced JVM build covers the entire analysable surface. The native/JS/Wasm targets are
-# outside CodeQL's reach and are covered by the CI test matrix instead.
+# single traced JVM build covers commonMain + jvmMain — the entire security-relevant surface. Only
+# platform-specific `actual` bodies (in jsMain/nativeMain/wasmJsMain, if any) fall outside this JVM
+# extraction; CodeQL can't extract those targets, and they are covered by the CI test matrix instead.
 
 on:
   push:
@@ -16,6 +17,12 @@ on:
     # Weekly re-scan (Mondays 03:19 UTC) so newly published CodeQL queries flag issues even on a
     # week with no code change. Off-the-hour to avoid the top-of-hour scheduling congestion.
     - cron: '19 3 * * 1'
+
+# A newer push to the same PR ref cancels an in-flight scan instead of stacking concurrent analyses;
+# main runs are never cancelled, so every default-branch commit keeps its own recorded CodeQL result.
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # Least privilege by default; the analyze job widens to what code-scanning upload needs.
 permissions:
@@ -44,10 +51,20 @@ jobs:
 
       # Initialise the CodeQL tracer BEFORE the build so the Kotlin/Java compilation is extracted.
       # 'java' is CodeQL's identifier for the Java/Kotlin extractor (it analyses Kotlin too).
+      # Pinned to the codeql-action's current major (@v4 → latest 4.x), matching how every other
+      # action here is pinned by major tag. The action version and the CodeQL CLI *bundle* version are
+      # separate schemes: @v4 selects the action, which ships a recent CLI bundle (2.26.x) on its own.
+      # (The previous @v2.26.0 pinned the long-deprecated v2 *action* — not the 2.26.0 CLI bundle it
+      # was mistaken for.)
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2.26.0
+        uses: github/codeql-action/init@v4
         with:
           languages: java
+          # v4's explicit mode for a compiled language whose database is built by manual commands
+          # between init and analyze (the `compileKotlinJvm` step below), never by autobuild — which
+          # would build the whole KMP project. Omitting it works too (the tracer path is identical for
+          # Java), but declaring it self-documents that autobuild is deliberately avoided.
+          build-mode: manual
           # security-and-quality query suite + generated-code exclusions.
           config-file: ./.github/codeql/codeql-config.yml
 
@@ -61,6 +78,6 @@ jobs:
         run: ./gradlew compileKotlinJvm --no-daemon --no-build-cache --stacktrace
 
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@v2.26.0
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:java"
