@@ -30,7 +30,9 @@ The generators are Go programs under `tools/` (module
 `github.com/dexpace/kuri/tools`), driven by `tools/internal/codegen`. That
 package reads raw UCD via `tools/internal/ucd` and derives the conformance
 baseline via `tools/internal/idnaref`, a faithful Go port of kuri's runtime IDNA
-engine.
+engine — a second implementation of kuri's own algorithm, not an independent
+oracle. WPT (below) is the independent oracle; idnaref only narrows the
+known-failures residual within whatever WPT doesn't already exercise.
 
 ## Source of truth
 

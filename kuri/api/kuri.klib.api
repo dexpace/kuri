@@ -160,6 +160,38 @@ sealed interface org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.erro
         final fun toString(): kotlin/String // org.dexpace.kuri.error/UriParseError.InvalidScheme.toString|toString(){}[0]
     }
 
+    final class IriBidiFormattingCharacter : org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.error/UriParseError.IriBidiFormattingCharacter|null[0]
+        constructor <init>(kotlin/Int, kotlin/Int) // org.dexpace.kuri.error/UriParseError.IriBidiFormattingCharacter.<init>|<init>(kotlin.Int;kotlin.Int){}[0]
+
+        final val at // org.dexpace.kuri.error/UriParseError.IriBidiFormattingCharacter.at|{}at[0]
+            final fun <get-at>(): kotlin/Int // org.dexpace.kuri.error/UriParseError.IriBidiFormattingCharacter.at.<get-at>|<get-at>(){}[0]
+        final val codePoint // org.dexpace.kuri.error/UriParseError.IriBidiFormattingCharacter.codePoint|{}codePoint[0]
+            final fun <get-codePoint>(): kotlin/Int // org.dexpace.kuri.error/UriParseError.IriBidiFormattingCharacter.codePoint.<get-codePoint>|<get-codePoint>(){}[0]
+
+        final fun component1(): kotlin/Int // org.dexpace.kuri.error/UriParseError.IriBidiFormattingCharacter.component1|component1(){}[0]
+        final fun component2(): kotlin/Int // org.dexpace.kuri.error/UriParseError.IriBidiFormattingCharacter.component2|component2(){}[0]
+        final fun copy(kotlin/Int = ..., kotlin/Int = ...): org.dexpace.kuri.error/UriParseError.IriBidiFormattingCharacter // org.dexpace.kuri.error/UriParseError.IriBidiFormattingCharacter.copy|copy(kotlin.Int;kotlin.Int){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.error/UriParseError.IriBidiFormattingCharacter.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.error/UriParseError.IriBidiFormattingCharacter.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.error/UriParseError.IriBidiFormattingCharacter.toString|toString(){}[0]
+    }
+
+    final class IriInvalidCodePoint : org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.error/UriParseError.IriInvalidCodePoint|null[0]
+        constructor <init>(kotlin/Int, kotlin/Int) // org.dexpace.kuri.error/UriParseError.IriInvalidCodePoint.<init>|<init>(kotlin.Int;kotlin.Int){}[0]
+
+        final val at // org.dexpace.kuri.error/UriParseError.IriInvalidCodePoint.at|{}at[0]
+            final fun <get-at>(): kotlin/Int // org.dexpace.kuri.error/UriParseError.IriInvalidCodePoint.at.<get-at>|<get-at>(){}[0]
+        final val codePoint // org.dexpace.kuri.error/UriParseError.IriInvalidCodePoint.codePoint|{}codePoint[0]
+            final fun <get-codePoint>(): kotlin/Int // org.dexpace.kuri.error/UriParseError.IriInvalidCodePoint.codePoint.<get-codePoint>|<get-codePoint>(){}[0]
+
+        final fun component1(): kotlin/Int // org.dexpace.kuri.error/UriParseError.IriInvalidCodePoint.component1|component1(){}[0]
+        final fun component2(): kotlin/Int // org.dexpace.kuri.error/UriParseError.IriInvalidCodePoint.component2|component2(){}[0]
+        final fun copy(kotlin/Int = ..., kotlin/Int = ...): org.dexpace.kuri.error/UriParseError.IriInvalidCodePoint // org.dexpace.kuri.error/UriParseError.IriInvalidCodePoint.copy|copy(kotlin.Int;kotlin.Int){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.error/UriParseError.IriInvalidCodePoint.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.error/UriParseError.IriInvalidCodePoint.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.error/UriParseError.IriInvalidCodePoint.toString|toString(){}[0]
+    }
+
     final object EmptyHost : org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.error/UriParseError.EmptyHost|null[0]
         final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.error/UriParseError.EmptyHost.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // org.dexpace.kuri.error/UriParseError.EmptyHost.hashCode|hashCode(){}[0]

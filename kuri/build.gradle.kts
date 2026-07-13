@@ -7,6 +7,8 @@ import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinMultiplatform
 import com.vanniktech.maven.publish.SonatypeHost
 import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
+import kotlinx.validation.KotlinApiBuildTask
+import kotlinx.validation.KotlinApiCompareTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
@@ -160,6 +162,10 @@ kotlin {
         // on the Java test's compile classpath, at the version the Kotlin release was built for.
         jvmTest.dependencies {
             implementation(kotlin("test-junit"))
+            // Independent third-party UTS-46 oracle for IdnaIcu4jDifferentialTest (issue #66):
+            // icu4j has no multiplatform artifact, so it is scoped to the JVM test classpath only
+            // and must never be referenced from commonMain/commonTest.
+            implementation(libs.icu4j)
         }
         // Instrumented tests run under AndroidJUnitRunner (JUnit4), so bind kotlin.test to JUnit4
         // and pull in the AndroidX test runtime that provides the runner.
@@ -241,6 +247,72 @@ apiValidation {
         enabled = true
     }
 }
+
+// binary-compatibility-validator's built-in multiplatform auto-configuration only recognizes an
+// Android target compilation literally named "release" (the classic AGP `com.android.library` +
+// `androidTarget()` build-variant naming). The AGP KMP library plugin used here
+// (`com.android.kotlin.multiplatform.library`) is single-variant and names its production
+// compilation "main" instead, so that auto-configuration never matches it, `androidApiBuild`/
+// `androidApiCheck`/`androidApiDump` tasks never get created, and `apiCheck`/`apiDump` silently
+// skip the android surface entirely (see the upstream gap tracked as KT-71172; verified locally
+// by inspecting the plugin's target-matching source — it hasn't changed as of BCV 0.18.1). That
+// silent skip is exactly how `kuri/api/android/kuri.api` went stale: nothing ever regenerated or
+// checked it. Wire an equivalent android leg by hand using BCV's own public task classes,
+// `KotlinApiBuildTask`/`KotlinApiCompareTask`, mirroring the classpath and directory layout
+// (`api/android/kuri.api`) its Kotlin-target legs already use, and hook the result into the same
+// `apiDump`/`apiCheck` entry points so android gets no special-cased invocation.
+val androidAbiRuntimeClasspath: NamedDomainObjectProvider<Configuration> =
+    configurations.register("androidAbiRuntimeClasspath") {
+        description = "Runtime classpath for the manually wired android apiBuild/apiCheck tasks."
+        isCanBeConsumed = false
+        isCanBeResolved = true
+        isVisible = false
+    }
+
+dependencies.apply {
+    add(androidAbiRuntimeClasspath.name, libs.asm.core.get())
+    add(androidAbiRuntimeClasspath.name, libs.asm.tree.get())
+    add(
+        androidAbiRuntimeClasspath.name,
+        libs.kotlin.metadata.jvm
+            .get(),
+    )
+}
+
+val androidApiBuild: TaskProvider<KotlinApiBuildTask> =
+    tasks.register<KotlinApiBuildTask>("androidApiBuild") {
+        group = "verification"
+        description = "Builds the Kotlin API dump for the android target's 'main' compilation of kuri."
+        inputClassesDirs.from(tasks.named("compileAndroidMain").map { it.outputs.files })
+        inputDependencies.from(
+            kotlin.targets
+                .getByName("android")
+                .compilations
+                .getByName("main")
+                .compileDependencyFiles,
+        )
+        outputApiFile.set(layout.buildDirectory.file("kotlin/abi-android/kuri.api"))
+        runtimeClasspath.from(androidAbiRuntimeClasspath)
+    }
+
+val androidApiCheck: TaskProvider<KotlinApiCompareTask> =
+    tasks.register<KotlinApiCompareTask>("androidApiCheck") {
+        group = "verification"
+        description = "Checks the android target's public API against api/android/kuri.api."
+        projectApiFile.set(layout.projectDirectory.file("api/android/kuri.api"))
+        generatedApiFile.set(androidApiBuild.flatMap { it.outputApiFile })
+    }
+
+val androidApiDump: TaskProvider<Copy> =
+    tasks.register<Copy>("androidApiDump") {
+        group = "other"
+        description = "Copies the android target's generated API dump into api/android/kuri.api."
+        from(androidApiBuild.flatMap { it.outputApiFile })
+        into(layout.projectDirectory.dir("api/android"))
+    }
+
+tasks.named("apiCheck") { dependsOn(androidApiCheck) }
+tasks.named("apiDump") { dependsOn(androidApiDump) }
 
 // Publish every Kotlin Multiplatform target (plus the root `kotlinMultiplatform` publication) to Maven
 // Central through the Central Portal. The vanniktech plugin wires the per-target publications, a

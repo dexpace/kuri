@@ -16,7 +16,8 @@ package org.dexpace.kuri.error
  * The parser produces a fixed slice of this catalog: structural failures
  * ([InvalidScheme], [MissingScheme], [InvalidPercentEncoding], [InvalidPort]),
  * host failures ([EmptyHost], [InvalidHost] carrying a [HostError], and
- * [ForbiddenHostCodePoint]), and the size failure [InputTooLong]. The hierarchy
+ * [ForbiddenHostCodePoint]), the size failure [InputTooLong], and the RFC 3987 IRI-conversion
+ * failures ([IriInvalidCodePoint], [IriBidiFormattingCharacter]). The hierarchy
  * is `sealed` so a `when` over it is exhaustive without an `else`;
  * adding a variant is an intentional, API-visible change.
  */
@@ -39,6 +40,8 @@ public sealed interface UriParseError {
                 is InvalidHost -> "invalid host \"$host\": $reason"
                 is ForbiddenHostCodePoint -> "forbidden host code point $codePoint at offset $at"
                 is InputTooLong -> "input length $length exceeds maximum $max"
+                is IriInvalidCodePoint -> "code point $codePoint at offset $at is outside the iri repertoire"
+                is IriBidiFormattingCharacter -> "forbidden bidi formatting character $codePoint at offset $at"
             }
 
     /**
@@ -131,5 +134,32 @@ public sealed interface UriParseError {
     public data class InputTooLong(
         public val length: Int,
         public val max: Int,
+    ) : UriParseError
+
+    /**
+     * A non-ASCII code point in an IRI component falls outside the RFC 3987 §2.2 repertoire that
+     * component permits: outside `ucschar` for userinfo, path, and fragment; outside `ucschar` and
+     * `iprivate` for the query (the only component `iprivate` is legal in). The host is excluded from
+     * this check — it is independently validated by the IDNA/UTS-46 pipeline.
+     *
+     * @property codePoint the offending Unicode scalar value.
+     * @property at the offset of the offending code unit in the original input.
+     */
+    public data class IriInvalidCodePoint(
+        public val codePoint: Int,
+        public val at: Int,
+    ) : UriParseError
+
+    /**
+     * An IRI contains one of the seven bidirectional formatting characters (LRM, RLM, LRE, RLE, PDF,
+     * LRO, RLO) that RFC 3987 §4.1 forbids anywhere in an IRI's logical (stored/transmitted) form —
+     * they affect visual rendering only and are never themselves part of the IRI.
+     *
+     * @property codePoint the offending bidi formatting code point.
+     * @property at the offset of the offending code unit in the original input.
+     */
+    public data class IriBidiFormattingCharacter(
+        public val codePoint: Int,
+        public val at: Int,
     ) : UriParseError
 }

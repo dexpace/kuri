@@ -473,7 +473,9 @@ kuri implements the standards below; per-standard conformance is measured in [Co
 | [RFC 3987][rfc3987]               | IRIs — one-way `Iri` mapping, not a validating parser*             | Supported  | Default |
 | [WHATWG URL Standard][whatwg-url] | the `Url` model — parser, special schemes, canonical serialization | Conformant | Default |
 
-\* kuri maps IRIs to URIs one-way (RFC 3987 §3.1/§3.2); it does not implement §4 validation (bidi, repertoire checks).
+\* kuri maps IRIs to URIs one-way (RFC 3987 §3.1/§3.2), rejecting a §2.2 `ucschar`/`iprivate`
+repertoire violation and a §4.1 bidi formatting character; it does not enforce §4.2's per-component
+directionality restriction, which the RFC itself states as a SHOULD, not a MUST.
 
 **Hosts, internationalization, and IP addresses**
 
@@ -491,7 +493,7 @@ kuri implements the standards below; per-standard conformance is measured in [Co
 
 | Standard                                       | Governs                                      | Compliance | Support |
 |------------------------------------------------|----------------------------------------------|------------|---------|
-| [`application/x-www-form-urlencoded`][formenc] | Form-encoded query parsing and serialization | Supported  | Default |
+| [`application/x-www-form-urlencoded`][formenc] | Form-encoded query parsing and serialization | Conformant | Default |
 
 **Notation and requirement levels**
 
@@ -548,6 +550,7 @@ Behavior is checked against the conformance corpora the standards ship with:
 | IDNA `IdnaTestV2` + `toascii`                          | 2756 / 2760     |
 | Unicode `NormalizationTest.txt` (NFC)                  | 20 034 / 20 034 |
 | RFC 3986 §5.4 reference resolution                     | all rows        |
+| WHATWG `urlencoded-parser.any.js` — form parsing       | 35 / 35         |
 
 Any case that does not yet pass is pinned in a checked-in known-failures baseline; the build fails if a passing case
 later regresses.
