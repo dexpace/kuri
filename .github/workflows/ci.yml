@@ -64,7 +64,7 @@ jobs:
       # when it changes.
       - name: Restore Kotlin/Native toolchain
         id: konan-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.konan
           key: ${{ runner.os }}-konan-gate-${{ hashFiles('gradle/libs.versions.toml') }}
@@ -75,7 +75,7 @@ jobs:
       # jvmTest/koverVerify) differs from the other Linux jobs' entries.
       - name: Restore Gradle configuration cache
         id: configcache-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .gradle/configuration-cache
           key: ${{ runner.os }}-configcache-gate-${{ hashFiles('**/*.gradle.kts', 'gradle.properties', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}
@@ -94,13 +94,13 @@ jobs:
       # main's warm cache.
       - name: Save Kotlin/Native toolchain
         if: github.ref == 'refs/heads/main' && steps.konan-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.konan
           key: ${{ runner.os }}-konan-gate-${{ hashFiles('gradle/libs.versions.toml') }}
       - name: Save Gradle configuration cache
         if: github.ref == 'refs/heads/main' && steps.configcache-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: .gradle/configuration-cache
           key: ${{ runner.os }}-configcache-gate-${{ hashFiles('**/*.gradle.kts', 'gradle.properties', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}
@@ -124,7 +124,7 @@ jobs:
       # differs from the other Linux jobs' entries.
       - name: Restore Gradle configuration cache
         id: configcache-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .gradle/configuration-cache
           key: ${{ runner.os }}-configcache-web-${{ hashFiles('**/*.gradle.kts', 'gradle.properties', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}
@@ -141,7 +141,7 @@ jobs:
       # key), so PR legs never evict main's warm cache.
       - name: Save Gradle configuration cache
         if: github.ref == 'refs/heads/main' && steps.configcache-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: .gradle/configuration-cache
           key: ${{ runner.os }}-configcache-web-${{ hashFiles('**/*.gradle.kts', 'gradle.properties', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}
@@ -204,7 +204,7 @@ jobs:
       # branch; only main writes it.
       - name: Restore Kotlin/Native toolchain
         id: konan-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.konan
           key: ${{ runner.os }}-konan-native-${{ hashFiles('gradle/libs.versions.toml') }}
@@ -219,7 +219,7 @@ jobs:
       # entry, with a restore-key fallback for a partial hit when they change.
       - name: Restore Gradle configuration cache
         id: configcache-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .gradle/configuration-cache
           key: ${{ runner.os }}-configcache-native-${{ hashFiles('**/*.gradle.kts', 'gradle.properties', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}
@@ -234,13 +234,13 @@ jobs:
       # write-once per key), so PR legs never evict main's warm per-OS cache.
       - name: Save Kotlin/Native toolchain
         if: github.ref == 'refs/heads/main' && steps.konan-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.konan
           key: ${{ runner.os }}-konan-native-${{ hashFiles('gradle/libs.versions.toml') }}
       - name: Save Gradle configuration cache
         if: github.ref == 'refs/heads/main' && steps.configcache-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: .gradle/configuration-cache
           key: ${{ runner.os }}-configcache-native-${{ hashFiles('**/*.gradle.kts', 'gradle.properties', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}
@@ -289,7 +289,7 @@ jobs:
       # options change, since GitHub caches are write-once per key.
       - name: Restore AVD snapshot
         id: avd-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.android/avd/*
@@ -327,7 +327,7 @@ jobs:
       # Persist the AVD snapshot for later runs — only from main, and only on a non-exact restore.
       - name: Save AVD snapshot
         if: github.ref == 'refs/heads/main' && steps.avd-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: |
             ~/.android/avd/*
