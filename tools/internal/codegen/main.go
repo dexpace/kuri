@@ -17,7 +17,8 @@ import (
 
 // usage describes the command line for error messages.
 const usage = "usage: codegen <name> [--stdout]\n" +
-	"  names: url, idna-mapping, idna-validity, nfc-tables, nfc-test, conformance, setters, percent-encoding\n" +
+	"  names: url, idna-mapping, idna-validity, nfc-tables, nfc-test, conformance, setters, percent-encoding,\n" +
+	"    urlencoded\n" +
 	"  conformance also accepts --stdout-data / --stdout-known to print one of its two files"
 
 // singleGenerator pairs a single-file generator's source builder with a resolver
@@ -27,8 +28,8 @@ type singleGenerator struct {
 	output   func() (string, error)
 }
 
-// singleGenerators is the dispatch table for the five generators that emit one
-// fixture each. conformance is handled separately in Main because it emits two
+// singleGenerators is the dispatch table for the generators that each emit one
+// fixture. conformance is handled separately in Main because it emits two
 // files and accepts its own stdout selectors.
 var singleGenerators = map[string]singleGenerator{
 	"url": {
@@ -58,6 +59,10 @@ var singleGenerators = map[string]singleGenerator{
 	"percent-encoding": {
 		generate: generatePercentEncoding,
 		output:   outputPath("kuri", "src", "commonTest", "kotlin", "org", "dexpace", "kuri", "percent", "PercentEncodingTestData.kt"),
+	},
+	"urlencoded": {
+		generate: generateUrlEncoded,
+		output:   outputPath("kuri", "src", "commonTest", "kotlin", "org", "dexpace", "kuri", "query", "UrlEncodedTestData.kt"),
 	},
 }
 

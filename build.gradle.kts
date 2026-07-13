@@ -75,6 +75,11 @@ val generators: List<Triple<String, String, String>> =
             "percent-encoding",
             "Regenerate the WPT percent-encoding conformance fixture from the vendored ada WPT corpus.",
         ),
+        Triple(
+            "generateUrlEncodedTestData",
+            "urlencoded",
+            "Regenerate the WPT urlencoded-parser conformance fixture from tools/urlencoded/urlencoded-parser.json.",
+        ),
     )
 
 val codegenTasks: List<TaskProvider<Exec>> =
