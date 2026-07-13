@@ -28,7 +28,7 @@ jobs:
     steps:
       # Check out the BASE branch (not the PR head) so the validator script cannot be weakened by the
       # PR under review. The PR title itself comes from the event payload, not the checkout.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.base_ref }}
       - name: Validate the PR title
@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate the HEAD commit message
         run: |
           git log -1 --pretty=%B > "$RUNNER_TEMP/message.txt"

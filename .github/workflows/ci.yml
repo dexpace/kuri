@@ -44,14 +44,16 @@ jobs:
     # 6-hour default; generous over the real ~few-minute runtime.
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
         with:
           # Matches the module's jvmToolchain(21); running Gradle on 21 means no separate
           # toolchain JDK has to be provisioned (there is no foojay resolver configured).
           distribution: corretto
           java-version: '21'
-      - uses: gradle/actions/setup-gradle@v4
+      # Default (Enhanced Caching, gradle-actions-caching): free for public repos, no extra config
+      # needed, and it caches GRADLE_USER_HOME (dependencies, wrapper distributions, build cache).
+      - uses: gradle/actions/setup-gradle@v6
       # Restore the Kotlin/Native toolchain (~1 GB: compiler bundle + LLVM/sysroot/gcc deps under
       # ~/.konan). setup-gradle caches ~/.gradle but not ~/.konan, and apiCheck's KLIB ABI validation
       # compiles every native klib here, so without this the whole bundle re-downloads each run.
@@ -112,12 +114,14 @@ jobs:
     # real runtime so only a genuine hang trips the limit.
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
         with:
           distribution: corretto
           java-version: '21'
-      - uses: gradle/actions/setup-gradle@v4
+      # Default (Enhanced Caching, gradle-actions-caching): free for public repos, no extra config
+      # needed, and it caches GRADLE_USER_HOME (dependencies, wrapper distributions, build cache).
+      - uses: gradle/actions/setup-gradle@v6
       # Gradle's configuration cache lives in the checkout (.gradle/configuration-cache), not
       # GRADLE_USER_HOME, so setup-gradle's default cache never covers it (see the `native` job
       # for the full rationale). Scoped `-web-` since this job's task set (jsTest/wasmJsTest)
@@ -190,12 +194,14 @@ jobs:
               watchosArm64TestBinaries
               klibApiCheck
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
         with:
           distribution: corretto
           java-version: '21'
-      - uses: gradle/actions/setup-gradle@v4
+      # Default (Enhanced Caching, gradle-actions-caching): free for public repos, no extra config
+      # needed, and it caches GRADLE_USER_HOME (dependencies, wrapper distributions, build cache).
+      - uses: gradle/actions/setup-gradle@v6
       # Restore the Kotlin/Native toolchain (~1 GB under ~/.konan) that this native job compiles and
       # links against; setup-gradle caches ~/.gradle but not ~/.konan. runner.os in the key keeps the
       # Linux/Windows/macOS legs separate, and the `-native-` scope keeps the Linux leg's smaller
@@ -251,12 +257,14 @@ jobs:
     # Host-side JVM tests; same generous bound as the other Linux JVM job.
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
         with:
           distribution: corretto
           java-version: '21'
-      - uses: gradle/actions/setup-gradle@v4
+      # Default (Enhanced Caching, gradle-actions-caching): free for public repos, no extra config
+      # needed, and it caches GRADLE_USER_HOME (dependencies, wrapper distributions, build cache).
+      - uses: gradle/actions/setup-gradle@v6
       - name: Android host (JVM) unit tests
         # Runs commonTest compiled for the Android target on the JVM — no emulator.
         run: ./gradlew :kuri:testAndroidHostTest --stacktrace
@@ -268,12 +276,14 @@ jobs:
     # wedged or never-booting emulator fails fast instead of hanging to the 6-hour default.
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
         with:
           distribution: corretto
           java-version: '21'
-      - uses: gradle/actions/setup-gradle@v4
+      # Default (Enhanced Caching, gradle-actions-caching): free for public repos, no extra config
+      # needed, and it caches GRADLE_USER_HOME (dependencies, wrapper distributions, build cache).
+      - uses: gradle/actions/setup-gradle@v6
       # Hardware acceleration for the emulator; required for a reliable boot on hosted runners.
       - name: Enable KVM
         run: |

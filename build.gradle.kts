@@ -1,3 +1,6 @@
+import org.jetbrains.kotlin.gradle.targets.js.yarn.YarnPlugin
+import org.jetbrains.kotlin.gradle.targets.js.yarn.YarnRootExtension
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.android.kmp.library) apply false
@@ -5,6 +8,19 @@ plugins {
     alias(libs.plugins.detekt) apply false
     alias(libs.plugins.kover) apply false
     alias(libs.plugins.binary.compat) apply false
+}
+
+// kotlin-js-store/yarn.lock pins whatever transitive versions this Kotlin/JS Gradle plugin release
+// declares for its bundled browser-test tooling (mocha/karma/webpack); those versions aren't otherwise
+// reachable from this build script, and a KGP bump is too heavy a lever for a single vulnerable
+// transitive dep. Force Yarn's resolution field for each dependency Dependabot flagged, to their first
+// patched release, until a future KGP upgrade moves the plugin's own defaults past them.
+rootProject.plugins.withType<YarnPlugin>().configureEach {
+    rootProject.extensions.configure<YarnRootExtension> {
+        resolution("webpack", "5.104.1")
+        resolution("serialize-javascript", "7.0.5")
+        resolution("diff", "8.0.3")
+    }
 }
 
 // --- Fixture & lookup-table code generation ----------------------------------
