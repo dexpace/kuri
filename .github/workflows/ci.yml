@@ -94,9 +94,13 @@ jobs:
       # Split from the step above so its own duration — including the Android target compile it
       # now transitively triggers via androidApiCheck -> androidApiBuild -> compileAndroidMain,
       # and the mingw KLIB cross-build for the ABI dump — shows up as its own line in the job
-      # timing instead of being folded into one opaque block.
+      # timing instead of being folded into one opaque block. Same tee/grep config-cache signal
+      # as the step above, since this step now carries its own (distinct) task graph and can miss
+      # independently of it.
       - name: apiCheck (binary compatibility, incl. Android + native KLIB ABI)
-        run: ./gradlew apiCheck --stacktrace
+        run: |
+          ./gradlew apiCheck --stacktrace | tee apicheck.log
+          echo "**Configuration cache (apiCheck):** $(grep -m1 -E 'Reusing configuration cache|Calculating task graph' apicheck.log || echo 'signal not found')" >> "$GITHUB_STEP_SUMMARY"
       # Write the toolchain cache only from main, and only when the restore was not an exact hit
       # (GitHub caches are write-once per key). PRs never write, so parallel branches can't evict
       # main's warm cache.
