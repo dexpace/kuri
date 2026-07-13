@@ -160,6 +160,10 @@ kotlin {
         // on the Java test's compile classpath, at the version the Kotlin release was built for.
         jvmTest.dependencies {
             implementation(kotlin("test-junit"))
+            // Independent third-party UTS-46 oracle for IdnaIcu4jDifferentialTest (issue #66):
+            // icu4j has no multiplatform artifact, so it is scoped to the JVM test classpath only
+            // and must never be referenced from commonMain/commonTest.
+            implementation(libs.icu4j)
         }
         // Instrumented tests run under AndroidJUnitRunner (JUnit4), so bind kotlin.test to JUnit4
         // and pull in the AndroidX test runtime that provides the runner.
