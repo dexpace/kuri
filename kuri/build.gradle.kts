@@ -270,8 +270,8 @@ val androidAbiRuntimeClasspath: NamedDomainObjectProvider<Configuration> =
     }
 
 dependencies.apply {
-    add(androidAbiRuntimeClasspath.name, "org.ow2.asm:asm:9.6")
-    add(androidAbiRuntimeClasspath.name, "org.ow2.asm:asm-tree:9.6")
+    add(androidAbiRuntimeClasspath.name, libs.asm.core.get())
+    add(androidAbiRuntimeClasspath.name, libs.asm.tree.get())
     add(androidAbiRuntimeClasspath.name, "org.jetbrains.kotlin:kotlin-metadata-jvm:${libs.versions.kotlin.get()}")
 }
 

@@ -8,6 +8,10 @@ binary-compat = "0.18.1"
 dokka = "2.0.0"
 maven-publish = "0.30.0"
 icu4j = "77.1"
+# Pinned to match the ASM version binary-compatibility-validator 0.18.1 wires into its own
+# jvm/native apiBuild classpath internally, so the hand-wired android apiBuild leg (build.gradle.kts)
+# parses class files with the same ASM release the rest of the apiCheck gate uses.
+asm = "9.6"
 
 [libraries]
 # kotlin-test is pulled in via the kotlin("test") MPP helper; listed for reference.
@@ -16,6 +20,9 @@ kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref =
 # engine against (see IdnaIcu4jDifferentialTest). No multiplatform artifact exists, so this
 # must never be referenced from commonMain/commonTest.
 icu4j = { module = "com.ibm.icu:icu4j", version.ref = "icu4j" }
+# Runtime classpath for the manually wired android apiBuild/apiCheck tasks (build.gradle.kts).
+asm-core = { module = "org.ow2.asm:asm", version.ref = "asm" }
+asm-tree = { module = "org.ow2.asm:asm-tree", version.ref = "asm" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
