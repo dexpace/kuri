@@ -6,6 +6,15 @@
 // tables decode. The codegen conformance generator runs it over the WPT corpora
 // to derive the tracked known-failures baseline. It depends only on internal/ucd
 // for its table data.
+//
+// idnaref is not an independent oracle: it re-derives kuri's own algorithm as a
+// second implementation, so a conceptual bug shared between the Kotlin engine and
+// this port (e.g. a shared misreading of the UTS-46 algorithm) would reproduce
+// identically in both and pass the ratchet undetected. Its value is catching
+// porting slips between the two — a divergence that is NOT shared — not verifying
+// the algorithm itself. WPT is the real independent oracle here: IdnaConformanceTest
+// checks every corpus case directly against it, and idnaref only narrows the
+// residual within whatever WPT doesn't already exercise.
 package idnaref
 
 import (

@@ -15,6 +15,10 @@
 // of kuri's Idna.domainToAscii is run over the corpus and the inputs it fails
 // become the tracked set. Because the reference matches kuri exactly, that set
 // equals kuri's live failing set, which IdnaConformanceTest asserts against.
+//
+// idnaref is a second implementation of kuri's own algorithm, not an independent
+// oracle — see the idnaref package doc. WPT is the independent oracle IdnaConformanceTest
+// checks kuri against; idnaref only narrows the residual within whatever WPT doesn't cover.
 
 package codegen
 

@@ -31,6 +31,15 @@ import kotlin.test.assertTrue
  * by [Idna.domainToAscii] (so the corpus's required rejection is a host obligation, not a ToASCII one)
  * yet rejected by [UrlHostParser] under the `Url` profile. The suite also ratchets: it fails if any other
  * case regresses, or if the residual drifts from the live failing set.
+ *
+ * WPT is the independent oracle this suite checks kuri against, not `tools/internal/idnaref` (the Go
+ * reference the codegen generator uses to derive [IDNA_KNOWN_FAILURES]). `idnaref` is a faithful Go port
+ * of this same [Idna.domainToAscii] algorithm — a second implementation, not a second spec reading — so a
+ * conceptual bug shared between the Kotlin engine and its port would reproduce identically in both and
+ * pass the derivation undetected; its value is catching a porting slip between the two, not verifying the
+ * algorithm against an outside source. That verification is what running every case here directly against
+ * the WPT corpus itself provides. `IdnaIcu4jDifferentialTest` (JVM-only) adds a further, genuinely
+ * third-party cross-check against ICU4J's UTS-46 implementation over the same corpus.
  */
 class IdnaConformanceTest {
     private val residual: Set<String> = IDNA_KNOWN_FAILURES
