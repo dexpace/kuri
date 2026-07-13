@@ -39,7 +39,9 @@ public enum class ValidationError {
 
     /**
      * A userinfo subcomponent (`username[:password]@`) was present in the authority (the WHATWG
-     * *invalid-credentials* anomaly, fired once per `@` consumed while splitting userinfo).
+     * *invalid-credentials* anomaly). Recorded once per authority parse when userinfo is present,
+     * even when splitting it consumes more than one `@` (a non-final `@` is folded into the
+     * username rather than producing its own entry).
      */
     INVALID_CREDENTIALS,
 }
