@@ -41,13 +41,18 @@ jobs:
       actions: read
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
         with:
           # Match the CI jobs: Gradle runs on Corretto 21 (the module's jvmToolchain(21)).
           distribution: corretto
           java-version: '21'
-      - uses: gradle/actions/setup-gradle@v4
+      # cache-provider: basic keeps caching on the MIT-licensed actions/cache-backed provider
+      # instead of setup-gradle's default proprietary Enhanced Caching (gradle-actions-caching),
+      # consistent with this project's all-OSS toolchain.
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
 
       # Initialise the CodeQL tracer BEFORE the build so the Kotlin/Java compilation is extracted.
       # 'java' is CodeQL's identifier for the Java/Kotlin extractor (it analyses Kotlin too).
