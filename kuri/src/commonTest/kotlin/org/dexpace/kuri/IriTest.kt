@@ -163,6 +163,42 @@ class IriTest {
     }
 
     @Test
+    fun `a bidi violation anywhere in the iri wins over an earlier repertoire violation`() {
+        // U+FDD0 is a repertoire violation (neither ucschar nor iprivate, see the noncharacter test
+        // above) placed BEFORE the LRM in raw text order. A naive single combined left-to-right scan
+        // would report the noncharacter first; the bidi scan is instead its own complete first pass
+        // over the whole raw string, so the later LRM wins the precedence, not just a leftmost match.
+        val nonCharacter = Char(0xFDD0).toString()
+        val lrm = Char(0x200E).toString()
+        val iri = "http://h/$nonCharacter$lrm"
+
+        val error =
+            assertIs<UriParseError.IriBidiFormattingCharacter>(assertIs<ParseResult.Err>(Iri.toUri(iri)).error)
+
+        assertEquals(0x200E, error.codePoint)
+        assertEquals(iri.indexOf(lrm), error.at)
+    }
+
+    @Test
+    fun `a precheck failure wins over an idna host failure`() {
+        // The leading combining mark makes this host idna-invalid on its own — see
+        // `fails when a non-ascii host is idna-invalid` above, which proves the same host text
+        // fails with UriParseError.InvalidHost(HostError.IdnaFailed) when used alone. Adding a
+        // repertoire-violating noncharacter to the path must still surface the precheck failure
+        // instead, since resolveHost short-circuits to the precheck error before ever mapping the
+        // host (see its KDoc).
+        val leadingCombiningMark = Char(0x0301).toString()
+        val nonCharacter = Char(0xFDD0).toString()
+        val invalidHost = "${leadingCombiningMark}x"
+        val iri = "http://$invalidHost/$nonCharacter"
+
+        val error = assertIs<UriParseError.IriInvalidCodePoint>(assertIs<ParseResult.Err>(Iri.toUri(iri)).error)
+
+        assertEquals(0xFDD0, error.codePoint)
+        assertEquals(iri.indexOf(nonCharacter), error.at)
+    }
+
+    @Test
     fun `strict uri parse rejects a raw non-ascii host while the facility maps it`() {
         val iri = "http://$aUmlaut.example/"
 
