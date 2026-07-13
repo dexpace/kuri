@@ -138,11 +138,41 @@ class UriTest {
     }
 
     @Test
+    fun `a leading zero in the port is not preserved on reserialization`() {
+        val uri = parseOk("http://h:007/")
+
+        assertEquals(7, uri.port)
+        assertEquals("http://h:7/", uri.uriString)
+    }
+
+    @Test
     fun `dot segments in the path are preserved verbatim`() {
         val uri = parseOk("http://h/a/../b")
 
         assertEquals("/a/../b", uri.path)
         assertEquals(listOf("a", "..", "b"), uri.pathSegments)
+    }
+
+    @Test
+    fun `a raw space in the path is preserved verbatim`() {
+        val uri = parseOk("http://h/a b")
+
+        assertEquals("/a b", uri.path)
+        assertEquals("http://h/a b", uri.uriString)
+    }
+
+    @Test
+    fun `a raw angle bracket in the path is preserved verbatim`() {
+        val uri = parseOk("http://h/a<b")
+
+        assertEquals("/a<b", uri.path)
+    }
+
+    @Test
+    fun `raw curly braces in the path are preserved verbatim`() {
+        val uri = parseOk("http://h/a{b}")
+
+        assertEquals("/a{b}", uri.path)
     }
 
     @Test

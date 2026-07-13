@@ -470,7 +470,7 @@ kuri implements the standards below; per-standard conformance is measured in [Co
 | Standard                          | Governs                                                            | Compliance | Support |
 |-----------------------------------|--------------------------------------------------------------------|------------|---------|
 | [RFC 3986][rfc3986] (STD 66)      | URI generic syntax; the `Uri` model and parsing authority          | Conformant | Default |
-| [RFC 3987][rfc3987]               | Internationalized Resource Identifiers (IRIs)                      | Supported  | Default |
+| [RFC 3987][rfc3987]               | IRIs — one-way `Iri` mapping (RFC 3987 §3.1/§3.2), not a validating parser (no §4 bidi or repertoire checks) | Supported  | Default |
 | [WHATWG URL Standard][whatwg-url] | the `Url` model — parser, special schemes, canonical serialization | Conformant | Default |
 
 **Hosts, internationalization, and IP addresses**
