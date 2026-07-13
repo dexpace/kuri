@@ -72,29 +72,48 @@ internal object Idna {
      * WHATWG "domain to ASCII" for the `Url` profile (`beStrict = false`): the URL-layer wrapper over
      * the pure UTS-46 [domainToAscii] (SPEC §7.4, [HOST-26]).
      *
-     * An all-ASCII [domain] is returned **lowercased verbatim**: per the standard, an ASCII domain's
-     * Unicode ToASCII failures are only validation errors, never fatal, for web compatibility — so an
-     * invalid `xn--` label such as `xn--pokxncvks` is kept as-is rather than rejected (and an
-     * `IgnoreInvalidPunycode` flag alone would not suffice, since Punycode can decode yet still fail a
-     * later validity check). A non-ASCII [domain] runs the full UTS-46 pipeline and propagates its
-     * failure. Either way, a result that collapses to the empty string (e.g. a lone soft hyphen, which
-     * maps to nothing) is a failure ("if result is the empty string, return failure"). The residual
+     * Decided **per label**, not per whole domain: an all-ASCII label is kept **lowercased
+     * verbatim**, since per the standard an ASCII label's Unicode ToASCII failure is only a
+     * validation error, never fatal, for web compatibility — so an invalid `xn--` label such as
+     * `xn--pokxncvks` is kept as-is rather than rejected, regardless of whether a sibling label
+     * elsewhere in the same domain happens to carry non-ASCII text. A label carrying any non-ASCII
+     * code point runs the full UTS-46 pipeline via [domainToAscii] and its failure is fatal. Either
+     * way, a result that collapses to the empty string (e.g. a lone soft hyphen, which maps to
+     * nothing) is a failure ("if result is the empty string, return failure"). The residual
      * forbidden-code-point check is applied by the host classifier, not here.
      *
      * @param domain the percent-decoded, assumed-NFC domain text.
      * @return [ParseResult.Ok] with the ASCII domain, or [ParseResult.Err] on a domain-to-ASCII failure.
      */
     internal fun domainToAsciiForUrl(domain: String): ParseResult<String> {
-        val result =
-            if (domain.isAllAscii()) {
-                asciiLowercase(domain)
+        val result = asciiLenientDomainToAscii(domain) ?: return idnaError(domain)
+        return if (result.isEmpty()) idnaError(domain) else ParseResult.Ok(result)
+    }
+
+    /**
+     * Splits [domain] on [LABEL_SEPARATOR] and resolves each label independently: an all-ASCII label
+     * is lowercased and kept unconditionally (never validated, matching the existing intentional
+     * leniency — see [domainToAsciiForUrl]); a label carrying any non-ASCII code point runs the full
+     * [domainToAscii] pipeline, and that label's failure fails the whole domain. Splitting first and
+     * running NFC per label (inside [domainToAscii]) rather than over the whole domain is equivalent
+     * here: `U+002E` never participates in a cross-label canonical composition.
+     *
+     * @return the joined ASCII domain, or `null` on the first non-ASCII label's UTS-46 failure.
+     */
+    private fun asciiLenientDomainToAscii(domain: String): String? {
+        val labels = splitLabels(domain)
+        val out = ArrayList<String>(labels.size)
+        for (label in labels) {
+            if (label.isAllAscii()) {
+                out.add(asciiLowercase(label))
             } else {
-                when (val ascii = domainToAscii(domain)) {
-                    is ParseResult.Err -> return ascii
-                    is ParseResult.Ok -> ascii.value
+                when (val result = domainToAscii(label)) {
+                    is ParseResult.Ok -> out.add(result.value)
+                    is ParseResult.Err -> return null
                 }
             }
-        return if (result.isEmpty()) idnaError(domain) else ParseResult.Ok(result)
+        }
+        return out.joinToString(LABEL_SEPARATOR)
     }
 
     /**

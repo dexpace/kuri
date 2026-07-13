@@ -36,6 +36,16 @@ class IdnTest {
     }
 
     @Test
+    fun `toAscii keeps an invalid xn-- label as-is even beside a genuine unicode label`() {
+        // "xn--a" is not valid Punycode (it decodes to a disallowed control code point); the
+        // web-compat leniency for a malformed xn-- label must hold per label, not per whole
+        // domain, so a non-ASCII sibling ("bücher") must not turn this label's failure fatal.
+        val input = "xn--a.b" + uUmlaut + "cher"
+
+        assertEquals("xn--a.xn--bcher-kva", Idn.toAscii(input).getOrNull())
+    }
+
+    @Test
     fun `toAscii fails on a disallowed code point`() {
         // U+0080 is a plain disallowed code point, so ToASCII must reject it fatally.
         val input = "exa" + Char(0x0080) + "mple.com"
