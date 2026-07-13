@@ -82,15 +82,25 @@ jobs:
           path: .gradle/configuration-cache
           key: ${{ runner.os }}-configcache-gate-${{ hashFiles('**/*.gradle.kts', 'gradle.properties', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-configcache-gate-
-      - name: ktlint, detekt, binary-compatibility and JVM coverage floor
+      - name: ktlint, detekt, and JVM coverage floor
         # koverVerify pulls in jvmTest and enforces the 80% line-coverage rule. Piped through
         # tee/grep (pipefail is on by default for `shell: bash`, so a gradlew failure still
         # fails the step) to surface Gradle's own configuration-cache hit/miss line in the job
         # summary — otherwise confirming the cache above is doing anything means digging
         # through the raw --stacktrace log by hand.
         run: |
-          ./gradlew ktlintCheck detekt apiCheck jvmTest koverVerify --stacktrace | tee build.log
+          ./gradlew ktlintCheck detekt jvmTest koverVerify --stacktrace | tee build.log
           echo "**Configuration cache:** $(grep -m1 -E 'Reusing configuration cache|Calculating task graph' build.log || echo 'signal not found')" >> "$GITHUB_STEP_SUMMARY"
+      # Split from the step above so its own duration — including the Android target compile it
+      # now transitively triggers via androidApiCheck -> androidApiBuild -> compileAndroidMain,
+      # and the mingw KLIB cross-build for the ABI dump — shows up as its own line in the job
+      # timing instead of being folded into one opaque block. Same tee/grep config-cache signal
+      # as the step above, since this step now carries its own (distinct) task graph and can miss
+      # independently of it.
+      - name: apiCheck (binary compatibility, incl. Android + native KLIB ABI)
+        run: |
+          ./gradlew apiCheck --stacktrace | tee apicheck.log
+          echo "**Configuration cache (apiCheck):** $(grep -m1 -E 'Reusing configuration cache|Calculating task graph' apicheck.log || echo 'signal not found')" >> "$GITHUB_STEP_SUMMARY"
       # Write the toolchain cache only from main, and only when the restore was not an exact hit
       # (GitHub caches are write-once per key). PRs never write, so parallel branches can't evict
       # main's warm cache.
