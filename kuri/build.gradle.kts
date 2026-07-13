@@ -272,7 +272,11 @@ val androidAbiRuntimeClasspath: NamedDomainObjectProvider<Configuration> =
 dependencies.apply {
     add(androidAbiRuntimeClasspath.name, libs.asm.core.get())
     add(androidAbiRuntimeClasspath.name, libs.asm.tree.get())
-    add(androidAbiRuntimeClasspath.name, "org.jetbrains.kotlin:kotlin-metadata-jvm:${libs.versions.kotlin.get()}")
+    add(
+        androidAbiRuntimeClasspath.name,
+        libs.kotlin.metadata.jvm
+            .get(),
+    )
 }
 
 val androidApiBuild: TaskProvider<KotlinApiBuildTask> =
@@ -280,6 +284,13 @@ val androidApiBuild: TaskProvider<KotlinApiBuildTask> =
         group = "verification"
         description = "Builds the Kotlin API dump for the android target's 'main' compilation of kuri."
         inputClassesDirs.from(tasks.named("compileAndroidMain").map { it.outputs.files })
+        inputDependencies.from(
+            kotlin.targets
+                .getByName("android")
+                .compilations
+                .getByName("main")
+                .compileDependencyFiles,
+        )
         outputApiFile.set(layout.buildDirectory.file("kotlin/abi-android/kuri.api"))
         runtimeClasspath.from(androidAbiRuntimeClasspath)
     }

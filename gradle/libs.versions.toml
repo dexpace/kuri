@@ -23,6 +23,7 @@ icu4j = { module = "com.ibm.icu:icu4j", version.ref = "icu4j" }
 # Runtime classpath for the manually wired android apiBuild/apiCheck tasks (build.gradle.kts).
 asm-core = { module = "org.ow2.asm:asm", version.ref = "asm" }
 asm-tree = { module = "org.ow2.asm:asm-tree", version.ref = "asm" }
+kotlin-metadata-jvm = { module = "org.jetbrains.kotlin:kotlin-metadata-jvm", version.ref = "kotlin" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
