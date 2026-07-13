@@ -473,7 +473,9 @@ kuri implements the standards below; per-standard conformance is measured in [Co
 | [RFC 3987][rfc3987]               | IRIs — one-way `Iri` mapping, not a validating parser*             | Supported  | Default |
 | [WHATWG URL Standard][whatwg-url] | the `Url` model — parser, special schemes, canonical serialization | Conformant | Default |
 
-\* kuri maps IRIs to URIs one-way (RFC 3987 §3.1/§3.2); it does not implement §4 validation (bidi, repertoire checks).
+\* kuri maps IRIs to URIs one-way (RFC 3987 §3.1/§3.2), rejecting a §2.2 `ucschar`/`iprivate`
+repertoire violation and a §4.1 bidi formatting character; it does not enforce §4.2's per-component
+directionality restriction, which the RFC itself states as a SHOULD, not a MUST.
 
 **Hosts, internationalization, and IP addresses**
 

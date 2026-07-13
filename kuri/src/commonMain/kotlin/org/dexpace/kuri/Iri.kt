@@ -20,10 +20,13 @@ import kotlin.jvm.JvmStatic
  * "no RFC 3986 deviations" invariant (Appendix B): `Uri.parse` still *rejects* raw non-ASCII, and
  * only this facility accepts it.
  *
- * The mapping is a faithful, uniform §3.1 transform, not an IRI *validator*: the host is processed
+ * The mapping is a §3.1 transform layered on two RFC 3987 validation passes: the host is processed
  * by IDNA/UTS-46 (via the engine's ToASCII), and every other component has its non-ASCII code points
- * percent-encoded as UTF-8 octets. No `ucschar`/`iprivate` repertoire is consulted, so a non-ASCII
- * code point outside the IRI character set is encoded rather than rejected.
+ * percent-encoded as UTF-8 octets — but only once that code point has cleared §2.2's `ucschar`/
+ * `iprivate` repertoire (`iprivate` legal only in the query) and §4.1's ban on the seven bidi
+ * formatting characters (LRM, RLM, LRE, RLE, PDF, LRO, RLO) anywhere in the IRI. §4.2's per-component
+ * directionality restriction is intentionally not enforced: the RFC states it as a SHOULD, not a
+ * MUST, and it is not relevant to every use of an IRI (e.g. one never presented visually).
  *
  * @see Uri
  */
@@ -37,9 +40,11 @@ public object Iri {
      * (never double-encoded). The fully-ASCII result is then validated and stored by the strict [Uri]
      * engine, so the returned [Uri] holds only RFC 3986-valid text.
      *
-     * The transform can fail: an IDNA-invalid non-ASCII host is a [ParseResult.Err], as is a mapping
-     * whose expanded ASCII form is rejected by the strict engine — note that percent-encoding grows
-     * the input, so a very long all-non-ASCII IRI may exceed the engine's maximum input length.
+     * The transform can fail: an IDNA-invalid non-ASCII host is a [ParseResult.Err], as is a non-ASCII
+     * code point outside its component's §2.2 repertoire, a §4.1 bidi formatting character anywhere
+     * in [iri], or a mapping whose expanded ASCII form is rejected by the strict engine — note that
+     * percent-encoding grows the input, so a very long all-non-ASCII IRI may exceed the engine's
+     * maximum input length.
      *
      * @param iri the internationalized reference to convert; non-ASCII input is accepted.
      * @return [ParseResult.Ok] with the mapped [Uri], or [ParseResult.Err] when the IRI cannot be

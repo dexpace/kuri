@@ -101,13 +101,65 @@ class IriTest {
     }
 
     @Test
-    fun `encodes any non-ascii code point even outside the iri repertoire`() {
-        // U+FDD0 is a noncharacter: neither ucschar nor iprivate, yet the converter still encodes it.
+    fun `rejects a non-ascii code point outside the iri repertoire`() {
+        // U+FDD0 is a noncharacter: neither ucschar nor iprivate, so RFC 3987 §2.2 excludes it.
         val nonCharacter = Char(0xFDD0).toString()
+        val iri = "http://h/$nonCharacter"
 
-        val uri = Iri.toUri("http://h/$nonCharacter").getOrThrow()
+        val error = assertIs<UriParseError.IriInvalidCodePoint>(assertIs<ParseResult.Err>(Iri.toUri(iri)).error)
 
-        assertEquals("/%EF%B7%90", uri.encodedPath)
+        assertEquals(0xFDD0, error.codePoint)
+        assertEquals(iri.indexOf(nonCharacter), error.at)
+    }
+
+    @Test
+    fun `accepts an iprivate code point only in the query component`() {
+        // U+E000 is iprivate: legal in iquery (RFC 3987 §2.2) but not in path, userinfo, or fragment.
+        val iprivate = Char(0xE000).toString()
+
+        val uri = Iri.toUri("http://h/?q=$iprivate").getOrThrow()
+
+        assertEquals("q=%EE%80%80", uri.query)
+    }
+
+    @Test
+    fun `rejects an iprivate code point in the path`() {
+        val iprivate = Char(0xE000).toString()
+        val iri = "http://h/$iprivate"
+
+        val error = assertIs<UriParseError.IriInvalidCodePoint>(assertIs<ParseResult.Err>(Iri.toUri(iri)).error)
+
+        assertEquals(0xE000, error.codePoint)
+        assertEquals(iri.indexOf(iprivate), error.at)
+    }
+
+    @Test
+    fun `rejects an iprivate code point in userinfo`() {
+        val iprivate = Char(0xE000).toString()
+        val iri = "http://u$iprivate@h/"
+
+        assertIs<UriParseError.IriInvalidCodePoint>(assertIs<ParseResult.Err>(Iri.toUri(iri)).error)
+    }
+
+    @Test
+    fun `rejects an iprivate code point in the fragment`() {
+        val iprivate = Char(0xE000).toString()
+        val iri = "http://h/#$iprivate"
+
+        assertIs<UriParseError.IriInvalidCodePoint>(assertIs<ParseResult.Err>(Iri.toUri(iri)).error)
+    }
+
+    @Test
+    fun `rejects a bidi formatting character anywhere in the iri`() {
+        // U+200E LEFT-TO-RIGHT MARK is one of the seven formatting characters RFC 3987 §4.1 forbids.
+        val lrm = Char(0x200E).toString()
+        val iri = "http://h/$lrm"
+
+        val error =
+            assertIs<UriParseError.IriBidiFormattingCharacter>(assertIs<ParseResult.Err>(Iri.toUri(iri)).error)
+
+        assertEquals(0x200E, error.codePoint)
+        assertEquals(iri.indexOf(lrm), error.at)
     }
 
     @Test
