@@ -45,6 +45,16 @@ internal class UriNormalizerTest {
     }
 
     @Test
+    fun `normalize decodes a percent-encoded unreserved host octet before lowercasing`() {
+        // NORM-5/NORM-8 order: an unreserved percent-triplet in the host must decode BEFORE the
+        // reg-name letters are lowercased, else a decoded uppercase letter (here "%41" -> "A")
+        // never gets folded. Also pins idempotency ([NORM-26]): normalizing an already-normalized
+        // result must not change it again.
+        assertEquals("http://a.com/", normalizedUri("http://%41.com/"))
+        assertEquals("http://a.com/", normalizedUri("http://a.com/"))
+    }
+
+    @Test
     fun `normalize elides a port equal to the scheme default`() {
         assertEquals("http://h/", normalizedUri("http://h:80/"))
     }
