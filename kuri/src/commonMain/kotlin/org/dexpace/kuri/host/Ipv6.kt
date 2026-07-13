@@ -453,10 +453,16 @@ internal object Ipv6 {
             return seen
         }
 
-        /** Expands compression or enforces the exact-eight rule once scanning ends ([HOST-14]). */
+        /**
+         * Expands compression or enforces the exact-eight rule once scanning ends ([HOST-14]). A
+         * `::` with no piece slot left to fill (all eight already written) is itself malformed —
+         * RFC 3986's `IPv6address` ABNF has no production for eight explicit groups plus `::` — so
+         * that case fails before [relocate] would otherwise silently no-op it.
+         */
         private fun finish() {
             when {
                 failure != null -> Unit
+                compress != UNSET_COMPRESS && pieceIndex == PIECE_COUNT -> fail()
                 compress != UNSET_COMPRESS -> relocate()
                 pieceIndex != PIECE_COUNT -> fail()
                 else -> Unit
