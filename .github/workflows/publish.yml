@@ -43,12 +43,9 @@ jobs:
           java-version: '21'
       # The Android target's publication needs an SDK (compileSdk 35) at build time.
       - uses: android-actions/setup-android@v3
-      # cache-provider: basic keeps caching on the MIT-licensed actions/cache-backed provider
-      # instead of setup-gradle's default proprietary Enhanced Caching (gradle-actions-caching),
-      # consistent with this project's all-OSS toolchain.
+      # Default (Enhanced Caching, gradle-actions-caching): free for public repos, no extra config
+      # needed, and it caches GRADLE_USER_HOME (dependencies, wrapper distributions, build cache).
       - uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-provider: basic
 
       - name: Resolve version
         id: version

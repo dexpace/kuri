@@ -47,12 +47,9 @@ jobs:
           # Match the CI jobs: Gradle runs on Corretto 21 (the module's jvmToolchain(21)).
           distribution: corretto
           java-version: '21'
-      # cache-provider: basic keeps caching on the MIT-licensed actions/cache-backed provider
-      # instead of setup-gradle's default proprietary Enhanced Caching (gradle-actions-caching),
-      # consistent with this project's all-OSS toolchain.
+      # Default (Enhanced Caching, gradle-actions-caching): free for public repos, no extra config
+      # needed, and it caches GRADLE_USER_HOME (dependencies, wrapper distributions, build cache).
       - uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-provider: basic
 
       # Initialise the CodeQL tracer BEFORE the build so the Kotlin/Java compilation is extracted.
       # 'java' is CodeQL's identifier for the Java/Kotlin extractor (it analyses Kotlin too).
