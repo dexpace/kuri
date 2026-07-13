@@ -89,6 +89,13 @@ class UrlParserTest {
     }
 
     @Test
+    fun `records an invalid-credentials validation error for userinfo`() {
+        val url = parsed("http://u:p@h/")
+
+        assertTrue(ValidationError.INVALID_CREDENTIALS in url.validationErrors)
+    }
+
+    @Test
     fun `encodes a non-final at-sign in userinfo`() {
         val url = parsed("http://a@b@h/")
         assertEquals("a%40b", url.username)

@@ -121,6 +121,7 @@ internal object UrlParserAuthority {
         state.password =
             if (colon >= 0) PercentCodec.encode(userinfo.substring(colon + 1), PercentEncodeSets.USERINFO) else ""
         state.atSignSeen = true
+        state.errors.add(ValidationError.INVALID_CREDENTIALS)
     }
 
     // --- host (§8.3 [PARSE-29]–[PARSE-31]) -------------------------------------------

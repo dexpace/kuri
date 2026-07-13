@@ -36,4 +36,10 @@ public enum class ValidationError {
      * appeared in a component (the WHATWG *invalid-URL-unit* anomaly).
      */
     INVALID_URL_UNIT,
+
+    /**
+     * A userinfo subcomponent (`username[:password]@`) was present in the authority (the WHATWG
+     * *invalid-credentials* anomaly, fired once per `@` consumed while splitting userinfo).
+     */
+    INVALID_CREDENTIALS,
 }
