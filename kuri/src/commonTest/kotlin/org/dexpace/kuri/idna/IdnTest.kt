@@ -9,6 +9,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Behavioural tests for the public [Idn] facade over the internal [Idna] engine (UTS-46, SPEC §7.4).
@@ -43,6 +44,42 @@ class IdnTest {
         val input = "xn--a.b" + uUmlaut + "cher"
 
         assertEquals("xn--a.xn--bcher-kva", Idn.toAscii(input).getOrNull())
+    }
+
+    @Test
+    fun `toAscii recognizes the ideographic full stop as a per-label leniency separator`() {
+        // U+3002 IDEOGRAPHIC FULL STOP is one of the three non-ASCII UTS-46 dot-separator
+        // variants mapped to U+002E; the per-label ASCII/non-ASCII gate must see the boundary it
+        // forms, not just a literal '.', so "xn--a" still gets the malformed-Punycode leniency.
+        val ideographicFullStop = Char(0x3002).toString()
+        val input = "xn--a" + ideographicFullStop + "b" + uUmlaut + "cher"
+        val expected = Idn.toAscii("xn--a.b" + uUmlaut + "cher")
+
+        assertTrue(expected.isOk())
+        assertEquals(expected.getOrNull(), Idn.toAscii(input).getOrNull())
+    }
+
+    @Test
+    fun `toAscii recognizes the fullwidth full stop as a per-label leniency separator`() {
+        // U+FF0E FULLWIDTH FULL STOP is another UTS-46 dot-separator variant mapped to U+002E.
+        val fullwidthFullStop = Char(0xFF0E).toString()
+        val input = "xn--a" + fullwidthFullStop + "b" + uUmlaut + "cher"
+        val expected = Idn.toAscii("xn--a.b" + uUmlaut + "cher")
+
+        assertTrue(expected.isOk())
+        assertEquals(expected.getOrNull(), Idn.toAscii(input).getOrNull())
+    }
+
+    @Test
+    fun `toAscii recognizes the halfwidth ideographic full stop as a per-label leniency separator`() {
+        // U+FF61 HALFWIDTH IDEOGRAPHIC FULL STOP is the third UTS-46 dot-separator variant mapped
+        // to U+002E.
+        val halfwidthIdeographicFullStop = Char(0xFF61).toString()
+        val input = "xn--a" + halfwidthIdeographicFullStop + "b" + uUmlaut + "cher"
+        val expected = Idn.toAscii("xn--a.b" + uUmlaut + "cher")
+
+        assertTrue(expected.isOk())
+        assertEquals(expected.getOrNull(), Idn.toAscii(input).getOrNull())
     }
 
     @Test

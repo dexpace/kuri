@@ -91,29 +91,43 @@ internal object Idna {
     }
 
     /**
-     * Splits [domain] on [LABEL_SEPARATOR] and resolves each label independently: an all-ASCII label
-     * is lowercased and kept unconditionally (never validated, matching the existing intentional
-     * leniency — see [domainToAsciiForUrl]); a label carrying any non-ASCII code point runs the full
-     * [domainToAscii] pipeline, and that label's failure fails the whole domain. Splitting first and
-     * running NFC per label (inside [domainToAscii]) rather than over the whole domain is equivalent
-     * here: `U+002E` never participates in a cross-label canonical composition.
+     * Maps [domain] first, then splits the mapped-and-NFC-normalized text on [LABEL_SEPARATOR] and
+     * resolves each label independently: an all-ASCII label is lowercased and kept unconditionally
+     * (never validated, matching the existing intentional leniency — see [domainToAsciiForUrl]); a
+     * label carrying any non-ASCII code point runs the full [domainToAscii] pipeline, and that
+     * label's failure fails the whole domain. Mapping before splitting (mirroring [domainToAscii]'s
+     * own step order) is required so a label boundary formed by one of the three non-ASCII UTS-46
+     * dot-separator variants (U+3002, U+FF0E, U+FF61 — all [IdnaMapping.Mapped] to [LABEL_SEPARATOR])
+     * is visible here too, not only inside the nested [domainToAscii] call on a non-ASCII label.
+     * Mapping the whole domain up front is safe: every ASCII code point reaching this function
+     * already passed the WHATWG forbidden-host-code-point filter upstream, and no ASCII code point
+     * maps outside ASCII or is dropped under `UseSTD3ASCIIRules = false`, so an all-ASCII label's
+     * content is unchanged in substance (only case-folded, which [asciiLowercase] already redoes
+     * harmlessly) and a `mapAll` failure can only occur where the nested [domainToAscii] on that same
+     * span would already have failed today.
      *
-     * @return the joined ASCII domain, or `null` on the first non-ASCII label's UTS-46 failure.
+     * @return the joined ASCII domain, or `null` on a mapping failure or the first non-ASCII label's
+     *   UTS-46 failure.
      */
     private fun asciiLenientDomainToAscii(domain: String): String? {
-        val labels = splitLabels(domain)
+        val mapped = mapAll(domain) ?: return null
+        val labels = splitLabels(Normalizer.nfc(mapped))
         val out = ArrayList<String>(labels.size)
-        for (label in labels) {
+        var index = 0
+        var failed = false
+        while (index < labels.size && !failed) {
+            val label = labels[index]
             if (label.isAllAscii()) {
                 out.add(asciiLowercase(label))
             } else {
                 when (val result = domainToAscii(label)) {
                     is ParseResult.Ok -> out.add(result.value)
-                    is ParseResult.Err -> return null
+                    is ParseResult.Err -> failed = true
                 }
             }
+            index++
         }
-        return out.joinToString(LABEL_SEPARATOR)
+        return if (failed) null else out.joinToString(LABEL_SEPARATOR)
     }
 
     /**
