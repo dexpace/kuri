@@ -9,9 +9,11 @@ import org.dexpace.kuri.ZONE_ID_ENABLED
 import org.dexpace.kuri.carriesZoneId
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
+import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.serializeHost
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.scheme.schemeColonIndex
+import org.dexpace.kuri.serialize.guardRecomposedUriPath
 
 /** A generous upper bound on a path/URI length used only for defensive assertions (mirrors the parser cap). */
 private const val MAX_PATH_LENGTH: Int = 8192
@@ -136,8 +138,10 @@ internal object Resolver {
         reference: ParsedComponents,
     ): ParseResult<ParsedComponents> {
         require(base.scheme != null) { "structured resolution requires an absolute base scheme" }
-        val target = transformReferences(partsOf(base), partsOf(reference))
-        return UriParser.parse(recompose(target), structuredOptions(base, reference))
+        return when (val target = transformReferences(partsOf(base), partsOf(reference))) {
+            is ParseResult.Err -> target
+            is ParseResult.Ok -> UriParser.parse(recompose(target.value), structuredOptions(base, reference))
+        }
     }
 
     /** Derives the round-trip [ParseOptions] for a structured resolve: a zone id on either input opts in. */
@@ -153,25 +157,29 @@ internal object Resolver {
     private fun transformReferences(
         base: UriParts,
         ref: UriParts,
-    ): UriParts {
+    ): ParseResult<UriParts> {
         require(base.scheme != null) { "reference resolution requires an absolute base scheme" }
         val resolved =
             when {
-                ref.scheme != null -> UriParts(ref.scheme, ref.authority, removeDotSegments(ref.path), ref.query, null)
+                ref.scheme != null ->
+                    ParseResult.Ok(UriParts(ref.scheme, ref.authority, removeDotSegments(ref.path), ref.query, null))
                 else -> resolveRelative(base, ref)
             }
-        val withFragment = resolved.copy(fragment = ref.fragment)
-        check(withFragment.scheme != null) { "a resolved target must carry the base scheme" }
-        return withFragment
+        return resolved.map { part ->
+            val withFragment = part.copy(fragment = ref.fragment)
+            check(withFragment.scheme != null) { "a resolved target must carry the base scheme" }
+            withFragment
+        }
     }
 
     /** §5.2.2 with no reference scheme: a defined reference authority replaces the base authority. */
     private fun resolveRelative(
         base: UriParts,
         ref: UriParts,
-    ): UriParts =
+    ): ParseResult<UriParts> =
         when {
-            ref.authority != null -> UriParts(base.scheme, ref.authority, removeDotSegments(ref.path), ref.query, null)
+            ref.authority != null ->
+                ParseResult.Ok(UriParts(base.scheme, ref.authority, removeDotSegments(ref.path), ref.query, null))
             else -> resolveNoAuthority(base, ref)
         }
 
@@ -179,20 +187,18 @@ internal object Resolver {
     private fun resolveNoAuthority(
         base: UriParts,
         ref: UriParts,
-    ): UriParts {
-        val (path, query) = resolvePathAndQuery(base, ref)
-        return UriParts(base.scheme, base.authority, path, query, null)
-    }
+    ): ParseResult<UriParts> =
+        resolvePathAndQuery(base, ref).map { (path, query) -> UriParts(base.scheme, base.authority, path, query, null) }
 
     /** §5.2.2 path/query selection: empty reference path keeps the base path (and base query if absent). */
     private fun resolvePathAndQuery(
         base: UriParts,
         ref: UriParts,
-    ): Pair<String, String?> =
+    ): ParseResult<Pair<String, String?>> =
         when {
-            ref.path.isEmpty() -> Pair(base.path, ref.query ?: base.query)
-            ref.path.startsWith(SLASH) -> Pair(removeDotSegments(ref.path), ref.query)
-            else -> Pair(removeDotSegments(merge(base, ref.path)), ref.query)
+            ref.path.isEmpty() -> ParseResult.Ok(Pair(base.path, ref.query ?: base.query))
+            ref.path.startsWith(SLASH) -> ParseResult.Ok(Pair(removeDotSegments(ref.path), ref.query))
+            else -> mergedPath(base, ref.path).map { Pair(removeDotSegments(it), ref.query) }
         }
 
     // --- §5.2.3 Merge Paths -----------------------------------------------------------------------
@@ -218,6 +224,23 @@ internal object Resolver {
         val slash = basePath.lastIndexOf('/')
         val prefix = if (slash >= 0) basePath.substring(0, slash + 1) else ""
         return prefix + refPath
+    }
+
+    /**
+     * Guards [merge]'s concatenation: the only point two independently length-bounded paths (the
+     * base's directory prefix and the reference path) combine into something that can exceed
+     * [MAX_PATH_LENGTH], since every already-parsed single path is bounded by the parser's own cap.
+     */
+    private fun mergedPath(
+        base: UriParts,
+        refPath: String,
+    ): ParseResult<String> {
+        val merged = merge(base, refPath)
+        return if (merged.length <= MAX_PATH_LENGTH) {
+            ParseResult.Ok(merged)
+        } else {
+            ParseResult.Err(UriParseError.InputTooLong(merged.length, MAX_PATH_LENGTH))
+        }
     }
 
     // --- §5.2.4 Remove Dot Segments ---------------------------------------------------------------
@@ -272,13 +295,20 @@ internal object Resolver {
 
     // --- §5.3 Component Recomposition -------------------------------------------------------------
 
-    /** §5.3: assembles the five resolved components back into a URI-reference string. */
+    /**
+     * §5.3: assembles the five resolved components back into a URI-reference string, applying the
+     * §3.3 `/.`-guard so an authority-less path produced by dot-segment removal never re-parses as
+     * fabricating an authority (RFC 3986 §3.3/§5.2.2). The length invariant is a postcondition, not a
+     * precondition: by the time [transformReferences] returns [ParseResult.Ok], its path is already
+     * known to fit (the one path that can exceed [MAX_PATH_LENGTH] — [merge]'s concatenation — is
+     * caught earlier, in [mergedPath]), so a violation here means this class's own invariant broke.
+     */
     private fun recompose(parts: UriParts): String {
-        require(parts.path.length <= MAX_PATH_LENGTH) { "resolved path exceeds the supported length bound" }
+        check(parts.path.length <= MAX_PATH_LENGTH) { "resolved path exceeds the supported length bound" }
         val sb = StringBuilder()
         if (parts.scheme != null) sb.append(parts.scheme).append(':')
         if (parts.authority != null) sb.append(DOUBLE_SLASH).append(parts.authority)
-        sb.append(parts.path)
+        sb.append(guardRecomposedUriPath(parts.scheme, parts.authority != null, parts.path))
         if (parts.query != null) sb.append('?').append(parts.query)
         if (parts.fragment != null) sb.append('#').append(parts.fragment)
         check(sb.length >= parts.path.length) { "recomposition dropped path characters" }
@@ -298,19 +328,20 @@ internal object Resolver {
             base is ParseResult.Err -> base
             ref is ParseResult.Err -> ref
             base is ParseResult.Ok && base.value.scheme == null -> ParseResult.Err(UriParseError.MissingScheme)
-            else -> ParseResult.Ok(resolveStrings(baseUri, reference))
+            else -> resolveStrings(baseUri, reference)
         }
 
     /** Splits both strings into raw 5-tuples, transforms, and recomposes the target URI string. */
     private fun resolveStrings(
         baseUri: String,
         reference: String,
-    ): String {
+    ): ParseResult<String> {
         val baseParts = splitUri(baseUri)
         require(baseParts.scheme != null) { "an absolute base must carry a scheme" }
-        val target = transformReferences(baseParts, splitUri(reference))
-        check(target.scheme != null) { "the resolved target must be absolute" }
-        return recompose(target)
+        return transformReferences(baseParts, splitUri(reference)).map { target ->
+            check(target.scheme != null) { "the resolved target must be absolute" }
+            recompose(target)
+        }
     }
 
     /** Appendix B split into the raw five parts, peeling fragment then query then the hierarchical part. */

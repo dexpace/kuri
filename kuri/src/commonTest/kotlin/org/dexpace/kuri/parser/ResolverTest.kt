@@ -132,6 +132,31 @@ internal class ResolverTest {
     }
 
     @Test
+    fun `resolve guards a dot-segment-collapsed authority-less two-slash path`() {
+        // RFC 3986 §3.3: an authority-less path cannot begin with "//" (it would re-read as an
+        // authority). "/.//g" resolved against a no-authority base collapses via §5.2.4 case B to
+        // "//g", which recompose must guard with the leading "/." so the target re-parses with no
+        // authority and path "//g", rather than fabricating host "g".
+        val resolved = Resolver.resolve("a:/b/c", "/.//g").getOrThrow()
+
+        assertEquals("a:/.//g", resolved)
+    }
+
+    @Test
+    fun `resolve returns an error instead of throwing when the merge exceeds the length bound`() {
+        // Each individual input parses fine, but base's directory prefix concatenated with the
+        // rootless reference exceeds the resolver's defensive length bound (8192); this must
+        // surface as a ParseResult.Err, never an escaping exception ("total, never throws").
+        val base = "a:/" + "x".repeat(5000) + "/c"
+        val longRef = "y".repeat(5000)
+
+        val result = Resolver.resolve(base, longRef)
+
+        val err = assertIs<ParseResult.Err>(result)
+        assertIs<UriParseError.InputTooLong>(err.error)
+    }
+
+    @Test
     fun `resolve merges a relative reference onto an empty-authority base path`() {
         // base authority present with an empty base path: §5.2.3 prepends a single "/" to the ref.
         val result = Resolver.resolve("http://a", "g").getOrThrow()
