@@ -7,6 +7,8 @@ public final class org/dexpace/kuri/Iri {
 public final class org/dexpace/kuri/JavaNetInteropKt {
 	public static final fun toJavaUri (Lorg/dexpace/kuri/Uri;)Ljava/net/URI;
 	public static final fun toJavaUri (Lorg/dexpace/kuri/Url;)Ljava/net/URI;
+	public static final fun toJavaUriOrNull (Lorg/dexpace/kuri/Uri;)Ljava/net/URI;
+	public static final fun toJavaUriOrNull (Lorg/dexpace/kuri/Url;)Ljava/net/URI;
 	public static final fun toJavaUrl (Lorg/dexpace/kuri/Url;)Ljava/net/URL;
 	public static final fun toKuriUri (Ljava/net/URI;)Lorg/dexpace/kuri/error/ParseResult;
 	public static final fun toKuriUrl (Ljava/net/URI;)Lorg/dexpace/kuri/error/ParseResult;
@@ -385,6 +387,7 @@ public final class org/dexpace/kuri/error/UriSyntaxException : java/lang/Illegal
 
 public final class org/dexpace/kuri/error/ValidationError : java/lang/Enum {
 	public static final field BACKSLASH_AS_SOLIDUS Lorg/dexpace/kuri/error/ValidationError;
+	public static final field INVALID_CREDENTIALS Lorg/dexpace/kuri/error/ValidationError;
 	public static final field INVALID_URL_UNIT Lorg/dexpace/kuri/error/ValidationError;
 	public static final field LEADING_OR_TRAILING_C0_CONTROL_OR_SPACE Lorg/dexpace/kuri/error/ValidationError;
 	public static final field MISSING_AUTHORITY_SLASHES Lorg/dexpace/kuri/error/ValidationError;

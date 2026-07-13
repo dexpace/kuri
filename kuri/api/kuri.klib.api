@@ -25,6 +25,7 @@ final enum class org.dexpace.kuri.error/HostError : kotlin/Enum<org.dexpace.kuri
 
 final enum class org.dexpace.kuri.error/ValidationError : kotlin/Enum<org.dexpace.kuri.error/ValidationError> { // org.dexpace.kuri.error/ValidationError|null[0]
     enum entry BACKSLASH_AS_SOLIDUS // org.dexpace.kuri.error/ValidationError.BACKSLASH_AS_SOLIDUS|null[0]
+    enum entry INVALID_CREDENTIALS // org.dexpace.kuri.error/ValidationError.INVALID_CREDENTIALS|null[0]
     enum entry INVALID_URL_UNIT // org.dexpace.kuri.error/ValidationError.INVALID_URL_UNIT|null[0]
     enum entry LEADING_OR_TRAILING_C0_CONTROL_OR_SPACE // org.dexpace.kuri.error/ValidationError.LEADING_OR_TRAILING_C0_CONTROL_OR_SPACE|null[0]
     enum entry MISSING_AUTHORITY_SLASHES // org.dexpace.kuri.error/ValidationError.MISSING_AUTHORITY_SLASHES|null[0]
