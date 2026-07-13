@@ -275,6 +275,21 @@ internal class ResolverTest {
         assertEquals("http://:pass@h/a/x", UriSerializer.serialize(resolved))
     }
 
+    @Test
+    fun `structured resolve returns an error instead of throwing when the merge exceeds the length bound`() {
+        // Mirrors "resolve returns an error instead of throwing when the merge exceeds the length
+        // bound" on the structured overload: both inputs parse fine individually, but base's
+        // directory prefix concatenated with the rootless reference exceeds the resolver's
+        // defensive length bound (8192), which the structured resolve shares via transformReferences.
+        val base = UriParser.parse("a:/" + "x".repeat(5000) + "/c").getOrThrow()
+        val reference = UriParser.parse("y".repeat(5000)).getOrThrow()
+
+        val result = Resolver.resolve(base, reference)
+
+        val err = assertIs<ParseResult.Err>(result)
+        assertIs<UriParseError.InputTooLong>(err.error)
+    }
+
     private fun assertResolves(cases: List<Pair<String, String>>) {
         for ((reference, expected) in cases) {
             val resolved = Resolver.resolve(BASE, reference).getOrThrow()
