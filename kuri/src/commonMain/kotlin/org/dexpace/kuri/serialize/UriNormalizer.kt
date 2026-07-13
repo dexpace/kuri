@@ -73,7 +73,7 @@ internal object UriNormalizer {
         }
 
     /** Lowercases reg-name letters ([NORM-5]) then applies the shared triplet rules ([NORM-7]). */
-    private fun normalizeRegName(value: String): String = normalizeText(lowercaseRegNameLetters(value))
+    private fun normalizeRegName(value: String): String = lowercaseRegNameLetters(normalizeText(value))
 
     /** Lowercases ASCII letters outside percent triplets; a triplet's hex digits are left to [NORM-6]. */
     private fun lowercaseRegNameLetters(text: String): String {
