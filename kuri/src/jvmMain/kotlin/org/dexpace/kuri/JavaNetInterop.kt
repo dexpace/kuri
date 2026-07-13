@@ -22,6 +22,21 @@ import java.net.URL
 public fun Url.toJavaUri(): URI = URI.create(href)
 
 /**
+ * Converts this [Url] to a [java.net.URI], punning the JDK's stricter-grammar rejection to `null`.
+ *
+ * The `null`-returning counterpart of [toJavaUri], for a call site that prefers a nullable value to
+ * an unchecked [IllegalArgumentException] from [URI.create].
+ *
+ * @return the [URI] whose string form equals this URL's [href], or `null` when [URI.create] rejects it.
+ */
+public fun Url.toJavaUriOrNull(): URI? =
+    try {
+        URI.create(href)
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+
+/**
  * Converts this [Url] to a [java.net.URL] by first bridging to a [java.net.URI] and calling [URI.toURL].
  *
  * @return the [URL] equivalent of this URL.
@@ -37,6 +52,21 @@ public fun Url.toJavaUrl(): URL = toJavaUri().toURL()
  * @throws IllegalArgumentException if [uriString] is not a valid RFC 2396 URI (raised by [URI.create]).
  */
 public fun Uri.toJavaUri(): URI = URI.create(uriString)
+
+/**
+ * Converts this [Uri] to a [java.net.URI], punning the JDK's stricter-grammar rejection to `null`.
+ *
+ * The `null`-returning counterpart of [toJavaUri], for a call site that prefers a nullable value to
+ * an unchecked [IllegalArgumentException] from [URI.create].
+ *
+ * @return the [URI] whose string form equals this URI's [uriString], or `null` when [URI.create] rejects it.
+ */
+public fun Uri.toJavaUriOrNull(): URI? =
+    try {
+        URI.create(uriString)
+    } catch (_: IllegalArgumentException) {
+        null
+    }
 
 /**
  * Re-parses this [java.net.URI]'s string form into a kuri [Uri] under the `Uri` profile.

@@ -74,4 +74,19 @@ class JavaNetInteropTest {
         assertEquals("https", url.scheme)
         assertEquals("host", url.hostName ?: fail("expected a host name"))
     }
+
+    @Test
+    fun `Url toJavaUriOrNull returns null instead of throwing for a WHATWG-only path character`() {
+        // "|" is valid verbatim in a WHATWG path but not in java.net.URI's stricter RFC 2396 grammar.
+        val url: Url = Url.parse("https://h/a|b").getOrThrow()
+
+        assertEquals(null, url.toJavaUriOrNull())
+    }
+
+    @Test
+    fun `Uri toJavaUriOrNull returns null instead of throwing for a WHATWG-only path character`() {
+        val uri: Uri = Uri.parse("https://h/a|b").getOrThrow()
+
+        assertEquals(null, uri.toJavaUriOrNull())
+    }
 }
