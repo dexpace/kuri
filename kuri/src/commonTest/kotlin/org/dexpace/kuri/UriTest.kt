@@ -166,6 +166,7 @@ class UriTest {
         val uri = parseOk("http://h/a<b")
 
         assertEquals("/a<b", uri.path)
+        assertEquals("http://h/a<b", uri.uriString)
     }
 
     @Test
@@ -173,6 +174,7 @@ class UriTest {
         val uri = parseOk("http://h/a{b}")
 
         assertEquals("/a{b}", uri.path)
+        assertEquals("http://h/a{b}", uri.uriString)
     }
 
     @Test
