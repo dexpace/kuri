@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). While kuri is in the `0.x`
 series the public API is not yet frozen and may change between minor releases.
 
+## [0.1.0-alpha.5](https://github.com/dexpace/kuri/compare/v0.1.0-alpha.4...v0.1.0-alpha.5) (2026-07-13)
+
+
+### Fixed
+
+* enforce RFC 3987 IRI rules and close IDNA, WPT, and BCV gaps ([#71](https://github.com/dexpace/kuri/issues/71)) ([46ea05f](https://github.com/dexpace/kuri/commit/46ea05fec66ee20967dd971c72f89d28b2fbc466))
+* several host, IPv6, IDNA, and resolver correctness fixes ([#68](https://github.com/dexpace/kuri/issues/68)) ([d00b6b9](https://github.com/dexpace/kuri/commit/d00b6b94e2827a4e797c5c805cb275d67013ee82))
+
 ## [0.1.0-alpha.4](https://github.com/dexpace/kuri/compare/v0.1.0-alpha.3...v0.1.0-alpha.4) (2026-07-10)
 
 
