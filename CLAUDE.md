@@ -53,7 +53,10 @@ conventions are wired into the build and are authoritative:
   `allWarningsAsErrors`, **explicit-API strict mode**, **binary-compatibility-validator**
   (`apiCheck`/`apiDump`), and a Kover line-coverage floor. Run `./gradlew build` to execute
   the full gate; `./gradlew apiDump` only after an **intentional** public-API change, and
-  commit the regenerated `api/*.api` snapshots alongside it.
+  commit the regenerated `api/*.api` snapshots alongside it. Regenerate the native
+  `kuri/api/kuri.klib.api` dump on **macOS**: running `apiDump` on a Linux/Windows host
+  silently drops the Apple klib targets from the merged dump, and the Linux `apiCheck`
+  won't flag the truncation.
 - **MIT license header in every source file** — each `.kt`/`.java`/`.kts` starts with the
   `Copyright (c) 2026 dexpace and Omar Aljarrah` / `SPDX-License-Identifier: MIT` block.
   This is a review convention; nothing enforces it automatically.

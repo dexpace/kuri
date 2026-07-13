@@ -55,10 +55,13 @@ jobs:
       # Restore the Kotlin/Native toolchain (~1 GB: compiler bundle + LLVM/sysroot/gcc deps under
       # ~/.konan). setup-gradle caches ~/.gradle but not ~/.konan, and apiCheck's KLIB ABI validation
       # compiles every native klib here, so without this the whole bundle re-downloads each run.
-      # The key is scoped `-gate-` (the native job below uses `-native-`) so the two Linux jobs each
-      # cache the toolchain subset they actually pull and never race to write one shared key on main.
-      # Restore runs on every branch (PRs reuse main's cache); only main writes it (see the save step
-      # below). The key tracks the version catalog; restore-keys give a partial hit when it changes.
+      # The key is scoped `-gate-` (the native job below uses `-native-`) because the two Linux jobs
+      # populate different ~/.konan subsets: this job's apiCheck cross-builds the mingw klib for the ABI
+      # dump, which the `-native-` leg (linuxX64/linuxArm64 only) never pulls. Separate keys let each job
+      # cache exactly its own subset instead of a shared write-once key locking the cache to whichever
+      # subset landed first. Restore runs on every branch (PRs reuse main's cache); only main writes it
+      # (see the save step below). The key tracks the version catalog; restore-keys give a partial hit
+      # when it changes.
       - name: Restore Kotlin/Native toolchain
         id: konan-cache
         uses: actions/cache/restore@v4
@@ -142,8 +145,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       # Restore the Kotlin/Native toolchain (~1 GB under ~/.konan) that this native job compiles and
       # links against; setup-gradle caches ~/.gradle but not ~/.konan. runner.os in the key keeps the
-      # Linux/Windows/macOS legs separate, and the `-native-` scope keeps the Linux leg from colliding
-      # with the quality-gate job's `-gate-` cache. Restore runs on every branch; only main writes it.
+      # Linux/Windows/macOS legs separate, and the `-native-` scope keeps the Linux leg's smaller
+      # toolchain subset (linuxX64/linuxArm64) from sharing a key with the quality-gate job's broader
+      # `-gate-` cache, which also cross-builds the mingw klib for the ABI dump. Restore runs on every
+      # branch; only main writes it.
       - name: Restore Kotlin/Native toolchain
         id: konan-cache
         uses: actions/cache/restore@v4
@@ -197,8 +202,10 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      # Restore the cached AVD (system image, created device, boot snapshot) under ~/.android so a run
-      # can skip the image download, AVD creation and cold boot and load a warm snapshot instead.
+      # Restore the cached AVD (the created device plus its boot snapshot) under ~/.android so a run can
+      # skip AVD creation and the cold boot and load a warm snapshot instead. This does not cache the
+      # system-image package itself — sdkmanager installs that under $ANDROID_SDK_ROOT/system-images,
+      # outside ~/.android — so the emulator action still ensures the image is present each run.
       # Restore runs on every branch (PRs reuse main's snapshot); only main writes it (see save below).
       # The key pins every coordinate that affects the snapshot; bump the -v suffix if the emulator
       # options change, since GitHub caches are write-once per key.
@@ -216,7 +223,7 @@ jobs:
       # below once, warm-booting from main's cached snapshot when present (a single boot, not two).
       - name: Create AVD and generate snapshot for caching
         if: github.ref == 'refs/heads/main' && steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 30
           target: aosp_atd
@@ -227,7 +234,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: echo "Generated AVD snapshot for caching."
       - name: Android instrumented tests on an emulator
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 30
           target: aosp_atd

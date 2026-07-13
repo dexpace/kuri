@@ -21,7 +21,7 @@ on:
 # A newer push to the same PR ref cancels an in-flight scan instead of stacking concurrent analyses;
 # main runs are never cancelled, so every default-branch commit keeps its own recorded CodeQL result.
 concurrency:
-  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # Least privilege by default; the analyze job widens to what code-scanning upload needs.
