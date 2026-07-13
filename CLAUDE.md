@@ -53,7 +53,11 @@ conventions are wired into the build and are authoritative:
   `allWarningsAsErrors`, **explicit-API strict mode**, **binary-compatibility-validator**
   (`apiCheck`/`apiDump`), and a Kover line-coverage floor. Run `./gradlew build` to execute
   the full gate; `./gradlew apiDump` only after an **intentional** public-API change, and
-  commit the regenerated `api/*.api` snapshots alongside it.
+  commit the regenerated `api/*.api` snapshots alongside it. Regenerate the native
+  `kuri/api/kuri.klib.api` dump on **macOS**: running `apiDump` on a Linux/Windows host
+  silently drops the Apple klib targets from the merged dump. The Linux `apiCheck` can't
+  see that truncation, but the macOS `native` CI leg runs `klibApiCheck` and fails on it, so
+  a dump regenerated on the wrong host is caught in CI rather than merged.
 - **MIT license header in every source file** — each `.kt`/`.java`/`.kts` starts with the
   `Copyright (c) 2026 dexpace and Omar Aljarrah` / `SPDX-License-Identifier: MIT` block.
   This is a review convention; nothing enforces it automatically.
@@ -67,8 +71,10 @@ conventions are wired into the build and are authoritative:
   (synchronized pins carrier threads under Loom). Blocking calls must respect
   `Thread.interrupt()` — catch `InterruptedException`, restore the interrupt flag, and
   throw `InterruptedIOException` (or attach the interrupt as suppressed).
-- **Commit style:** `feat:` / `test:` / `docs:` / `chore:` / `refactor:` prefixes (`merge:`
-  for merge commits). **PR titles follow the same prefixed style** (e.g. `docs: add CLAUDE.md`).
+- **Commit style:** `feat:` / `fix:` / `docs:` / `test:` / `chore:` / `perf:` / `refactor:` /
+  `ci:` / `build:` / `style:` / `revert:` prefixes (`merge:` for merge commits), enforced by
+  `.github/scripts/check-conventional-commit.sh`. **PR titles follow the same prefixed style**
+  (e.g. `docs: add CLAUDE.md`).
 
 ## Generated data & codegen
 

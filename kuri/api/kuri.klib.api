@@ -1,0 +1,555 @@
+// Klib ABI Dump
+// Targets: [iosArm64, iosSimulatorArm64, iosX64, js, linuxArm64, linuxX64, macosArm64, mingwX64, tvosArm64, tvosSimulatorArm64, wasmJs, watchosArm64, watchosSimulatorArm64]
+// Rendering settings:
+// - Signature version: 2
+// - Show manifest properties: true
+// - Show declarations: true
+
+// Library unique name: <org.dexpace:kuri>
+final enum class org.dexpace.kuri.error/HostError : kotlin/Enum<org.dexpace.kuri.error/HostError> { // org.dexpace.kuri.error/HostError|null[0]
+    enum entry EmptyLabel // org.dexpace.kuri.error/HostError.EmptyLabel|null[0]
+    enum entry HostTooLong // org.dexpace.kuri.error/HostError.HostTooLong|null[0]
+    enum entry IdnaFailed // org.dexpace.kuri.error/HostError.IdnaFailed|null[0]
+    enum entry Ipv4NonNumeric // org.dexpace.kuri.error/HostError.Ipv4NonNumeric|null[0]
+    enum entry Ipv4Overflow // org.dexpace.kuri.error/HostError.Ipv4Overflow|null[0]
+    enum entry Ipv6Malformed // org.dexpace.kuri.error/HostError.Ipv6Malformed|null[0]
+    enum entry LabelTooLong // org.dexpace.kuri.error/HostError.LabelTooLong|null[0]
+    enum entry ZoneIdRejected // org.dexpace.kuri.error/HostError.ZoneIdRejected|null[0]
+
+    final val entries // org.dexpace.kuri.error/HostError.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<org.dexpace.kuri.error/HostError> // org.dexpace.kuri.error/HostError.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): org.dexpace.kuri.error/HostError // org.dexpace.kuri.error/HostError.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<org.dexpace.kuri.error/HostError> // org.dexpace.kuri.error/HostError.values|values#static(){}[0]
+}
+
+final enum class org.dexpace.kuri.error/ValidationError : kotlin/Enum<org.dexpace.kuri.error/ValidationError> { // org.dexpace.kuri.error/ValidationError|null[0]
+    enum entry BACKSLASH_AS_SOLIDUS // org.dexpace.kuri.error/ValidationError.BACKSLASH_AS_SOLIDUS|null[0]
+    enum entry INVALID_URL_UNIT // org.dexpace.kuri.error/ValidationError.INVALID_URL_UNIT|null[0]
+    enum entry LEADING_OR_TRAILING_C0_CONTROL_OR_SPACE // org.dexpace.kuri.error/ValidationError.LEADING_OR_TRAILING_C0_CONTROL_OR_SPACE|null[0]
+    enum entry MISSING_AUTHORITY_SLASHES // org.dexpace.kuri.error/ValidationError.MISSING_AUTHORITY_SLASHES|null[0]
+    enum entry TAB_OR_NEWLINE_REMOVED // org.dexpace.kuri.error/ValidationError.TAB_OR_NEWLINE_REMOVED|null[0]
+
+    final val entries // org.dexpace.kuri.error/ValidationError.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<org.dexpace.kuri.error/ValidationError> // org.dexpace.kuri.error/ValidationError.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): org.dexpace.kuri.error/ValidationError // org.dexpace.kuri.error/ValidationError.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<org.dexpace.kuri.error/ValidationError> // org.dexpace.kuri.error/ValidationError.values|values#static(){}[0]
+}
+
+sealed interface <#A: out kotlin/Any?> org.dexpace.kuri.error/ParseResult { // org.dexpace.kuri.error/ParseResult|null[0]
+    open fun getOrNull(): #A? // org.dexpace.kuri.error/ParseResult.getOrNull|getOrNull(){}[0]
+    open fun getOrThrow(): #A // org.dexpace.kuri.error/ParseResult.getOrThrow|getOrThrow(){}[0]
+    open fun isOk(): kotlin/Boolean // org.dexpace.kuri.error/ParseResult.isOk|isOk(){}[0]
+
+    final class <#A1: out kotlin/Any?> Ok : org.dexpace.kuri.error/ParseResult<#A1> { // org.dexpace.kuri.error/ParseResult.Ok|null[0]
+        constructor <init>(#A1) // org.dexpace.kuri.error/ParseResult.Ok.<init>|<init>(1:0){}[0]
+
+        final val value // org.dexpace.kuri.error/ParseResult.Ok.value|{}value[0]
+            final fun <get-value>(): #A1 // org.dexpace.kuri.error/ParseResult.Ok.value.<get-value>|<get-value>(){}[0]
+
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.error/ParseResult.Ok.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.error/ParseResult.Ok.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.error/ParseResult.Ok.toString|toString(){}[0]
+    }
+
+    final class Err : org.dexpace.kuri.error/ParseResult<kotlin/Nothing> { // org.dexpace.kuri.error/ParseResult.Err|null[0]
+        constructor <init>(org.dexpace.kuri.error/UriParseError) // org.dexpace.kuri.error/ParseResult.Err.<init>|<init>(org.dexpace.kuri.error.UriParseError){}[0]
+
+        final val error // org.dexpace.kuri.error/ParseResult.Err.error|{}error[0]
+            final fun <get-error>(): org.dexpace.kuri.error/UriParseError // org.dexpace.kuri.error/ParseResult.Err.error.<get-error>|<get-error>(){}[0]
+
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.error/ParseResult.Err.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.error/ParseResult.Err.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.error/ParseResult.Err.toString|toString(){}[0]
+    }
+}
+
+sealed interface org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.error/UriParseError|null[0]
+    open val message // org.dexpace.kuri.error/UriParseError.message|{}message[0]
+        open fun <get-message>(): kotlin/String // org.dexpace.kuri.error/UriParseError.message.<get-message>|<get-message>(){}[0]
+
+    final class ForbiddenHostCodePoint : org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.error/UriParseError.ForbiddenHostCodePoint|null[0]
+        constructor <init>(kotlin/Int, kotlin/Int) // org.dexpace.kuri.error/UriParseError.ForbiddenHostCodePoint.<init>|<init>(kotlin.Int;kotlin.Int){}[0]
+
+        final val at // org.dexpace.kuri.error/UriParseError.ForbiddenHostCodePoint.at|{}at[0]
+            final fun <get-at>(): kotlin/Int // org.dexpace.kuri.error/UriParseError.ForbiddenHostCodePoint.at.<get-at>|<get-at>(){}[0]
+        final val codePoint // org.dexpace.kuri.error/UriParseError.ForbiddenHostCodePoint.codePoint|{}codePoint[0]
+            final fun <get-codePoint>(): kotlin/Int // org.dexpace.kuri.error/UriParseError.ForbiddenHostCodePoint.codePoint.<get-codePoint>|<get-codePoint>(){}[0]
+
+        final fun component1(): kotlin/Int // org.dexpace.kuri.error/UriParseError.ForbiddenHostCodePoint.component1|component1(){}[0]
+        final fun component2(): kotlin/Int // org.dexpace.kuri.error/UriParseError.ForbiddenHostCodePoint.component2|component2(){}[0]
+        final fun copy(kotlin/Int = ..., kotlin/Int = ...): org.dexpace.kuri.error/UriParseError.ForbiddenHostCodePoint // org.dexpace.kuri.error/UriParseError.ForbiddenHostCodePoint.copy|copy(kotlin.Int;kotlin.Int){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.error/UriParseError.ForbiddenHostCodePoint.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.error/UriParseError.ForbiddenHostCodePoint.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.error/UriParseError.ForbiddenHostCodePoint.toString|toString(){}[0]
+    }
+
+    final class InputTooLong : org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.error/UriParseError.InputTooLong|null[0]
+        constructor <init>(kotlin/Int, kotlin/Int) // org.dexpace.kuri.error/UriParseError.InputTooLong.<init>|<init>(kotlin.Int;kotlin.Int){}[0]
+
+        final val length // org.dexpace.kuri.error/UriParseError.InputTooLong.length|{}length[0]
+            final fun <get-length>(): kotlin/Int // org.dexpace.kuri.error/UriParseError.InputTooLong.length.<get-length>|<get-length>(){}[0]
+        final val max // org.dexpace.kuri.error/UriParseError.InputTooLong.max|{}max[0]
+            final fun <get-max>(): kotlin/Int // org.dexpace.kuri.error/UriParseError.InputTooLong.max.<get-max>|<get-max>(){}[0]
+
+        final fun component1(): kotlin/Int // org.dexpace.kuri.error/UriParseError.InputTooLong.component1|component1(){}[0]
+        final fun component2(): kotlin/Int // org.dexpace.kuri.error/UriParseError.InputTooLong.component2|component2(){}[0]
+        final fun copy(kotlin/Int = ..., kotlin/Int = ...): org.dexpace.kuri.error/UriParseError.InputTooLong // org.dexpace.kuri.error/UriParseError.InputTooLong.copy|copy(kotlin.Int;kotlin.Int){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.error/UriParseError.InputTooLong.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.error/UriParseError.InputTooLong.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.error/UriParseError.InputTooLong.toString|toString(){}[0]
+    }
+
+    final class InvalidHost : org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.error/UriParseError.InvalidHost|null[0]
+        constructor <init>(kotlin/String, org.dexpace.kuri.error/HostError) // org.dexpace.kuri.error/UriParseError.InvalidHost.<init>|<init>(kotlin.String;org.dexpace.kuri.error.HostError){}[0]
+
+        final val host // org.dexpace.kuri.error/UriParseError.InvalidHost.host|{}host[0]
+            final fun <get-host>(): kotlin/String // org.dexpace.kuri.error/UriParseError.InvalidHost.host.<get-host>|<get-host>(){}[0]
+        final val reason // org.dexpace.kuri.error/UriParseError.InvalidHost.reason|{}reason[0]
+            final fun <get-reason>(): org.dexpace.kuri.error/HostError // org.dexpace.kuri.error/UriParseError.InvalidHost.reason.<get-reason>|<get-reason>(){}[0]
+
+        final fun component1(): kotlin/String // org.dexpace.kuri.error/UriParseError.InvalidHost.component1|component1(){}[0]
+        final fun component2(): org.dexpace.kuri.error/HostError // org.dexpace.kuri.error/UriParseError.InvalidHost.component2|component2(){}[0]
+        final fun copy(kotlin/String = ..., org.dexpace.kuri.error/HostError = ...): org.dexpace.kuri.error/UriParseError.InvalidHost // org.dexpace.kuri.error/UriParseError.InvalidHost.copy|copy(kotlin.String;org.dexpace.kuri.error.HostError){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.error/UriParseError.InvalidHost.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.error/UriParseError.InvalidHost.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.error/UriParseError.InvalidHost.toString|toString(){}[0]
+    }
+
+    final class InvalidPercentEncoding : org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.error/UriParseError.InvalidPercentEncoding|null[0]
+        constructor <init>(kotlin/Int) // org.dexpace.kuri.error/UriParseError.InvalidPercentEncoding.<init>|<init>(kotlin.Int){}[0]
+
+        final val at // org.dexpace.kuri.error/UriParseError.InvalidPercentEncoding.at|{}at[0]
+            final fun <get-at>(): kotlin/Int // org.dexpace.kuri.error/UriParseError.InvalidPercentEncoding.at.<get-at>|<get-at>(){}[0]
+
+        final fun component1(): kotlin/Int // org.dexpace.kuri.error/UriParseError.InvalidPercentEncoding.component1|component1(){}[0]
+        final fun copy(kotlin/Int = ...): org.dexpace.kuri.error/UriParseError.InvalidPercentEncoding // org.dexpace.kuri.error/UriParseError.InvalidPercentEncoding.copy|copy(kotlin.Int){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.error/UriParseError.InvalidPercentEncoding.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.error/UriParseError.InvalidPercentEncoding.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.error/UriParseError.InvalidPercentEncoding.toString|toString(){}[0]
+    }
+
+    final class InvalidPort : org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.error/UriParseError.InvalidPort|null[0]
+        constructor <init>(kotlin/String) // org.dexpace.kuri.error/UriParseError.InvalidPort.<init>|<init>(kotlin.String){}[0]
+
+        final val text // org.dexpace.kuri.error/UriParseError.InvalidPort.text|{}text[0]
+            final fun <get-text>(): kotlin/String // org.dexpace.kuri.error/UriParseError.InvalidPort.text.<get-text>|<get-text>(){}[0]
+
+        final fun component1(): kotlin/String // org.dexpace.kuri.error/UriParseError.InvalidPort.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): org.dexpace.kuri.error/UriParseError.InvalidPort // org.dexpace.kuri.error/UriParseError.InvalidPort.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.error/UriParseError.InvalidPort.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.error/UriParseError.InvalidPort.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.error/UriParseError.InvalidPort.toString|toString(){}[0]
+    }
+
+    final class InvalidScheme : org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.error/UriParseError.InvalidScheme|null[0]
+        constructor <init>(kotlin/Int, kotlin/String) // org.dexpace.kuri.error/UriParseError.InvalidScheme.<init>|<init>(kotlin.Int;kotlin.String){}[0]
+
+        final val at // org.dexpace.kuri.error/UriParseError.InvalidScheme.at|{}at[0]
+            final fun <get-at>(): kotlin/Int // org.dexpace.kuri.error/UriParseError.InvalidScheme.at.<get-at>|<get-at>(){}[0]
+        final val detail // org.dexpace.kuri.error/UriParseError.InvalidScheme.detail|{}detail[0]
+            final fun <get-detail>(): kotlin/String // org.dexpace.kuri.error/UriParseError.InvalidScheme.detail.<get-detail>|<get-detail>(){}[0]
+
+        final fun component1(): kotlin/Int // org.dexpace.kuri.error/UriParseError.InvalidScheme.component1|component1(){}[0]
+        final fun component2(): kotlin/String // org.dexpace.kuri.error/UriParseError.InvalidScheme.component2|component2(){}[0]
+        final fun copy(kotlin/Int = ..., kotlin/String = ...): org.dexpace.kuri.error/UriParseError.InvalidScheme // org.dexpace.kuri.error/UriParseError.InvalidScheme.copy|copy(kotlin.Int;kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.error/UriParseError.InvalidScheme.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.error/UriParseError.InvalidScheme.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.error/UriParseError.InvalidScheme.toString|toString(){}[0]
+    }
+
+    final object EmptyHost : org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.error/UriParseError.EmptyHost|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.error/UriParseError.EmptyHost.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.error/UriParseError.EmptyHost.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.error/UriParseError.EmptyHost.toString|toString(){}[0]
+    }
+
+    final object MissingScheme : org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.error/UriParseError.MissingScheme|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.error/UriParseError.MissingScheme.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.error/UriParseError.MissingScheme.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.error/UriParseError.MissingScheme.toString|toString(){}[0]
+    }
+}
+
+sealed interface org.dexpace.kuri.host/Host { // org.dexpace.kuri.host/Host|null[0]
+    open fun asText(): kotlin/String // org.dexpace.kuri.host/Host.asText|asText(){}[0]
+
+    final class IpFuture : org.dexpace.kuri.host/Host { // org.dexpace.kuri.host/Host.IpFuture|null[0]
+        constructor <init>(kotlin/String) // org.dexpace.kuri.host/Host.IpFuture.<init>|<init>(kotlin.String){}[0]
+
+        final val value // org.dexpace.kuri.host/Host.IpFuture.value|{}value[0]
+            final fun <get-value>(): kotlin/String // org.dexpace.kuri.host/Host.IpFuture.value.<get-value>|<get-value>(){}[0]
+
+        final fun component1(): kotlin/String // org.dexpace.kuri.host/Host.IpFuture.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): org.dexpace.kuri.host/Host.IpFuture // org.dexpace.kuri.host/Host.IpFuture.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.host/Host.IpFuture.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.host/Host.IpFuture.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.host/Host.IpFuture.toString|toString(){}[0]
+    }
+
+    final class Ipv4 : org.dexpace.kuri.host/Host { // org.dexpace.kuri.host/Host.Ipv4|null[0]
+        constructor <init>(kotlin/Int) // org.dexpace.kuri.host/Host.Ipv4.<init>|<init>(kotlin.Int){}[0]
+
+        final val value // org.dexpace.kuri.host/Host.Ipv4.value|{}value[0]
+            final fun <get-value>(): kotlin/Int // org.dexpace.kuri.host/Host.Ipv4.value.<get-value>|<get-value>(){}[0]
+
+        final fun component1(): kotlin/Int // org.dexpace.kuri.host/Host.Ipv4.component1|component1(){}[0]
+        final fun copy(kotlin/Int = ...): org.dexpace.kuri.host/Host.Ipv4 // org.dexpace.kuri.host/Host.Ipv4.copy|copy(kotlin.Int){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.host/Host.Ipv4.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.host/Host.Ipv4.hashCode|hashCode(){}[0]
+        final fun octets(): kotlin/IntArray // org.dexpace.kuri.host/Host.Ipv4.octets|octets(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.host/Host.Ipv4.toString|toString(){}[0]
+    }
+
+    final class Ipv6 : org.dexpace.kuri.host/Host { // org.dexpace.kuri.host/Host.Ipv6|null[0]
+        constructor <init>(kotlin.collections/List<kotlin/Int>, kotlin/String? = ...) // org.dexpace.kuri.host/Host.Ipv6.<init>|<init>(kotlin.collections.List<kotlin.Int>;kotlin.String?){}[0]
+
+        final val pieces // org.dexpace.kuri.host/Host.Ipv6.pieces|{}pieces[0]
+            final fun <get-pieces>(): kotlin.collections/List<kotlin/Int> // org.dexpace.kuri.host/Host.Ipv6.pieces.<get-pieces>|<get-pieces>(){}[0]
+        final val zoneId // org.dexpace.kuri.host/Host.Ipv6.zoneId|{}zoneId[0]
+            final fun <get-zoneId>(): kotlin/String? // org.dexpace.kuri.host/Host.Ipv6.zoneId.<get-zoneId>|<get-zoneId>(){}[0]
+
+        final fun component1(): kotlin.collections/List<kotlin/Int> // org.dexpace.kuri.host/Host.Ipv6.component1|component1(){}[0]
+        final fun component2(): kotlin/String? // org.dexpace.kuri.host/Host.Ipv6.component2|component2(){}[0]
+        final fun copy(kotlin.collections/List<kotlin/Int> = ..., kotlin/String? = ...): org.dexpace.kuri.host/Host.Ipv6 // org.dexpace.kuri.host/Host.Ipv6.copy|copy(kotlin.collections.List<kotlin.Int>;kotlin.String?){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.host/Host.Ipv6.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.host/Host.Ipv6.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.host/Host.Ipv6.toString|toString(){}[0]
+    }
+
+    final class Opaque : org.dexpace.kuri.host/Host { // org.dexpace.kuri.host/Host.Opaque|null[0]
+        constructor <init>(kotlin/String) // org.dexpace.kuri.host/Host.Opaque.<init>|<init>(kotlin.String){}[0]
+
+        final val value // org.dexpace.kuri.host/Host.Opaque.value|{}value[0]
+            final fun <get-value>(): kotlin/String // org.dexpace.kuri.host/Host.Opaque.value.<get-value>|<get-value>(){}[0]
+
+        final fun component1(): kotlin/String // org.dexpace.kuri.host/Host.Opaque.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): org.dexpace.kuri.host/Host.Opaque // org.dexpace.kuri.host/Host.Opaque.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.host/Host.Opaque.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.host/Host.Opaque.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.host/Host.Opaque.toString|toString(){}[0]
+    }
+
+    final class RegName : org.dexpace.kuri.host/Host { // org.dexpace.kuri.host/Host.RegName|null[0]
+        constructor <init>(kotlin/String) // org.dexpace.kuri.host/Host.RegName.<init>|<init>(kotlin.String){}[0]
+
+        final val value // org.dexpace.kuri.host/Host.RegName.value|{}value[0]
+            final fun <get-value>(): kotlin/String // org.dexpace.kuri.host/Host.RegName.value.<get-value>|<get-value>(){}[0]
+
+        final fun component1(): kotlin/String // org.dexpace.kuri.host/Host.RegName.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): org.dexpace.kuri.host/Host.RegName // org.dexpace.kuri.host/Host.RegName.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.host/Host.RegName.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.host/Host.RegName.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.host/Host.RegName.toString|toString(){}[0]
+    }
+
+    final object Empty : org.dexpace.kuri.host/Host { // org.dexpace.kuri.host/Host.Empty|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.host/Host.Empty.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // org.dexpace.kuri.host/Host.Empty.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // org.dexpace.kuri.host/Host.Empty.toString|toString(){}[0]
+    }
+}
+
+final class org.dexpace.kuri.error/UriSyntaxException : kotlin/IllegalArgumentException { // org.dexpace.kuri.error/UriSyntaxException|null[0]
+    final val error // org.dexpace.kuri.error/UriSyntaxException.error|{}error[0]
+        final fun <get-error>(): org.dexpace.kuri.error/UriParseError // org.dexpace.kuri.error/UriSyntaxException.error.<get-error>|<get-error>(){}[0]
+}
+
+final class org.dexpace.kuri.query/QueryParameter { // org.dexpace.kuri.query/QueryParameter|null[0]
+    constructor <init>(kotlin/String, kotlin/String?) // org.dexpace.kuri.query/QueryParameter.<init>|<init>(kotlin.String;kotlin.String?){}[0]
+
+    final val name // org.dexpace.kuri.query/QueryParameter.name|{}name[0]
+        final fun <get-name>(): kotlin/String // org.dexpace.kuri.query/QueryParameter.name.<get-name>|<get-name>(){}[0]
+    final val value // org.dexpace.kuri.query/QueryParameter.value|{}value[0]
+        final fun <get-value>(): kotlin/String? // org.dexpace.kuri.query/QueryParameter.value.<get-value>|<get-value>(){}[0]
+
+    final fun component1(): kotlin/String // org.dexpace.kuri.query/QueryParameter.component1|component1(){}[0]
+    final fun component2(): kotlin/String? // org.dexpace.kuri.query/QueryParameter.component2|component2(){}[0]
+    final fun copy(kotlin/String = ..., kotlin/String? = ...): org.dexpace.kuri.query/QueryParameter // org.dexpace.kuri.query/QueryParameter.copy|copy(kotlin.String;kotlin.String?){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.query/QueryParameter.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // org.dexpace.kuri.query/QueryParameter.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // org.dexpace.kuri.query/QueryParameter.toString|toString(){}[0]
+}
+
+final class org.dexpace.kuri.query/QueryParameters : kotlin.collections/Iterable<org.dexpace.kuri.query/QueryParameter> { // org.dexpace.kuri.query/QueryParameters|null[0]
+    final val size // org.dexpace.kuri.query/QueryParameters.size|{}size[0]
+        final fun <get-size>(): kotlin/Int // org.dexpace.kuri.query/QueryParameters.size.<get-size>|<get-size>(){}[0]
+
+    final fun contains(kotlin/String): kotlin/Boolean // org.dexpace.kuri.query/QueryParameters.contains|contains(kotlin.String){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.query/QueryParameters.equals|equals(kotlin.Any?){}[0]
+    final fun get(kotlin/String): kotlin/String? // org.dexpace.kuri.query/QueryParameters.get|get(kotlin.String){}[0]
+    final fun getAll(kotlin/String): kotlin.collections/List<kotlin/String?> // org.dexpace.kuri.query/QueryParameters.getAll|getAll(kotlin.String){}[0]
+    final fun has(kotlin/String): kotlin/Boolean // org.dexpace.kuri.query/QueryParameters.has|has(kotlin.String){}[0]
+    final fun hashCode(): kotlin/Int // org.dexpace.kuri.query/QueryParameters.hashCode|hashCode(){}[0]
+    final fun isEmpty(): kotlin/Boolean // org.dexpace.kuri.query/QueryParameters.isEmpty|isEmpty(){}[0]
+    final fun iterator(): kotlin.collections/Iterator<org.dexpace.kuri.query/QueryParameter> // org.dexpace.kuri.query/QueryParameters.iterator|iterator(){}[0]
+    final fun nameAt(kotlin/Int): kotlin/String // org.dexpace.kuri.query/QueryParameters.nameAt|nameAt(kotlin.Int){}[0]
+    final fun names(): kotlin.collections/Set<kotlin/String> // org.dexpace.kuri.query/QueryParameters.names|names(){}[0]
+    final fun newBuilder(): org.dexpace.kuri.query/QueryParametersBuilder // org.dexpace.kuri.query/QueryParameters.newBuilder|newBuilder(){}[0]
+    final fun split(kotlin/String, kotlin/Char): kotlin.collections/List<kotlin/String> // org.dexpace.kuri.query/QueryParameters.split|split(kotlin.String;kotlin.Char){}[0]
+    final fun toFormUrlEncoded(): kotlin/String // org.dexpace.kuri.query/QueryParameters.toFormUrlEncoded|toFormUrlEncoded(){}[0]
+    final fun toMap(): kotlin.collections/Map<kotlin/String, kotlin/String?> // org.dexpace.kuri.query/QueryParameters.toMap|toMap(){}[0]
+    final fun toQueryString(): kotlin/String // org.dexpace.kuri.query/QueryParameters.toQueryString|toQueryString(){}[0]
+    final fun toString(): kotlin/String // org.dexpace.kuri.query/QueryParameters.toString|toString(){}[0]
+    final fun valueAt(kotlin/Int): kotlin/String? // org.dexpace.kuri.query/QueryParameters.valueAt|valueAt(kotlin.Int){}[0]
+
+    final object Companion { // org.dexpace.kuri.query/QueryParameters.Companion|null[0]
+        final fun of(kotlin.collections/Map<kotlin/String, kotlin/String?>): org.dexpace.kuri.query/QueryParameters // org.dexpace.kuri.query/QueryParameters.Companion.of|of(kotlin.collections.Map<kotlin.String,kotlin.String?>){}[0]
+        final fun of(kotlin/Array<out org.dexpace.kuri.query/QueryParameter>...): org.dexpace.kuri.query/QueryParameters // org.dexpace.kuri.query/QueryParameters.Companion.of|of(kotlin.Array<out|org.dexpace.kuri.query.QueryParameter>...){}[0]
+        final fun parse(kotlin/String): org.dexpace.kuri.query/QueryParameters // org.dexpace.kuri.query/QueryParameters.Companion.parse|parse(kotlin.String){}[0]
+        final fun parseForm(kotlin/String): org.dexpace.kuri.query/QueryParameters // org.dexpace.kuri.query/QueryParameters.Companion.parseForm|parseForm(kotlin.String){}[0]
+    }
+}
+
+final class org.dexpace.kuri.query/QueryParametersBuilder { // org.dexpace.kuri.query/QueryParametersBuilder|null[0]
+    constructor <init>() // org.dexpace.kuri.query/QueryParametersBuilder.<init>|<init>(){}[0]
+
+    final fun add(kotlin/String, kotlin/String?): org.dexpace.kuri.query/QueryParametersBuilder // org.dexpace.kuri.query/QueryParametersBuilder.add|add(kotlin.String;kotlin.String?){}[0]
+    final fun add(org.dexpace.kuri.query/QueryParameter): org.dexpace.kuri.query/QueryParametersBuilder // org.dexpace.kuri.query/QueryParametersBuilder.add|add(org.dexpace.kuri.query.QueryParameter){}[0]
+    final fun addAll(kotlin.collections/Map<kotlin/String, kotlin/String?>): org.dexpace.kuri.query/QueryParametersBuilder // org.dexpace.kuri.query/QueryParametersBuilder.addAll|addAll(kotlin.collections.Map<kotlin.String,kotlin.String?>){}[0]
+    final fun build(): org.dexpace.kuri.query/QueryParameters // org.dexpace.kuri.query/QueryParametersBuilder.build|build(){}[0]
+    final fun removeAll(kotlin/String): org.dexpace.kuri.query/QueryParametersBuilder // org.dexpace.kuri.query/QueryParametersBuilder.removeAll|removeAll(kotlin.String){}[0]
+    final fun set(kotlin/String, kotlin/String?): org.dexpace.kuri.query/QueryParametersBuilder // org.dexpace.kuri.query/QueryParametersBuilder.set|set(kotlin.String;kotlin.String?){}[0]
+    final fun set(org.dexpace.kuri.query/QueryParameter): org.dexpace.kuri.query/QueryParametersBuilder // org.dexpace.kuri.query/QueryParametersBuilder.set|set(org.dexpace.kuri.query.QueryParameter){}[0]
+    final fun sort(): org.dexpace.kuri.query/QueryParametersBuilder // org.dexpace.kuri.query/QueryParametersBuilder.sort|sort(){}[0]
+}
+
+final class org.dexpace.kuri/ParseOptions { // org.dexpace.kuri/ParseOptions|null[0]
+    final val allowIpv6ZoneId // org.dexpace.kuri/ParseOptions.allowIpv6ZoneId|{}allowIpv6ZoneId[0]
+        final fun <get-allowIpv6ZoneId>(): kotlin/Boolean // org.dexpace.kuri/ParseOptions.allowIpv6ZoneId.<get-allowIpv6ZoneId>|<get-allowIpv6ZoneId>(){}[0]
+
+    final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri/ParseOptions.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // org.dexpace.kuri/ParseOptions.hashCode|hashCode(){}[0]
+    final fun newBuilder(): org.dexpace.kuri/ParseOptions.Builder // org.dexpace.kuri/ParseOptions.newBuilder|newBuilder(){}[0]
+    final fun toString(): kotlin/String // org.dexpace.kuri/ParseOptions.toString|toString(){}[0]
+
+    final class Builder { // org.dexpace.kuri/ParseOptions.Builder|null[0]
+        constructor <init>() // org.dexpace.kuri/ParseOptions.Builder.<init>|<init>(){}[0]
+
+        final fun allowIpv6ZoneId(kotlin/Boolean): org.dexpace.kuri/ParseOptions.Builder // org.dexpace.kuri/ParseOptions.Builder.allowIpv6ZoneId|allowIpv6ZoneId(kotlin.Boolean){}[0]
+        final fun build(): org.dexpace.kuri/ParseOptions // org.dexpace.kuri/ParseOptions.Builder.build|build(){}[0]
+    }
+
+    final object Companion { // org.dexpace.kuri/ParseOptions.Companion|null[0]
+        final val DEFAULT // org.dexpace.kuri/ParseOptions.Companion.DEFAULT|{}DEFAULT[0]
+            final fun <get-DEFAULT>(): org.dexpace.kuri/ParseOptions // org.dexpace.kuri/ParseOptions.Companion.DEFAULT.<get-DEFAULT>|<get-DEFAULT>(){}[0]
+    }
+}
+
+final class org.dexpace.kuri/Uri { // org.dexpace.kuri/Uri|null[0]
+    final val authority // org.dexpace.kuri/Uri.authority|{}authority[0]
+        final fun <get-authority>(): kotlin/String? // org.dexpace.kuri/Uri.authority.<get-authority>|<get-authority>(){}[0]
+    final val encodedPath // org.dexpace.kuri/Uri.encodedPath|{}encodedPath[0]
+        final fun <get-encodedPath>(): kotlin/String // org.dexpace.kuri/Uri.encodedPath.<get-encodedPath>|<get-encodedPath>(){}[0]
+    final val fragment // org.dexpace.kuri/Uri.fragment|{}fragment[0]
+        final fun <get-fragment>(): kotlin/String? // org.dexpace.kuri/Uri.fragment.<get-fragment>|<get-fragment>(){}[0]
+    final val host // org.dexpace.kuri/Uri.host|{}host[0]
+        final fun <get-host>(): org.dexpace.kuri.host/Host? // org.dexpace.kuri/Uri.host.<get-host>|<get-host>(){}[0]
+    final val hostName // org.dexpace.kuri/Uri.hostName|{}hostName[0]
+        final fun <get-hostName>(): kotlin/String? // org.dexpace.kuri/Uri.hostName.<get-hostName>|<get-hostName>(){}[0]
+    final val path // org.dexpace.kuri/Uri.path|{}path[0]
+        final fun <get-path>(): kotlin/String // org.dexpace.kuri/Uri.path.<get-path>|<get-path>(){}[0]
+    final val pathSegments // org.dexpace.kuri/Uri.pathSegments|{}pathSegments[0]
+        final fun <get-pathSegments>(): kotlin.collections/List<kotlin/String> // org.dexpace.kuri/Uri.pathSegments.<get-pathSegments>|<get-pathSegments>(){}[0]
+    final val port // org.dexpace.kuri/Uri.port|{}port[0]
+        final fun <get-port>(): kotlin/Int? // org.dexpace.kuri/Uri.port.<get-port>|<get-port>(){}[0]
+    final val query // org.dexpace.kuri/Uri.query|{}query[0]
+        final fun <get-query>(): kotlin/String? // org.dexpace.kuri/Uri.query.<get-query>|<get-query>(){}[0]
+    final val scheme // org.dexpace.kuri/Uri.scheme|{}scheme[0]
+        final fun <get-scheme>(): kotlin/String? // org.dexpace.kuri/Uri.scheme.<get-scheme>|<get-scheme>(){}[0]
+    final val uriString // org.dexpace.kuri/Uri.uriString|{}uriString[0]
+        final fun <get-uriString>(): kotlin/String // org.dexpace.kuri/Uri.uriString.<get-uriString>|<get-uriString>(){}[0]
+    final val userInfo // org.dexpace.kuri/Uri.userInfo|{}userInfo[0]
+        final fun <get-userInfo>(): kotlin/String? // org.dexpace.kuri/Uri.userInfo.<get-userInfo>|<get-userInfo>(){}[0]
+
+    final fun effectivePort(): kotlin/Int? // org.dexpace.kuri/Uri.effectivePort|effectivePort(){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri/Uri.equals|equals(kotlin.Any?){}[0]
+    final fun fileExtension(): kotlin/String // org.dexpace.kuri/Uri.fileExtension|fileExtension(){}[0]
+    final fun fileName(): kotlin/String // org.dexpace.kuri/Uri.fileName|fileName(){}[0]
+    final fun hashCode(): kotlin/Int // org.dexpace.kuri/Uri.hashCode|hashCode(){}[0]
+    final fun isAbsolute(): kotlin/Boolean // org.dexpace.kuri/Uri.isAbsolute|isAbsolute(){}[0]
+    final fun isOpaquePath(): kotlin/Boolean // org.dexpace.kuri/Uri.isOpaquePath|isOpaquePath(){}[0]
+    final fun newBuilder(): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.newBuilder|newBuilder(){}[0]
+    final fun normalized(): org.dexpace.kuri/Uri // org.dexpace.kuri/Uri.normalized|normalized(){}[0]
+    final fun normalizedEquals(org.dexpace.kuri/Uri): kotlin/Boolean // org.dexpace.kuri/Uri.normalizedEquals|normalizedEquals(org.dexpace.kuri.Uri){}[0]
+    final fun queryParameters(): org.dexpace.kuri.query/QueryParameters // org.dexpace.kuri/Uri.queryParameters|queryParameters(){}[0]
+    final fun relativize(org.dexpace.kuri/Uri): org.dexpace.kuri/Uri? // org.dexpace.kuri/Uri.relativize|relativize(org.dexpace.kuri.Uri){}[0]
+    final fun resolve(kotlin/String, org.dexpace.kuri/ParseOptions = ...): org.dexpace.kuri.error/ParseResult<org.dexpace.kuri/Uri> // org.dexpace.kuri/Uri.resolve|resolve(kotlin.String;org.dexpace.kuri.ParseOptions){}[0]
+    final fun resolveOrNull(kotlin/String, org.dexpace.kuri/ParseOptions = ...): org.dexpace.kuri/Uri? // org.dexpace.kuri/Uri.resolveOrNull|resolveOrNull(kotlin.String;org.dexpace.kuri.ParseOptions){}[0]
+    final fun resolveOrThrow(kotlin/String, org.dexpace.kuri/ParseOptions = ...): org.dexpace.kuri/Uri // org.dexpace.kuri/Uri.resolveOrThrow|resolveOrThrow(kotlin.String;org.dexpace.kuri.ParseOptions){}[0]
+    final fun toString(): kotlin/String // org.dexpace.kuri/Uri.toString|toString(){}[0]
+    final fun toUrl(): org.dexpace.kuri.error/ParseResult<org.dexpace.kuri/Url> // org.dexpace.kuri/Uri.toUrl|toUrl(){}[0]
+    final fun toUrlOrNull(): org.dexpace.kuri/Url? // org.dexpace.kuri/Uri.toUrlOrNull|toUrlOrNull(){}[0]
+    final fun toUrlOrThrow(): org.dexpace.kuri/Url // org.dexpace.kuri/Uri.toUrlOrThrow|toUrlOrThrow(){}[0]
+    final fun withFragment(kotlin/String?): org.dexpace.kuri/Uri // org.dexpace.kuri/Uri.withFragment|withFragment(kotlin.String?){}[0]
+    final fun withPort(kotlin/Int?): org.dexpace.kuri/Uri // org.dexpace.kuri/Uri.withPort|withPort(kotlin.Int?){}[0]
+    final fun withoutFragment(): org.dexpace.kuri/Uri // org.dexpace.kuri/Uri.withoutFragment|withoutFragment(){}[0]
+
+    final class Builder { // org.dexpace.kuri/Uri.Builder|null[0]
+        constructor <init>() // org.dexpace.kuri/Uri.Builder.<init>|<init>(){}[0]
+
+        final fun addEncodedPathSegment(kotlin/String): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.addEncodedPathSegment|addEncodedPathSegment(kotlin.String){}[0]
+        final fun addPathSegment(kotlin/String): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.addPathSegment|addPathSegment(kotlin.String){}[0]
+        final fun addPathSegments(kotlin/String): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.addPathSegments|addPathSegments(kotlin.String){}[0]
+        final fun addQueryParameter(kotlin/String, kotlin/String?): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.addQueryParameter|addQueryParameter(kotlin.String;kotlin.String?){}[0]
+        final fun allowIpv6ZoneId(kotlin/Boolean): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.allowIpv6ZoneId|allowIpv6ZoneId(kotlin.Boolean){}[0]
+        final fun build(): org.dexpace.kuri/Uri // org.dexpace.kuri/Uri.Builder.build|build(){}[0]
+        final fun buildOrNull(): org.dexpace.kuri/Uri? // org.dexpace.kuri/Uri.Builder.buildOrNull|buildOrNull(){}[0]
+        final fun encodedPath(kotlin/String): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.encodedPath|encodedPath(kotlin.String){}[0]
+        final fun fragment(kotlin/String?): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.fragment|fragment(kotlin.String?){}[0]
+        final fun host(kotlin/String?): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.host|host(kotlin.String?){}[0]
+        final fun host(org.dexpace.kuri.host/Host): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.host|host(org.dexpace.kuri.host.Host){}[0]
+        final fun port(kotlin/Int?): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.port|port(kotlin.Int?){}[0]
+        final fun query(kotlin/String?): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.query|query(kotlin.String?){}[0]
+        final fun removeAllQueryParameters(kotlin/String): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.removeAllQueryParameters|removeAllQueryParameters(kotlin.String){}[0]
+        final fun removePathSegment(kotlin/Int): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.removePathSegment|removePathSegment(kotlin.Int){}[0]
+        final fun scheme(kotlin/String?): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.scheme|scheme(kotlin.String?){}[0]
+        final fun setPathSegment(kotlin/Int, kotlin/String): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.setPathSegment|setPathSegment(kotlin.Int;kotlin.String){}[0]
+        final fun setQueryParameter(kotlin/String, kotlin/String?): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.setQueryParameter|setQueryParameter(kotlin.String;kotlin.String?){}[0]
+        final fun userInfo(kotlin/String?): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri/Uri.Builder.userInfo|userInfo(kotlin.String?){}[0]
+    }
+
+    final object Companion { // org.dexpace.kuri/Uri.Companion|null[0]
+        final fun canParse(kotlin/String, org.dexpace.kuri/ParseOptions = ...): kotlin/Boolean // org.dexpace.kuri/Uri.Companion.canParse|canParse(kotlin.String;org.dexpace.kuri.ParseOptions){}[0]
+        final fun parse(kotlin/String, org.dexpace.kuri/ParseOptions = ...): org.dexpace.kuri.error/ParseResult<org.dexpace.kuri/Uri> // org.dexpace.kuri/Uri.Companion.parse|parse(kotlin.String;org.dexpace.kuri.ParseOptions){}[0]
+        final fun parseOrNull(kotlin/String, org.dexpace.kuri/ParseOptions = ...): org.dexpace.kuri/Uri? // org.dexpace.kuri/Uri.Companion.parseOrNull|parseOrNull(kotlin.String;org.dexpace.kuri.ParseOptions){}[0]
+        final fun parseOrThrow(kotlin/String, org.dexpace.kuri/ParseOptions = ...): org.dexpace.kuri/Uri // org.dexpace.kuri/Uri.Companion.parseOrThrow|parseOrThrow(kotlin.String;org.dexpace.kuri.ParseOptions){}[0]
+    }
+}
+
+final class org.dexpace.kuri/Url { // org.dexpace.kuri/Url|null[0]
+    final val authority // org.dexpace.kuri/Url.authority|{}authority[0]
+        final fun <get-authority>(): kotlin/String? // org.dexpace.kuri/Url.authority.<get-authority>|<get-authority>(){}[0]
+    final val effectivePort // org.dexpace.kuri/Url.effectivePort|{}effectivePort[0]
+        final fun <get-effectivePort>(): kotlin/Int // org.dexpace.kuri/Url.effectivePort.<get-effectivePort>|<get-effectivePort>(){}[0]
+    final val encodedFragment // org.dexpace.kuri/Url.encodedFragment|{}encodedFragment[0]
+        final fun <get-encodedFragment>(): kotlin/String? // org.dexpace.kuri/Url.encodedFragment.<get-encodedFragment>|<get-encodedFragment>(){}[0]
+    final val encodedPath // org.dexpace.kuri/Url.encodedPath|{}encodedPath[0]
+        final fun <get-encodedPath>(): kotlin/String // org.dexpace.kuri/Url.encodedPath.<get-encodedPath>|<get-encodedPath>(){}[0]
+    final val fragment // org.dexpace.kuri/Url.fragment|{}fragment[0]
+        final fun <get-fragment>(): kotlin/String? // org.dexpace.kuri/Url.fragment.<get-fragment>|<get-fragment>(){}[0]
+    final val host // org.dexpace.kuri/Url.host|{}host[0]
+        final fun <get-host>(): org.dexpace.kuri.host/Host? // org.dexpace.kuri/Url.host.<get-host>|<get-host>(){}[0]
+    final val hostName // org.dexpace.kuri/Url.hostName|{}hostName[0]
+        final fun <get-hostName>(): kotlin/String? // org.dexpace.kuri/Url.hostName.<get-hostName>|<get-hostName>(){}[0]
+    final val href // org.dexpace.kuri/Url.href|{}href[0]
+        final fun <get-href>(): kotlin/String // org.dexpace.kuri/Url.href.<get-href>|<get-href>(){}[0]
+    final val origin // org.dexpace.kuri/Url.origin|{}origin[0]
+        final fun <get-origin>(): kotlin/String // org.dexpace.kuri/Url.origin.<get-origin>|<get-origin>(){}[0]
+    final val password // org.dexpace.kuri/Url.password|{}password[0]
+        final fun <get-password>(): kotlin/String // org.dexpace.kuri/Url.password.<get-password>|<get-password>(){}[0]
+    final val pathSegments // org.dexpace.kuri/Url.pathSegments|{}pathSegments[0]
+        final fun <get-pathSegments>(): kotlin.collections/List<kotlin/String> // org.dexpace.kuri/Url.pathSegments.<get-pathSegments>|<get-pathSegments>(){}[0]
+    final val port // org.dexpace.kuri/Url.port|{}port[0]
+        final fun <get-port>(): kotlin/Int? // org.dexpace.kuri/Url.port.<get-port>|<get-port>(){}[0]
+    final val query // org.dexpace.kuri/Url.query|{}query[0]
+        final fun <get-query>(): kotlin/String? // org.dexpace.kuri/Url.query.<get-query>|<get-query>(){}[0]
+    final val queryParameters // org.dexpace.kuri/Url.queryParameters|{}queryParameters[0]
+        final fun <get-queryParameters>(): org.dexpace.kuri.query/QueryParameters // org.dexpace.kuri/Url.queryParameters.<get-queryParameters>|<get-queryParameters>(){}[0]
+    final val scheme // org.dexpace.kuri/Url.scheme|{}scheme[0]
+        final fun <get-scheme>(): kotlin/String // org.dexpace.kuri/Url.scheme.<get-scheme>|<get-scheme>(){}[0]
+    final val username // org.dexpace.kuri/Url.username|{}username[0]
+        final fun <get-username>(): kotlin/String // org.dexpace.kuri/Url.username.<get-username>|<get-username>(){}[0]
+
+    final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri/Url.equals|equals(kotlin.Any?){}[0]
+    final fun fileExtension(): kotlin/String // org.dexpace.kuri/Url.fileExtension|fileExtension(){}[0]
+    final fun fileName(): kotlin/String // org.dexpace.kuri/Url.fileName|fileName(){}[0]
+    final fun hasOpaqueOrigin(): kotlin/Boolean // org.dexpace.kuri/Url.hasOpaqueOrigin|hasOpaqueOrigin(){}[0]
+    final fun hashCode(): kotlin/Int // org.dexpace.kuri/Url.hashCode|hashCode(){}[0]
+    final fun isSpecial(): kotlin/Boolean // org.dexpace.kuri/Url.isSpecial|isSpecial(){}[0]
+    final fun newBuilder(): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.newBuilder|newBuilder(){}[0]
+    final fun relativize(org.dexpace.kuri/Url): kotlin/String? // org.dexpace.kuri/Url.relativize|relativize(org.dexpace.kuri.Url){}[0]
+    final fun resolve(kotlin/String): org.dexpace.kuri.error/ParseResult<org.dexpace.kuri/Url> // org.dexpace.kuri/Url.resolve|resolve(kotlin.String){}[0]
+    final fun resolveOrNull(kotlin/String): org.dexpace.kuri/Url? // org.dexpace.kuri/Url.resolveOrNull|resolveOrNull(kotlin.String){}[0]
+    final fun resolveOrThrow(kotlin/String): org.dexpace.kuri/Url // org.dexpace.kuri/Url.resolveOrThrow|resolveOrThrow(kotlin.String){}[0]
+    final fun toString(): kotlin/String // org.dexpace.kuri/Url.toString|toString(){}[0]
+    final fun toUri(): org.dexpace.kuri/Uri // org.dexpace.kuri/Url.toUri|toUri(){}[0]
+    final fun validationErrors(): kotlin.collections/List<org.dexpace.kuri.error/ValidationError> // org.dexpace.kuri/Url.validationErrors|validationErrors(){}[0]
+    final fun withFragment(kotlin/String?): org.dexpace.kuri/Url // org.dexpace.kuri/Url.withFragment|withFragment(kotlin.String?){}[0]
+    final fun withHash(kotlin/String): org.dexpace.kuri/Url // org.dexpace.kuri/Url.withHash|withHash(kotlin.String){}[0]
+    final fun withHost(kotlin/String): org.dexpace.kuri/Url // org.dexpace.kuri/Url.withHost|withHost(kotlin.String){}[0]
+    final fun withHostname(kotlin/String): org.dexpace.kuri/Url // org.dexpace.kuri/Url.withHostname|withHostname(kotlin.String){}[0]
+    final fun withPassword(kotlin/String): org.dexpace.kuri/Url // org.dexpace.kuri/Url.withPassword|withPassword(kotlin.String){}[0]
+    final fun withPathname(kotlin/String): org.dexpace.kuri/Url // org.dexpace.kuri/Url.withPathname|withPathname(kotlin.String){}[0]
+    final fun withPort(kotlin/Int?): org.dexpace.kuri/Url // org.dexpace.kuri/Url.withPort|withPort(kotlin.Int?){}[0]
+    final fun withPort(kotlin/String): org.dexpace.kuri/Url // org.dexpace.kuri/Url.withPort|withPort(kotlin.String){}[0]
+    final fun withProtocol(kotlin/String): org.dexpace.kuri/Url // org.dexpace.kuri/Url.withProtocol|withProtocol(kotlin.String){}[0]
+    final fun withSearch(kotlin/String): org.dexpace.kuri/Url // org.dexpace.kuri/Url.withSearch|withSearch(kotlin.String){}[0]
+    final fun withUsername(kotlin/String): org.dexpace.kuri/Url // org.dexpace.kuri/Url.withUsername|withUsername(kotlin.String){}[0]
+    final fun withoutFragment(): org.dexpace.kuri/Url // org.dexpace.kuri/Url.withoutFragment|withoutFragment(){}[0]
+
+    final class Builder { // org.dexpace.kuri/Url.Builder|null[0]
+        constructor <init>() // org.dexpace.kuri/Url.Builder.<init>|<init>(){}[0]
+
+        final fun addEncodedPathSegment(kotlin/String): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.addEncodedPathSegment|addEncodedPathSegment(kotlin.String){}[0]
+        final fun addPathSegment(kotlin/String): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.addPathSegment|addPathSegment(kotlin.String){}[0]
+        final fun addPathSegments(kotlin/String): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.addPathSegments|addPathSegments(kotlin.String){}[0]
+        final fun addQueryParameter(kotlin/String, kotlin/String?): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.addQueryParameter|addQueryParameter(kotlin.String;kotlin.String?){}[0]
+        final fun build(): org.dexpace.kuri/Url // org.dexpace.kuri/Url.Builder.build|build(){}[0]
+        final fun buildOrNull(): org.dexpace.kuri/Url? // org.dexpace.kuri/Url.Builder.buildOrNull|buildOrNull(){}[0]
+        final fun encodedPath(kotlin/String): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.encodedPath|encodedPath(kotlin.String){}[0]
+        final fun fragment(kotlin/String?): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.fragment|fragment(kotlin.String?){}[0]
+        final fun host(kotlin/String): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.host|host(kotlin.String){}[0]
+        final fun host(org.dexpace.kuri.host/Host): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.host|host(org.dexpace.kuri.host.Host){}[0]
+        final fun password(kotlin/String): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.password|password(kotlin.String){}[0]
+        final fun port(kotlin/Int?): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.port|port(kotlin.Int?){}[0]
+        final fun query(kotlin/String?): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.query|query(kotlin.String?){}[0]
+        final fun removeAllQueryParameters(kotlin/String): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.removeAllQueryParameters|removeAllQueryParameters(kotlin.String){}[0]
+        final fun removePathSegment(kotlin/Int): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.removePathSegment|removePathSegment(kotlin.Int){}[0]
+        final fun scheme(kotlin/String): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.scheme|scheme(kotlin.String){}[0]
+        final fun setPathSegment(kotlin/Int, kotlin/String): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.setPathSegment|setPathSegment(kotlin.Int;kotlin.String){}[0]
+        final fun setQueryParameter(kotlin/String, kotlin/String?): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.setQueryParameter|setQueryParameter(kotlin.String;kotlin.String?){}[0]
+        final fun username(kotlin/String): org.dexpace.kuri/Url.Builder // org.dexpace.kuri/Url.Builder.username|username(kotlin.String){}[0]
+    }
+
+    final object Companion { // org.dexpace.kuri/Url.Companion|null[0]
+        final fun canParse(kotlin/String, org.dexpace.kuri/Url? = ...): kotlin/Boolean // org.dexpace.kuri/Url.Companion.canParse|canParse(kotlin.String;org.dexpace.kuri.Url?){}[0]
+        final fun parse(kotlin/String, org.dexpace.kuri/Url? = ...): org.dexpace.kuri.error/ParseResult<org.dexpace.kuri/Url> // org.dexpace.kuri/Url.Companion.parse|parse(kotlin.String;org.dexpace.kuri.Url?){}[0]
+        final fun parseOrNull(kotlin/String, org.dexpace.kuri/Url? = ...): org.dexpace.kuri/Url? // org.dexpace.kuri/Url.Companion.parseOrNull|parseOrNull(kotlin.String;org.dexpace.kuri.Url?){}[0]
+        final fun parseOrThrow(kotlin/String, org.dexpace.kuri/Url? = ...): org.dexpace.kuri/Url // org.dexpace.kuri/Url.Companion.parseOrThrow|parseOrThrow(kotlin.String;org.dexpace.kuri.Url?){}[0]
+    }
+}
+
+final object org.dexpace.kuri.idna/Idn { // org.dexpace.kuri.idna/Idn|null[0]
+    final fun toAscii(kotlin/String): org.dexpace.kuri.error/ParseResult<kotlin/String> // org.dexpace.kuri.idna/Idn.toAscii|toAscii(kotlin.String){}[0]
+    final fun toUnicode(kotlin/String): kotlin/String // org.dexpace.kuri.idna/Idn.toUnicode|toUnicode(kotlin.String){}[0]
+}
+
+final object org.dexpace.kuri.percent/Percent { // org.dexpace.kuri.percent/Percent|null[0]
+    final fun decode(kotlin/String): kotlin/String // org.dexpace.kuri.percent/Percent.decode|decode(kotlin.String){}[0]
+    final fun encode(kotlin/String, org.dexpace.kuri.percent/Percent.Component): kotlin/String // org.dexpace.kuri.percent/Percent.encode|encode(kotlin.String;org.dexpace.kuri.percent.Percent.Component){}[0]
+
+    final enum class Component : kotlin/Enum<org.dexpace.kuri.percent/Percent.Component> { // org.dexpace.kuri.percent/Percent.Component|null[0]
+        enum entry COMPONENT // org.dexpace.kuri.percent/Percent.Component.COMPONENT|null[0]
+        enum entry FRAGMENT // org.dexpace.kuri.percent/Percent.Component.FRAGMENT|null[0]
+        enum entry PATH_SEGMENT // org.dexpace.kuri.percent/Percent.Component.PATH_SEGMENT|null[0]
+        enum entry QUERY // org.dexpace.kuri.percent/Percent.Component.QUERY|null[0]
+        enum entry USER_INFO // org.dexpace.kuri.percent/Percent.Component.USER_INFO|null[0]
+
+        final val entries // org.dexpace.kuri.percent/Percent.Component.entries|#static{}entries[0]
+            final fun <get-entries>(): kotlin.enums/EnumEntries<org.dexpace.kuri.percent/Percent.Component> // org.dexpace.kuri.percent/Percent.Component.entries.<get-entries>|<get-entries>#static(){}[0]
+
+        final fun valueOf(kotlin/String): org.dexpace.kuri.percent/Percent.Component // org.dexpace.kuri.percent/Percent.Component.valueOf|valueOf#static(kotlin.String){}[0]
+        final fun values(): kotlin/Array<org.dexpace.kuri.percent/Percent.Component> // org.dexpace.kuri.percent/Percent.Component.values|values#static(){}[0]
+    }
+}
+
+final object org.dexpace.kuri.scheme/Schemes { // org.dexpace.kuri.scheme/Schemes|null[0]
+    final fun defaultPort(kotlin/String): kotlin/Int? // org.dexpace.kuri.scheme/Schemes.defaultPort|defaultPort(kotlin.String){}[0]
+    final fun isSpecial(kotlin/String): kotlin/Boolean // org.dexpace.kuri.scheme/Schemes.isSpecial|isSpecial(kotlin.String){}[0]
+    final fun isValid(kotlin/String): kotlin/Boolean // org.dexpace.kuri.scheme/Schemes.isValid|isValid(kotlin.String){}[0]
+}
+
+final object org.dexpace.kuri/Iri { // org.dexpace.kuri/Iri|null[0]
+    final fun toUnicode(org.dexpace.kuri/Uri): kotlin/String // org.dexpace.kuri/Iri.toUnicode|toUnicode(org.dexpace.kuri.Uri){}[0]
+    final fun toUri(kotlin/String): org.dexpace.kuri.error/ParseResult<org.dexpace.kuri/Uri> // org.dexpace.kuri/Iri.toUri|toUri(kotlin.String){}[0]
+}
+
+final object org.dexpace.kuri/Kuri { // org.dexpace.kuri/Kuri|null[0]
+    final const val VERSION // org.dexpace.kuri/Kuri.VERSION|{}VERSION[0]
+        final fun <get-VERSION>(): kotlin/String // org.dexpace.kuri/Kuri.VERSION.<get-VERSION>|<get-VERSION>(){}[0]
+}
+
+final fun <#A: kotlin/Any?, #B: kotlin/Any?> (org.dexpace.kuri.error/ParseResult<#A>).org.dexpace.kuri.error/map(kotlin/Function1<#A, #B>): org.dexpace.kuri.error/ParseResult<#B> // org.dexpace.kuri.error/map|map@org.dexpace.kuri.error.ParseResult<0:0>(kotlin.Function1<0:0,0:1>){0§<kotlin.Any?>;1§<kotlin.Any?>}[0]
+final inline fun <#A: kotlin/Any?, #B: kotlin/Any?> (org.dexpace.kuri.error/ParseResult<#A>).org.dexpace.kuri.error/fold(kotlin/Function1<#A, #B>, kotlin/Function1<org.dexpace.kuri.error/UriParseError, #B>): #B // org.dexpace.kuri.error/fold|fold@org.dexpace.kuri.error.ParseResult<0:0>(kotlin.Function1<0:0,0:1>;kotlin.Function1<org.dexpace.kuri.error.UriParseError,0:1>){0§<kotlin.Any?>;1§<kotlin.Any?>}[0]

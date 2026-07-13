@@ -1,4 +1,7 @@
-@file:OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
+@file:OptIn(
+    org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class,
+    kotlinx.validation.ExperimentalBCVApi::class,
+)
 
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinMultiplatform
@@ -218,6 +221,24 @@ kover {
                 minBound(85, CoverageUnit.BRANCH)
             }
         }
+    }
+}
+
+// Enforce the native (KLIB) public ABI, not only the JVM/Android one. binary-compatibility-validator's
+// klib validation is experimental and off by default, so `apiCheck` was already compiling every native
+// klib but then skipping the comparison — wasted work that guaranteed nothing. Enabling it makes
+// `apiDump` emit the merged `api/kuri.klib.api` snapshot and `apiCheck` diff each native target's ABI
+// against it, so a source-compatible but ABI-breaking change to the native surface fails the build.
+// Enforcement splits across two CI hosts by what each can build. The Linux quality-gate `apiCheck` builds
+// the linuxX64/linuxArm64/mingw/js/wasm klibs and diffs them, but it cannot build the Apple klibs, so it
+// infers those from the merged dump rather than re-verifying them. The macOS `native` leg runs
+// `klibApiCheck`, which *can* build every klib target — so the Apple ABI (macos/ios/tvos/watchos) is
+// re-verified there for real, not inferred. Between them no target is left to inference only, and a dump
+// accidentally regenerated on Linux/Windows (which silently drops the Apple targets) fails the macOS
+// check. Regenerate the merged dump on macOS (see CLAUDE.md).
+apiValidation {
+    klib {
+        enabled = true
     }
 }
 
