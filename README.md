@@ -493,7 +493,7 @@ directionality restriction, which the RFC itself states as a SHOULD, not a MUST.
 
 | Standard                                       | Governs                                      | Compliance | Support |
 |------------------------------------------------|----------------------------------------------|------------|---------|
-| [`application/x-www-form-urlencoded`][formenc] | Form-encoded query parsing and serialization | Supported  | Default |
+| [`application/x-www-form-urlencoded`][formenc] | Form-encoded query parsing and serialization | Conformant | Default |
 
 **Notation and requirement levels**
 
@@ -550,6 +550,7 @@ Behavior is checked against the conformance corpora the standards ship with:
 | IDNA `IdnaTestV2` + `toascii`                          | 2756 / 2760     |
 | Unicode `NormalizationTest.txt` (NFC)                  | 20 034 / 20 034 |
 | RFC 3986 §5.4 reference resolution                     | all rows        |
+| WHATWG `urlencoded-parser.any.js` — form parsing       | 35 / 35         |
 
 Any case that does not yet pass is pinned in a checked-in known-failures baseline; the build fails if a passing case
 later regresses.
