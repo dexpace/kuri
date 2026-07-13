@@ -83,6 +83,18 @@ class IdnTest {
     }
 
     @Test
+    fun `toAscii rejects a fullwidth label that maps down to a literal xn-- ascii string`() {
+        // U+FF58 U+FF4E U+FF0D U+FF0D 'a' (fullwidth x, n, hyphen-minus x2, then ascii 'a') maps
+        // down to the literal ASCII text "xn--a" under UTS-46 mapping. The per-label ASCII/
+        // non-ASCII routing decision must be made on this original non-ASCII label, not on its
+        // post-mapping text, or the label slips past the Punycode decode/validate step that
+        // Idna.domainToAscii("xn--a") itself fails.
+        val fullwidthLabel = Char(0xFF58).toString() + Char(0xFF4E) + Char(0xFF0D) + Char(0xFF0D) + "a"
+
+        assertFalse(Idn.toAscii(fullwidthLabel).isOk())
+    }
+
+    @Test
     fun `toAscii fails on a disallowed code point`() {
         // U+0080 is a plain disallowed code point, so ToASCII must reject it fatally.
         val input = "exa" + Char(0x0080) + "mple.com"
