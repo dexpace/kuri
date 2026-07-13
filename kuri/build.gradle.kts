@@ -229,11 +229,13 @@ kover {
 // klib but then skipping the comparison — wasted work that guaranteed nothing. Enabling it makes
 // `apiDump` emit the merged `api/kuri.klib.api` snapshot and `apiCheck` diff each native target's ABI
 // against it, so a source-compatible but ABI-breaking change to the native surface fails the build.
-// The comparison only re-compiles the klib targets buildable on the CI host running `apiCheck`: the Linux
-// quality-gate job verifies linuxX64/linuxArm64/mingw/js/wasm, and infers the Apple targets it cannot
-// build there from the grouped dump rather than re-verifying them. That holds only because the public API
-// is fully common (the dump has no per-target sections); a platform-specific public declaration would
-// need `apiCheck` to also run on macOS to be guarded. Regenerate the merged dump on macOS (see CLAUDE.md).
+// Enforcement splits across two CI hosts by what each can build. The Linux quality-gate `apiCheck` builds
+// the linuxX64/linuxArm64/mingw/js/wasm klibs and diffs them, but it cannot build the Apple klibs, so it
+// infers those from the merged dump rather than re-verifying them. The macOS `native` leg runs
+// `klibApiCheck`, which *can* build every klib target — so the Apple ABI (macos/ios/tvos/watchos) is
+// re-verified there for real, not inferred. Between them no target is left to inference only, and a dump
+// accidentally regenerated on Linux/Windows (which silently drops the Apple targets) fails the macOS
+// check. Regenerate the merged dump on macOS (see CLAUDE.md).
 apiValidation {
     klib {
         enabled = true

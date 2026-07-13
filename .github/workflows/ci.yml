@@ -127,6 +127,12 @@ jobs:
             # execute — the device targets (iosArm64/tvosArm64/watchosArm64) and the x86_64
             # iOS simulator (iosX64: disabled by Kotlin/Native on an arm64 host, and GitHub no
             # longer offers Intel macOS runners) — are compiled and linked via *TestBinaries.
+            # klibApiCheck runs here too: it re-verifies the Apple klib targets' ABI against the
+            # committed dump. The Linux quality-gate job can only *infer* those targets from the
+            # merged dump (it can't build them), so macOS is the only host that catches an Apple
+            # ABI break — or a dump accidentally regenerated on Linux/Windows, which silently
+            # drops the Apple targets. (The klib merge also cross-builds the non-Apple klibs on
+            # this host; those are redundant with the Linux gate but cheap.)
             tasks: >-
               macosArm64Test
               iosSimulatorArm64Test
@@ -136,6 +142,7 @@ jobs:
               iosArm64TestBinaries
               tvosArm64TestBinaries
               watchosArm64TestBinaries
+              klibApiCheck
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
