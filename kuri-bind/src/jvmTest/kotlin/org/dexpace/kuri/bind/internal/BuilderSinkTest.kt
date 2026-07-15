@@ -122,6 +122,24 @@ class BuilderSinkTest {
     }
 
     @Test
+    fun `url sink escapes a literal percent in a query parameter name so it reads back literally`() {
+        val b = Url.Builder().scheme("https").host("h")
+        val sink = UrlBuilderSink(b)
+        sink.addQueryParameter("100%3Doff", "v")
+        val url = b.build()
+        assertEquals("v", url.queryParameters.get("100%3Doff"))
+    }
+
+    @Test
+    fun `uri sink escapes a literal percent in a query parameter name so it reads back literally`() {
+        val b = Uri.Builder().scheme("https").host("h")
+        val sink = UriBuilderSink(b)
+        sink.addQueryParameter("100%3Doff", "v")
+        val uri = b.build()
+        assertEquals("v", uri.queryParameters().get("100%3Doff"))
+    }
+
+    @Test
     fun `url sink escapes a literal percent in a decoded fragment so it reads back literally`() {
         val b = Url.Builder().scheme("https").host("h")
         val sink = UrlBuilderSink(b)
