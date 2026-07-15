@@ -114,12 +114,22 @@ class SerdeTest {
 
     @Test
     fun `decode then encode is stable`() {
-        val query = "q=kotlin&page=3&sort=ASC&tags=x"
+        // Every value here deliberately differs from its declared default, since encoding omits a
+        // default-valued property — otherwise re-encoding sort=ASC (its default) would drop `sort` and
+        // break the round-trip.
+        val query = "q=kotlin&page=3&sort=DESC&tags=x"
         val roundTripped =
             QueryParametersFormat.encodeToQueryString(
                 QueryParametersFormat.decodeFromQueryString<Search>(query),
             )
         assertEquals(query, roundTripped)
+    }
+
+    @Test
+    fun `encoding omits a property left at its declared default`() {
+        // Search(q = "only") leaves page, sort, and tags at their declared defaults (1, ASC, emptyList);
+        // none of them should appear in the encoded query string.
+        assertEquals("q=only", QueryParametersFormat.encodeToQueryString(Search(q = "only")))
     }
 
     @Test

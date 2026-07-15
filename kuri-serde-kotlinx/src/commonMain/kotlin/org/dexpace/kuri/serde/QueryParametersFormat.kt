@@ -24,9 +24,11 @@ import org.dexpace.kuri.query.QueryParameters
  *
  * Scope: a single, flat class whose properties are `String`, a primitive, an enum, or a `List` of those.
  * Each scalar property is one parameter; a list property repeats the parameter (duplicate-preserving,
- * matching `QueryParameters`). Absent optional properties fall back to their declared default; an absent
- * required property raises a [kotlinx.serialization.SerializationException]. Nested `@Serializable`
- * objects are rejected — model them at the call site or bind them separately.
+ * matching `QueryParameters`). Decoding and encoding are symmetric about defaults: an absent optional
+ * property decodes to its declared default, and — the other direction — a property still at its declared
+ * default is omitted from the encoded output, keeping the query string minimal; an absent required
+ * property raises a [kotlinx.serialization.SerializationException]. Nested `@Serializable` objects are
+ * rejected — model them at the call site or bind them separately.
  */
 public object QueryParametersFormat {
     /**

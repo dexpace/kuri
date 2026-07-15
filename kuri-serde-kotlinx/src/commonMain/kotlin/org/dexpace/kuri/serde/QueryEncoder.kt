@@ -36,6 +36,16 @@ internal class QueryEncoder : AbstractEncoder() {
         return this
     }
 
+    /**
+     * Omits a property left at its declared default, mirroring the decode side's "absent falls back to
+     * the default" contract and keeping the encoded query string minimal. `AbstractEncoder`'s inherited
+     * default is `true` (always encode), which would otherwise spell out every default (e.g. `page=1`).
+     */
+    override fun shouldEncodeElementDefault(
+        descriptor: SerialDescriptor,
+        index: Int,
+    ): Boolean = false
+
     override fun encodeElement(
         descriptor: SerialDescriptor,
         index: Int,
