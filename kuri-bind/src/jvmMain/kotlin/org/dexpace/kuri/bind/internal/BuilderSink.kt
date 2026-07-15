@@ -9,6 +9,13 @@ import org.dexpace.kuri.Url
 import org.dexpace.kuri.percent.Percent
 
 /**
+ * Escapes a literal `%` to `%25` so it survives every downstream encode set unambiguously (none of
+ * which reserve `%` — see [Percent.Component]) as the literal character the caller supplied, rather
+ * than being read back as (or colliding with) a percent-encoded escape.
+ */
+private fun escapeLiteralPercent(text: String): String = text.replace("%", "%25")
+
+/**
  * The narrow set of builder operations the binder needs, abstracting the two profiles.
  *
  * All profile-specific differences — userinfo split vs. verbatim-join, and fragment encoding — live
@@ -52,9 +59,13 @@ internal interface BuilderSink {
      * Percent-encodes [decoded] under the FRAGMENT set, then stores it. Both profiles' fragment
      * setters take an already-encoded string, so the encode is shared here and each sink only supplies
      * the raw store via [setEncodedFragment].
+     *
+     * A literal `%` in [decoded] is escaped to `%25` first: the FRAGMENT set doesn't reserve `%`
+     * itself, so an un-escaped `%` would pass through unambiguously as data on the way in but read
+     * back as (or collide with) a percent-encoded escape on the way out.
      */
     fun fragmentDecoded(decoded: String) {
-        setEncodedFragment(Percent.encode(decoded, Percent.Component.FRAGMENT))
+        setEncodedFragment(Percent.encode(escapeLiteralPercent(decoded), Percent.Component.FRAGMENT))
     }
 
     /** Stores an already-encoded fragment verbatim on the underlying builder. */
@@ -77,16 +88,19 @@ internal class UrlBuilderSink(
      * password clears the slot), so an object's userinfo never leaks a base builder's existing
      * password. The URL builder encodes each part under the userinfo set; the `:` separator is
      * managed by the builder.
+     *
+     * A literal `%` in either part is escaped to `%25` first: the userinfo set doesn't reserve `%`
+     * itself, so an un-escaped `%` would read back as (or collide with) a percent-encoded escape.
      */
     override fun userInfo(
         username: String,
         password: String?,
     ) {
         require(username.isNotEmpty() || password != null) { "at least one of username or password must be present" }
-        builder.username(username)
+        builder.username(escapeLiteralPercent(username))
         // Always set the password (empty clears it) so the object's userinfo FULLY replaces a base
         // builder's slot — otherwise a username-only object would leak a base URL's existing password.
-        builder.password(password ?: "")
+        builder.password(password?.let { escapeLiteralPercent(it) } ?: "")
     }
 
     override fun hostText(value: String) {
@@ -101,11 +115,16 @@ internal class UrlBuilderSink(
         builder.addPathSegment(decoded)
     }
 
+    /**
+     * A literal `%` in [name] or [value] is escaped to `%25` first: the query encode sets don't
+     * reserve `%` itself, so an un-escaped `%` would read back as (or collide with) a
+     * percent-encoded escape.
+     */
     override fun addQueryParameter(
         name: String,
         value: String?,
     ) {
-        builder.addQueryParameter(name, value)
+        builder.addQueryParameter(escapeLiteralPercent(name), value?.let { escapeLiteralPercent(it) })
     }
 
     override fun setEncodedFragment(encoded: String) {
@@ -133,19 +152,22 @@ internal class UriBuilderSink(
      * literal `:` separator. The joined string is stored verbatim by [Uri.Builder.userInfo].
      *
      * The `:` itself is NOT encoded because it acts as the structural delimiter between the two
-     * userinfo sub-components, not as data.
+     * userinfo sub-components, not as data. A literal `%` in either part is escaped to `%25` before
+     * that encode: the USER_INFO set doesn't reserve `%` itself, so an un-escaped `%` would read back
+     * as (or collide with) a percent-encoded escape.
      */
     override fun userInfo(
         username: String,
         password: String?,
     ) {
         require(username.isNotEmpty() || password != null) { "at least one of username or password must be present" }
-        val encodedUser = Percent.encode(username, Percent.Component.USER_INFO)
+        val encodedUser = Percent.encode(escapeLiteralPercent(username), Percent.Component.USER_INFO)
         val joined =
             if (password == null) {
                 encodedUser
             } else {
-                "$encodedUser:${Percent.encode(password, Percent.Component.USER_INFO)}"
+                val encodedPassword = Percent.encode(escapeLiteralPercent(password), Percent.Component.USER_INFO)
+                "$encodedUser:$encodedPassword"
             }
         builder.userInfo(joined)
     }
@@ -162,11 +184,16 @@ internal class UriBuilderSink(
         builder.addPathSegment(decoded)
     }
 
+    /**
+     * A literal `%` in [name] or [value] is escaped to `%25` first: the query encode sets don't
+     * reserve `%` itself, so an un-escaped `%` would read back as (or collide with) a
+     * percent-encoded escape.
+     */
     override fun addQueryParameter(
         name: String,
         value: String?,
     ) {
-        builder.addQueryParameter(name, value)
+        builder.addQueryParameter(escapeLiteralPercent(name), value?.let { escapeLiteralPercent(it) })
     }
 
     override fun setEncodedFragment(encoded: String) {

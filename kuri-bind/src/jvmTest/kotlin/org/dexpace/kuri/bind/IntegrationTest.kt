@@ -492,7 +492,8 @@ private class DotSegment(
     @Path val b: String = "..",
 )
 
-// Pins the inherited `%`-under-encoding of the core query set.
+// A literal `%` in a decoded query value: the core query set doesn't reserve `%` itself, so the
+// binder boundary escapes it to `%25` before that value reaches the core encode call (#76).
 @Url
 private class PercentValue(
     @Scheme val scheme: String = "https",
@@ -934,10 +935,15 @@ class IntegrationTest {
     }
 
     @Test
-    fun `pins the inherited percent under-encoding of the query set`() {
+    fun `escapes a literal percent sign in a query value so it round-trips through decode`() {
         // The core query set leaves `%` literal (WHATWG "already-encoded" convention) rather than
-        // re-encoding it to `%25` — pinned to document the contract, not a binder-level choice.
-        assertEquals("q=a%2Bb", KuriBind.toUrl(PercentValue()).query)
+        // re-encoding it to `%25`, so the binder boundary escapes it first: "a%2Bb" reaches the wire
+        // as "a%252Bb", which decodes back to the original literal "a%2Bb" rather than misreading the
+        // embedded "%2B" as an escaped '+'.
+        val url = KuriBind.toUrl(PercentValue())
+
+        assertEquals("q=a%252Bb", url.query)
+        assertEquals("a%2Bb", url.queryParameters.get("q"))
     }
 
     @Test
