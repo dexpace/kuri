@@ -29,8 +29,8 @@ internal interface BuilderSink {
     /**
      * Sets the userinfo component from decoded [username] and optional decoded [password].
      *
-     * Each implementation encodes the parts appropriately for its profile:
-     * [UrlBuilderSink] calls split setters; [UriBuilderSink] encodes and joins around a literal `:`.
+     * Both [UrlBuilderSink] and [UriBuilderSink] delegate to their underlying builder's split
+     * `username`/`password` setters, which each encode their own part appropriately for the profile.
      */
     fun userInfo(
         username: String,
@@ -133,12 +133,9 @@ internal class UrlBuilderSink(
 }
 
 /**
- * Projects decoded contributions onto a [Uri.Builder]: encodes username and password separately
- * under the USER_INFO set, then joins them around a literal `:` before passing the verbatim
- * userinfo string to the builder. Fragment is handled the same way as [UrlBuilderSink].
- *
- * [Uri.Builder.userInfo] stores the value verbatim (already-encoded), so encoding must happen
- * here before the call.
+ * Projects decoded contributions onto a [Uri.Builder]: split username/password setters, and a
+ * percent-encoded fragment stored via the raw-fragment setter. Fragment is handled the same way
+ * as [UrlBuilderSink].
  */
 internal class UriBuilderSink(
     private val builder: Uri.Builder,
@@ -148,28 +145,22 @@ internal class UriBuilderSink(
     }
 
     /**
-     * Percent-encodes [username] and [password] under the USER_INFO set, then joins them with a
-     * literal `:` separator. The joined string is stored verbatim by [Uri.Builder.userInfo].
-     *
-     * The `:` itself is NOT encoded because it acts as the structural delimiter between the two
-     * userinfo sub-components, not as data. A literal `%` in either part is escaped to `%25` before
-     * that encode: the USER_INFO set doesn't reserve `%` itself, so an un-escaped `%` would read back
-     * as (or collide with) a percent-encoded escape.
+     * Fully replaces the userinfo slot from decoded [username] and [password] (an absent password
+     * clears the slot), so an object's userinfo never leaks a base builder's existing password.
+     * [Uri.Builder.username]/[Uri.Builder.password] each percent-encode under the USER_INFO set and
+     * escape a literal `%` themselves, join with `:`, and switch the builder to split userinfo mode
+     * (discarding any verbatim [Uri.Builder.userInfo] value the base builder carried), so no manual
+     * encode/join is needed here.
      */
     override fun userInfo(
         username: String,
         password: String?,
     ) {
         require(username.isNotEmpty() || password != null) { "at least one of username or password must be present" }
-        val encodedUser = Percent.encode(escapeLiteralPercent(username), Percent.Component.USER_INFO)
-        val joined =
-            if (password == null) {
-                encodedUser
-            } else {
-                val encodedPassword = Percent.encode(escapeLiteralPercent(password), Percent.Component.USER_INFO)
-                "$encodedUser:$encodedPassword"
-            }
-        builder.userInfo(joined)
+        builder.username(username)
+        // Always set the password (empty clears it) so the object's userinfo FULLY replaces a base
+        // builder's slot — otherwise a username-only object would leak a base URI's existing password.
+        builder.password(password ?: "")
     }
 
     override fun hostText(value: String) {
