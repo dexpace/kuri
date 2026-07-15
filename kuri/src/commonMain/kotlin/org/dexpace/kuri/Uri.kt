@@ -706,13 +706,18 @@ public class Uri internal constructor(
          * Sets or clears the raw `userinfo` component (without its trailing `@`), kept verbatim.
          *
          * Switches this builder back to verbatim mode: a [username]/[password] pair set earlier is
-         * discarded from the built authority in favour of [userInfo], matching last-setter-wins.
+         * discarded from the built authority in favour of [userInfo], matching last-setter-wins. The
+         * discarded pair is also cleared from the split-mode state, so a later [username] or
+         * [password] call made alone (without re-setting the other) starts from `""` rather than
+         * leaking the value this call just discarded.
          *
          * @param userInfo the encoded userinfo (e.g. `user` or `user:password`), or `null` to clear it.
          */
         public fun userInfo(userInfo: String?): Builder {
             this.userInfo = userInfo
             usesSplitUserInfo = false
+            encodedUsername = ""
+            encodedPassword = ""
             return this
         }
 
