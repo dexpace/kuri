@@ -94,7 +94,7 @@ public class Url internal constructor(
     public val username: String
         get() = components.username
 
-    /** The decoded userinfo username (percent-decoded [username]). */
+    /** The decoded userinfo username (percent-decoded [username]), `""` when absent or empty. */
     @get:JvmName("decodedUsername")
     public val decodedUsername: String
         get() = decodedUsernameValue
