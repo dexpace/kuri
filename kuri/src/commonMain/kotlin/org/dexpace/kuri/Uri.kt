@@ -649,6 +649,9 @@ public class Uri internal constructor(
     public class Builder {
         private var scheme: String? = null
         private var userInfo: String? = null
+        private var encodedUsername: String = ""
+        private var encodedPassword: String = ""
+        private var usesSplitUserInfo: Boolean = false
         private var host: String? = null
         private var port: Int? = null
 
@@ -694,10 +697,47 @@ public class Uri internal constructor(
         /**
          * Sets or clears the raw `userinfo` component (without its trailing `@`), kept verbatim.
          *
+         * Switches this builder back to verbatim mode: a [username]/[password] pair set earlier is
+         * discarded from the built authority in favour of [userInfo], matching last-setter-wins.
+         *
          * @param userInfo the encoded userinfo (e.g. `user` or `user:password`), or `null` to clear it.
          */
         public fun userInfo(userInfo: String?): Builder {
             this.userInfo = userInfo
+            usesSplitUserInfo = false
+            return this
+        }
+
+        /**
+         * Sets the userinfo username, percent-encoding it under the userinfo set.
+         *
+         * Switches this builder to split userinfo mode: the username/password pair accumulated
+         * through this and [password] takes priority at [build] over a verbatim [userInfo] set
+         * earlier, and the two are joined with `:` — an empty password collapses to no colon,
+         * matching [Uri.userInfo]'s own reconstruction rule. Call [userInfo] again to switch back
+         * to verbatim mode.
+         *
+         * @param username the decoded username; `""` clears the username.
+         * @return this builder, for chaining.
+         */
+        public fun username(username: String): Builder {
+            encodedUsername = PercentCodec.encode(escapeLiteralPercent(username), PercentEncodeSets.USERINFO)
+            usesSplitUserInfo = true
+            return this
+        }
+
+        /**
+         * Sets the userinfo password, percent-encoding it under the userinfo set.
+         *
+         * As [username], switches this builder to split userinfo mode; see its doc for the
+         * priority and combination rules the two setters share.
+         *
+         * @param password the decoded password; `""` clears the password.
+         * @return this builder, for chaining.
+         */
+        public fun password(password: String): Builder {
+            encodedPassword = PercentCodec.encode(escapeLiteralPercent(password), PercentEncodeSets.USERINFO)
+            usesSplitUserInfo = true
             return this
         }
 
@@ -1019,11 +1059,32 @@ public class Uri internal constructor(
                 else -> null
             }
 
-        /** True when a [host] is present, or neither [userInfo] nor [port] (which require one) is set. */
-        private fun authorityHasHost(): Boolean = host != null || (userInfo.isNullOrEmpty() && port == null)
+        /** True when a [host] is present, or neither the effective userinfo nor [port] (which require one) is set. */
+        private fun authorityHasHost(): Boolean = host != null || (effectiveUserInfoIsEmpty() && port == null)
 
         /** True when [path] fits beside the current authority: no host, or an empty or rooted path. */
         private fun pathFitsAuthority(path: String): Boolean = host == null || path.isEmpty() || path.startsWith(SLASH)
+
+        /**
+         * True when the userinfo this builder would emit is empty — whichever representation
+         * ([usesSplitUserInfo] or verbatim [userInfo]) is currently active, mirroring the choice
+         * [appendAuthority] makes.
+         */
+        private fun effectiveUserInfoIsEmpty(): Boolean =
+            if (usesSplitUserInfo) combinedUserInfo() == null else userInfo.isNullOrEmpty()
+
+        /**
+         * Joins the split-mode [encodedUsername]/[encodedPassword] into one `userinfo` string for
+         * [appendAuthority], or `null` when both are empty — an empty password collapses to no
+         * colon, the same convention [Uri.reconstructUserInfo] applies when reading a parsed value
+         * back.
+         */
+        private fun combinedUserInfo(): String? =
+            when {
+                encodedUsername.isEmpty() && encodedPassword.isEmpty() -> null
+                encodedPassword.isEmpty() -> encodedUsername
+                else -> "$encodedUsername:$encodedPassword"
+            }
 
         /** The path [recompose] serializes, resolving the [BuilderPath] rooting against the current authority. */
         private fun effectivePath(): String = path.effectivePath(host != null)
@@ -1043,10 +1104,22 @@ public class Uri internal constructor(
         /** Appends `//[userinfo@]host[:port]` for a present authority (RFC 3986 §3.2). */
         private fun appendAuthority(sb: StringBuilder) {
             val authorityHost = requireNotNull(host) { "authority requires a host" }
+            val effectiveUserInfo = if (usesSplitUserInfo) combinedUserInfo() else userInfo
             sb.append(SLASH).append(SLASH)
-            if (!userInfo.isNullOrEmpty()) sb.append(userInfo).append('@')
+            if (!effectiveUserInfo.isNullOrEmpty()) sb.append(effectiveUserInfo).append('@')
             sb.append(authorityHost)
             if (port != null) sb.append(':').append(port)
         }
+
+        /**
+         * Escapes a literal `%` to `%25` before it reaches [PercentCodec.encode] under the userinfo
+         * set, which does not itself reserve `%` (SPEC §5.1.3, [PercentEncodeSets.COMPONENT] is the
+         * narrower set that does) — left unescaped, a literal `%` would pass through the encode
+         * call untouched and the strict `Uri` parser would then reject it at [build] as a malformed
+         * percent-triplet, the same hazard [addPathSegment] avoids by encoding under the wider
+         * [PercentEncodeSets.COMPONENT] set instead. This is safe from double-encoding: an
+         * already-escaped `%25` has no literal `%` left to escape a second time.
+         */
+        private fun escapeLiteralPercent(text: String): String = text.replace("%", "%25")
     }
 }
