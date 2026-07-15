@@ -500,6 +500,44 @@ public final class org/dexpace/kuri/idna/Idn {
 	public static final fun toUnicode (Ljava/lang/String;)Ljava/lang/String;
 }
 
+public final class org/dexpace/kuri/ktx/ConversionsKt {
+	public static final synthetic fun invoke (Lorg/dexpace/kuri/Uri$Companion;Ljava/lang/String;)Lorg/dexpace/kuri/Uri;
+	public static final synthetic fun invoke (Lorg/dexpace/kuri/Url$Companion;Ljava/lang/String;Lorg/dexpace/kuri/Url;)Lorg/dexpace/kuri/Url;
+	public static synthetic fun invoke$default (Lorg/dexpace/kuri/Url$Companion;Ljava/lang/String;Lorg/dexpace/kuri/Url;ILjava/lang/Object;)Lorg/dexpace/kuri/Url;
+	public static final synthetic fun toUri (Ljava/lang/String;)Lorg/dexpace/kuri/Uri;
+	public static final synthetic fun toUriOrThrow (Ljava/lang/String;)Lorg/dexpace/kuri/Uri;
+	public static final synthetic fun toUriResult (Ljava/lang/String;)Lorg/dexpace/kuri/error/ParseResult;
+	public static final synthetic fun toUrl (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Lorg/dexpace/kuri/Url;
+	public static synthetic fun toUrl$default (Ljava/lang/String;Lorg/dexpace/kuri/Url;ILjava/lang/Object;)Lorg/dexpace/kuri/Url;
+	public static final synthetic fun toUrlOrThrow (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Lorg/dexpace/kuri/Url;
+	public static synthetic fun toUrlOrThrow$default (Ljava/lang/String;Lorg/dexpace/kuri/Url;ILjava/lang/Object;)Lorg/dexpace/kuri/Url;
+	public static final synthetic fun toUrlResult (Ljava/lang/String;Lorg/dexpace/kuri/Url;)Lorg/dexpace/kuri/error/ParseResult;
+	public static synthetic fun toUrlResult$default (Ljava/lang/String;Lorg/dexpace/kuri/Url;ILjava/lang/Object;)Lorg/dexpace/kuri/error/ParseResult;
+}
+
+public final class org/dexpace/kuri/ktx/DslKt {
+	public static final synthetic fun buildUri (Lkotlin/jvm/functions/Function1;)Lorg/dexpace/kuri/Uri;
+	public static final synthetic fun buildUrl (Lkotlin/jvm/functions/Function1;)Lorg/dexpace/kuri/Url;
+	public static final synthetic fun edit (Lorg/dexpace/kuri/Uri;Lkotlin/jvm/functions/Function1;)Lorg/dexpace/kuri/Uri;
+	public static final synthetic fun edit (Lorg/dexpace/kuri/Url;Lkotlin/jvm/functions/Function1;)Lorg/dexpace/kuri/Url;
+	public static final synthetic fun params (Lorg/dexpace/kuri/Uri$Builder;[Lkotlin/Pair;)Lorg/dexpace/kuri/Uri$Builder;
+	public static final synthetic fun params (Lorg/dexpace/kuri/Url$Builder;[Lkotlin/Pair;)Lorg/dexpace/kuri/Url$Builder;
+	public static final synthetic fun pathSegments (Lorg/dexpace/kuri/Uri$Builder;[Ljava/lang/String;)Lorg/dexpace/kuri/Uri$Builder;
+	public static final synthetic fun pathSegments (Lorg/dexpace/kuri/Url$Builder;[Ljava/lang/String;)Lorg/dexpace/kuri/Url$Builder;
+}
+
+public final class org/dexpace/kuri/ktx/OperatorsKt {
+	public static final synthetic fun contains (Lorg/dexpace/kuri/Uri;Ljava/lang/String;)Z
+	public static final synthetic fun contains (Lorg/dexpace/kuri/Url;Ljava/lang/String;)Z
+	public static final synthetic fun div (Lorg/dexpace/kuri/Uri;Ljava/lang/String;)Lorg/dexpace/kuri/Uri;
+	public static final synthetic fun div (Lorg/dexpace/kuri/Url;Ljava/lang/String;)Lorg/dexpace/kuri/Url;
+	public static final synthetic fun get (Lorg/dexpace/kuri/Uri;Ljava/lang/String;)Ljava/lang/String;
+	public static final synthetic fun get (Lorg/dexpace/kuri/Url;Ljava/lang/String;)Ljava/lang/String;
+	public static final synthetic fun plus (Lorg/dexpace/kuri/Uri;Lkotlin/Pair;)Lorg/dexpace/kuri/Uri;
+	public static final synthetic fun plus (Lorg/dexpace/kuri/Url;Ljava/util/Map;)Lorg/dexpace/kuri/Url;
+	public static final synthetic fun plus (Lorg/dexpace/kuri/Url;Lkotlin/Pair;)Lorg/dexpace/kuri/Url;
+}
+
 public final class org/dexpace/kuri/percent/Percent {
 	public static final field INSTANCE Lorg/dexpace/kuri/percent/Percent;
 	public static final fun decode (Ljava/lang/String;)Ljava/lang/String;
@@ -580,5 +618,33 @@ public final class org/dexpace/kuri/scheme/Schemes {
 	public static final fun defaultPort (Ljava/lang/String;)Ljava/lang/Integer;
 	public static final fun isSpecial (Ljava/lang/String;)Z
 	public static final fun isValid (Ljava/lang/String;)Z
+}
+
+public final class org/dexpace/kuri/template/UriTemplate {
+	public static final field Companion Lorg/dexpace/kuri/template/UriTemplate$Companion;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun expand (Ljava/util/Map;)Ljava/lang/String;
+	public final synthetic fun expand ([Lkotlin/Pair;)Ljava/lang/String;
+	public final fun expandToUri (Ljava/util/Map;)Lorg/dexpace/kuri/error/ParseResult;
+	public final fun expandToUrl (Ljava/util/Map;)Lorg/dexpace/kuri/error/ParseResult;
+	public final fun getTemplate ()Ljava/lang/String;
+	public final fun getVariableNames ()Ljava/util/Set;
+	public fun hashCode ()I
+	public static final fun parse (Ljava/lang/String;)Lorg/dexpace/kuri/template/UriTemplate;
+	public static final fun parseOrNull (Ljava/lang/String;)Lorg/dexpace/kuri/template/UriTemplate;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class org/dexpace/kuri/template/UriTemplate$Companion {
+	public final fun parse (Ljava/lang/String;)Lorg/dexpace/kuri/template/UriTemplate;
+	public final fun parseOrNull (Ljava/lang/String;)Lorg/dexpace/kuri/template/UriTemplate;
+}
+
+public final class org/dexpace/kuri/template/UriTemplateException : java/lang/IllegalArgumentException {
+	public final fun getIndex ()I
+}
+
+public final class org/dexpace/kuri/template/UriTemplateMatchKt {
+	public static final fun match (Lorg/dexpace/kuri/template/UriTemplate;Ljava/lang/String;)Ljava/util/Map;
 }
 

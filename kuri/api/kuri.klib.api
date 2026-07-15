@@ -348,6 +348,31 @@ final class org.dexpace.kuri.query/QueryParametersBuilder { // org.dexpace.kuri.
     final fun sort(): org.dexpace.kuri.query/QueryParametersBuilder // org.dexpace.kuri.query/QueryParametersBuilder.sort|sort(){}[0]
 }
 
+final class org.dexpace.kuri.template/UriTemplate { // org.dexpace.kuri.template/UriTemplate|null[0]
+    final val template // org.dexpace.kuri.template/UriTemplate.template|{}template[0]
+        final fun <get-template>(): kotlin/String // org.dexpace.kuri.template/UriTemplate.template.<get-template>|<get-template>(){}[0]
+    final val variableNames // org.dexpace.kuri.template/UriTemplate.variableNames|{}variableNames[0]
+        final fun <get-variableNames>(): kotlin.collections/Set<kotlin/String> // org.dexpace.kuri.template/UriTemplate.variableNames.<get-variableNames>|<get-variableNames>(){}[0]
+
+    final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.template/UriTemplate.equals|equals(kotlin.Any?){}[0]
+    final fun expand(kotlin.collections/Map<kotlin/String, kotlin/Any?>): kotlin/String // org.dexpace.kuri.template/UriTemplate.expand|expand(kotlin.collections.Map<kotlin.String,kotlin.Any?>){}[0]
+    final fun expand(kotlin/Array<out kotlin/Pair<kotlin/String, kotlin/Any?>>...): kotlin/String // org.dexpace.kuri.template/UriTemplate.expand|expand(kotlin.Array<out|kotlin.Pair<kotlin.String,kotlin.Any?>>...){}[0]
+    final fun expandToUri(kotlin.collections/Map<kotlin/String, kotlin/Any?>): org.dexpace.kuri.error/ParseResult<org.dexpace.kuri/Uri> // org.dexpace.kuri.template/UriTemplate.expandToUri|expandToUri(kotlin.collections.Map<kotlin.String,kotlin.Any?>){}[0]
+    final fun expandToUrl(kotlin.collections/Map<kotlin/String, kotlin/Any?>): org.dexpace.kuri.error/ParseResult<org.dexpace.kuri/Url> // org.dexpace.kuri.template/UriTemplate.expandToUrl|expandToUrl(kotlin.collections.Map<kotlin.String,kotlin.Any?>){}[0]
+    final fun hashCode(): kotlin/Int // org.dexpace.kuri.template/UriTemplate.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // org.dexpace.kuri.template/UriTemplate.toString|toString(){}[0]
+
+    final object Companion { // org.dexpace.kuri.template/UriTemplate.Companion|null[0]
+        final fun parse(kotlin/String): org.dexpace.kuri.template/UriTemplate // org.dexpace.kuri.template/UriTemplate.Companion.parse|parse(kotlin.String){}[0]
+        final fun parseOrNull(kotlin/String): org.dexpace.kuri.template/UriTemplate? // org.dexpace.kuri.template/UriTemplate.Companion.parseOrNull|parseOrNull(kotlin.String){}[0]
+    }
+}
+
+final class org.dexpace.kuri.template/UriTemplateException : kotlin/IllegalArgumentException { // org.dexpace.kuri.template/UriTemplateException|null[0]
+    final val index // org.dexpace.kuri.template/UriTemplateException.index|{}index[0]
+        final fun <get-index>(): kotlin/Int // org.dexpace.kuri.template/UriTemplateException.index.<get-index>|<get-index>(){}[0]
+}
+
 final class org.dexpace.kuri/ParseOptions { // org.dexpace.kuri/ParseOptions|null[0]
     final val allowIpv6ZoneId // org.dexpace.kuri/ParseOptions.allowIpv6ZoneId|{}allowIpv6ZoneId[0]
         final fun <get-allowIpv6ZoneId>(): kotlin/Boolean // org.dexpace.kuri/ParseOptions.allowIpv6ZoneId.<get-allowIpv6ZoneId>|<get-allowIpv6ZoneId>(){}[0]
@@ -584,5 +609,31 @@ final object org.dexpace.kuri/Kuri { // org.dexpace.kuri/Kuri|null[0]
         final fun <get-VERSION>(): kotlin/String // org.dexpace.kuri/Kuri.VERSION.<get-VERSION>|<get-VERSION>(){}[0]
 }
 
+final fun (kotlin/String).org.dexpace.kuri.ktx/toUri(): org.dexpace.kuri/Uri? // org.dexpace.kuri.ktx/toUri|toUri@kotlin.String(){}[0]
+final fun (kotlin/String).org.dexpace.kuri.ktx/toUriOrThrow(): org.dexpace.kuri/Uri // org.dexpace.kuri.ktx/toUriOrThrow|toUriOrThrow@kotlin.String(){}[0]
+final fun (kotlin/String).org.dexpace.kuri.ktx/toUriResult(): org.dexpace.kuri.error/ParseResult<org.dexpace.kuri/Uri> // org.dexpace.kuri.ktx/toUriResult|toUriResult@kotlin.String(){}[0]
+final fun (kotlin/String).org.dexpace.kuri.ktx/toUrl(org.dexpace.kuri/Url? = ...): org.dexpace.kuri/Url? // org.dexpace.kuri.ktx/toUrl|toUrl@kotlin.String(org.dexpace.kuri.Url?){}[0]
+final fun (kotlin/String).org.dexpace.kuri.ktx/toUrlOrThrow(org.dexpace.kuri/Url? = ...): org.dexpace.kuri/Url // org.dexpace.kuri.ktx/toUrlOrThrow|toUrlOrThrow@kotlin.String(org.dexpace.kuri.Url?){}[0]
+final fun (kotlin/String).org.dexpace.kuri.ktx/toUrlResult(org.dexpace.kuri/Url? = ...): org.dexpace.kuri.error/ParseResult<org.dexpace.kuri/Url> // org.dexpace.kuri.ktx/toUrlResult|toUrlResult@kotlin.String(org.dexpace.kuri.Url?){}[0]
+final fun (org.dexpace.kuri.template/UriTemplate).org.dexpace.kuri.template/match(kotlin/String): kotlin.collections/Map<kotlin/String, kotlin/String>? // org.dexpace.kuri.template/match|match@org.dexpace.kuri.template.UriTemplate(kotlin.String){}[0]
+final fun (org.dexpace.kuri/Uri).org.dexpace.kuri.ktx/contains(kotlin/String): kotlin/Boolean // org.dexpace.kuri.ktx/contains|contains@org.dexpace.kuri.Uri(kotlin.String){}[0]
+final fun (org.dexpace.kuri/Uri).org.dexpace.kuri.ktx/div(kotlin/String): org.dexpace.kuri/Uri // org.dexpace.kuri.ktx/div|div@org.dexpace.kuri.Uri(kotlin.String){}[0]
+final fun (org.dexpace.kuri/Uri).org.dexpace.kuri.ktx/get(kotlin/String): kotlin/String? // org.dexpace.kuri.ktx/get|get@org.dexpace.kuri.Uri(kotlin.String){}[0]
+final fun (org.dexpace.kuri/Uri).org.dexpace.kuri.ktx/plus(kotlin/Pair<kotlin/String, kotlin/String?>): org.dexpace.kuri/Uri // org.dexpace.kuri.ktx/plus|plus@org.dexpace.kuri.Uri(kotlin.Pair<kotlin.String,kotlin.String?>){}[0]
+final fun (org.dexpace.kuri/Uri.Builder).org.dexpace.kuri.ktx/params(kotlin/Array<out kotlin/Pair<kotlin/String, kotlin/String?>>...): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri.ktx/params|params@org.dexpace.kuri.Uri.Builder(kotlin.Array<out|kotlin.Pair<kotlin.String,kotlin.String?>>...){}[0]
+final fun (org.dexpace.kuri/Uri.Builder).org.dexpace.kuri.ktx/pathSegments(kotlin/Array<out kotlin/String>...): org.dexpace.kuri/Uri.Builder // org.dexpace.kuri.ktx/pathSegments|pathSegments@org.dexpace.kuri.Uri.Builder(kotlin.Array<out|kotlin.String>...){}[0]
+final fun (org.dexpace.kuri/Uri.Companion).org.dexpace.kuri.ktx/invoke(kotlin/String): org.dexpace.kuri/Uri // org.dexpace.kuri.ktx/invoke|invoke@org.dexpace.kuri.Uri.Companion(kotlin.String){}[0]
+final fun (org.dexpace.kuri/Url).org.dexpace.kuri.ktx/contains(kotlin/String): kotlin/Boolean // org.dexpace.kuri.ktx/contains|contains@org.dexpace.kuri.Url(kotlin.String){}[0]
+final fun (org.dexpace.kuri/Url).org.dexpace.kuri.ktx/div(kotlin/String): org.dexpace.kuri/Url // org.dexpace.kuri.ktx/div|div@org.dexpace.kuri.Url(kotlin.String){}[0]
+final fun (org.dexpace.kuri/Url).org.dexpace.kuri.ktx/get(kotlin/String): kotlin/String? // org.dexpace.kuri.ktx/get|get@org.dexpace.kuri.Url(kotlin.String){}[0]
+final fun (org.dexpace.kuri/Url).org.dexpace.kuri.ktx/plus(kotlin.collections/Map<kotlin/String, kotlin/String?>): org.dexpace.kuri/Url // org.dexpace.kuri.ktx/plus|plus@org.dexpace.kuri.Url(kotlin.collections.Map<kotlin.String,kotlin.String?>){}[0]
+final fun (org.dexpace.kuri/Url).org.dexpace.kuri.ktx/plus(kotlin/Pair<kotlin/String, kotlin/String?>): org.dexpace.kuri/Url // org.dexpace.kuri.ktx/plus|plus@org.dexpace.kuri.Url(kotlin.Pair<kotlin.String,kotlin.String?>){}[0]
+final fun (org.dexpace.kuri/Url.Builder).org.dexpace.kuri.ktx/params(kotlin/Array<out kotlin/Pair<kotlin/String, kotlin/String?>>...): org.dexpace.kuri/Url.Builder // org.dexpace.kuri.ktx/params|params@org.dexpace.kuri.Url.Builder(kotlin.Array<out|kotlin.Pair<kotlin.String,kotlin.String?>>...){}[0]
+final fun (org.dexpace.kuri/Url.Builder).org.dexpace.kuri.ktx/pathSegments(kotlin/Array<out kotlin/String>...): org.dexpace.kuri/Url.Builder // org.dexpace.kuri.ktx/pathSegments|pathSegments@org.dexpace.kuri.Url.Builder(kotlin.Array<out|kotlin.String>...){}[0]
+final fun (org.dexpace.kuri/Url.Companion).org.dexpace.kuri.ktx/invoke(kotlin/String, org.dexpace.kuri/Url? = ...): org.dexpace.kuri/Url // org.dexpace.kuri.ktx/invoke|invoke@org.dexpace.kuri.Url.Companion(kotlin.String;org.dexpace.kuri.Url?){}[0]
 final fun <#A: kotlin/Any?, #B: kotlin/Any?> (org.dexpace.kuri.error/ParseResult<#A>).org.dexpace.kuri.error/map(kotlin/Function1<#A, #B>): org.dexpace.kuri.error/ParseResult<#B> // org.dexpace.kuri.error/map|map@org.dexpace.kuri.error.ParseResult<0:0>(kotlin.Function1<0:0,0:1>){0§<kotlin.Any?>;1§<kotlin.Any?>}[0]
+final inline fun (org.dexpace.kuri/Uri).org.dexpace.kuri.ktx/edit(kotlin/Function1<org.dexpace.kuri/Uri.Builder, kotlin/Unit>): org.dexpace.kuri/Uri // org.dexpace.kuri.ktx/edit|edit@org.dexpace.kuri.Uri(kotlin.Function1<org.dexpace.kuri.Uri.Builder,kotlin.Unit>){}[0]
+final inline fun (org.dexpace.kuri/Url).org.dexpace.kuri.ktx/edit(kotlin/Function1<org.dexpace.kuri/Url.Builder, kotlin/Unit>): org.dexpace.kuri/Url // org.dexpace.kuri.ktx/edit|edit@org.dexpace.kuri.Url(kotlin.Function1<org.dexpace.kuri.Url.Builder,kotlin.Unit>){}[0]
 final inline fun <#A: kotlin/Any?, #B: kotlin/Any?> (org.dexpace.kuri.error/ParseResult<#A>).org.dexpace.kuri.error/fold(kotlin/Function1<#A, #B>, kotlin/Function1<org.dexpace.kuri.error/UriParseError, #B>): #B // org.dexpace.kuri.error/fold|fold@org.dexpace.kuri.error.ParseResult<0:0>(kotlin.Function1<0:0,0:1>;kotlin.Function1<org.dexpace.kuri.error.UriParseError,0:1>){0§<kotlin.Any?>;1§<kotlin.Any?>}[0]
+final inline fun org.dexpace.kuri.ktx/buildUri(kotlin/Function1<org.dexpace.kuri/Uri.Builder, kotlin/Unit>): org.dexpace.kuri/Uri // org.dexpace.kuri.ktx/buildUri|buildUri(kotlin.Function1<org.dexpace.kuri.Uri.Builder,kotlin.Unit>){}[0]
+final inline fun org.dexpace.kuri.ktx/buildUrl(kotlin/Function1<org.dexpace.kuri/Url.Builder, kotlin/Unit>): org.dexpace.kuri/Url // org.dexpace.kuri.ktx/buildUrl|buildUrl(kotlin.Function1<org.dexpace.kuri.Url.Builder,kotlin.Unit>){}[0]

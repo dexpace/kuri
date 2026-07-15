@@ -1,0 +1,24 @@
+public final class org/dexpace/kuri/serde/QueryParametersFormat {
+	public static final field INSTANCE Lorg/dexpace/kuri/serde/QueryParametersFormat;
+	public final fun decodeFromQueryParameters (Lkotlinx/serialization/DeserializationStrategy;Lorg/dexpace/kuri/query/QueryParameters;)Ljava/lang/Object;
+	public final fun encodeToQueryParameters (Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;)Lorg/dexpace/kuri/query/QueryParameters;
+}
+
+public final class org/dexpace/kuri/serde/UriSerializer : kotlinx/serialization/KSerializer {
+	public static final field INSTANCE Lorg/dexpace/kuri/serde/UriSerializer;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lorg/dexpace/kuri/Uri;
+	public fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun serialize (Lkotlinx/serialization/encoding/Encoder;Lorg/dexpace/kuri/Uri;)V
+}
+
+public final class org/dexpace/kuri/serde/UrlSerializer : kotlinx/serialization/KSerializer {
+	public static final field INSTANCE Lorg/dexpace/kuri/serde/UrlSerializer;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lorg/dexpace/kuri/Url;
+	public fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun serialize (Lkotlinx/serialization/encoding/Encoder;Lorg/dexpace/kuri/Url;)V
+}
+

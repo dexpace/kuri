@@ -19,3 +19,4 @@ rootProject.name = "kuri"
 
 include(":kuri")
 include(":kuri-bind")
+include(":kuri-serde-kotlinx")
