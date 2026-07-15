@@ -94,10 +94,20 @@ public class Url internal constructor(
     public val username: String
         get() = components.username
 
+    /** The decoded userinfo username (percent-decoded [username]). */
+    @get:JvmName("decodedUsername")
+    public val decodedUsername: String
+        get() = decodedUsernameValue
+
     /** The percent-encoded userinfo password, or `""` when absent or empty. */
     @get:JvmName("password")
     public val password: String
         get() = components.password
+
+    /** The decoded userinfo password (percent-decoded [password]), `""` when absent or empty. */
+    @get:JvmName("decodedPassword")
+    public val decodedPassword: String
+        get() = decodedPasswordValue
 
     /** The structured host, or `null` when the URL has no authority. */
     @get:JvmName("host")
@@ -175,6 +185,11 @@ public class Url internal constructor(
     public val encodedFragment: String?
         get() = components.fragment
 
+    /** The decoded fragment (percent-decoded [fragment]), or `null` when no `#` was present. */
+    @get:JvmName("decodedFragment")
+    public val decodedFragment: String?
+        get() = decodedFragmentValue
+
     /** The `userinfo@host:port` authority, or `null` when the URL has no authority. */
     @get:JvmName("authority")
     public val authority: String?
@@ -226,6 +241,11 @@ public class Url internal constructor(
     // (needed only to keep href re-parseable) does not belong in its output (SPEC §11.2).
     private val encodedPathText: String by lazy { serializeUrlPath(components, guardAgainstAuthority = false) }
     private val queryParameterSnapshot: QueryParameters by lazy { QueryParameters.parseOrEmpty(components.query) }
+
+    /** Decoded fragment/userinfo projections, each computed once; immutable, mirroring [canonicalHref]. */
+    private val decodedFragmentValue: String? by lazy { fragment?.let { PercentCodec.decode(it) } }
+    private val decodedUsernameValue: String by lazy { PercentCodec.decode(username) }
+    private val decodedPasswordValue: String by lazy { PercentCodec.decode(password) }
 
     /**
      * The canonical serialized URL; the basis of [toString], [equals], and [hashCode].

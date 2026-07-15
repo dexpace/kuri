@@ -48,6 +48,38 @@ class UriTest {
     }
 
     @Test
+    fun `decodedFragment mirrors fragment when there is nothing to decode`() {
+        val uri = parseOk("foo://h/p#plain")
+
+        assertEquals("plain", uri.fragment)
+        assertEquals("plain", uri.decodedFragment)
+    }
+
+    @Test
+    fun `decodedFragment percent-decodes a triplet`() {
+        val uri = parseOk("foo://h/p#a%20b")
+
+        assertEquals("a%20b", uri.fragment)
+        assertEquals("a b", uri.decodedFragment)
+    }
+
+    @Test
+    fun `decodedFragment is null when there is no fragment`() {
+        val uri = parseOk("foo://h/p")
+
+        assertNull(uri.fragment)
+        assertNull(uri.decodedFragment)
+    }
+
+    @Test
+    fun `decodedFragment decodes an already-escaped literal percent sign back to the original text`() {
+        val uri = parseOk("foo://h/p#50%25off")
+
+        assertEquals("50%25off", uri.fragment)
+        assertEquals("50%off", uri.decodedFragment)
+    }
+
+    @Test
     fun `uriString and toString are the canonical unnormalized serialization`() {
         val input = "foo://u@h:8042/over/there?q#n"
         val uri = parseOk(input)

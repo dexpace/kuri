@@ -143,6 +143,11 @@ public class Uri internal constructor(
     public val fragment: String?
         get() = components.fragment
 
+    /** The decoded fragment (percent-decoded [fragment]), or `null` when no `#` was present. */
+    @get:JvmName("decodedFragment")
+    public val decodedFragment: String?
+        get() = decodedFragmentValue
+
     /** The `[userinfo@]host[:port]` authority, or `null` when the URI has no authority. */
     @get:JvmName("authority")
     public val authority: String?
@@ -527,6 +532,9 @@ public class Uri internal constructor(
     /** Encoded path and query snapshot, computed once each; both are immutable, mirroring [canonicalUri]. */
     private val encodedPathText: String by lazy { components.path.toUriPathString() }
     private val queryParameterSnapshot: QueryParameters by lazy { QueryParameters.parseOrEmpty(query) }
+
+    /** Decoded fragment backing [decodedFragment], computed once; immutable, mirroring [canonicalUri]. */
+    private val decodedFragmentValue: String? by lazy { fragment?.let { PercentCodec.decode(it) } }
 
     /**
      * Percent-decodes the stored path — an opaque path whole, else each segment — backing [path].
