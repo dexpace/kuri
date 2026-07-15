@@ -28,18 +28,23 @@ import org.dexpace.kuri.host.Host
  * - [query] `null` = no `?`; `""` = `?` present with empty content ([MODEL-30]).
  * - [fragment] `null` = no `#`; `""` = `#` present with empty content ([PARSE-8]).
  *
- * [username]/[password] are the decoded userinfo halves and default to `""`
- * (absent userinfo) rather than `null`; the `Uri`/`Url` facades map them to their
- * nullable public accessors ([MODEL-13]). Held in decoded form and re-encoded under
- * the userinfo percent-encode set on serialization (§5).
+ * [username]/[password] default to `""` (absent userinfo) rather than `null`; the
+ * `Uri`/`Url` facades map them to their nullable public accessors ([MODEL-13]). Their
+ * encoding is profile-specific: for `Uri` they are a raw, unmodified pass-through of
+ * whatever the input contained — split off the userinfo span verbatim, with no decode
+ * and no encode, the same treatment as every other `Uri`-profile component; for `Url`
+ * they are already percent-encoded under the userinfo percent-encode set at parse time
+ * (§5), matching `Url.username`/`Url.password`'s own documented contract.
  *
  * As a value record this type performs no inline validation — the §7/§8 modules that
  * populate it own the component invariants (mirroring [Host] and [ComponentPath]).
  *
  * @property scheme the parsed scheme (lowercased for storage in the `Url` profile),
  *   or `null` for a `Uri` relative reference.
- * @property username the decoded userinfo user, `""` when no userinfo is present.
- * @property password the decoded userinfo password, `""` when absent or empty.
+ * @property username the userinfo user (raw for `Uri`, percent-encoded for `Url`),
+ *   `""` when no userinfo is present.
+ * @property password the userinfo password (raw for `Uri`, percent-encoded for `Url`),
+ *   `""` when absent or empty.
  * @property host the parsed host, `null` when there is no authority, [Host.Empty]
  *   for an empty authority.
  * @property port the explicit port, or `null` when unspecified / default-elided.
