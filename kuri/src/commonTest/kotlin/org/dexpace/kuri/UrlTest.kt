@@ -92,6 +92,14 @@ class UrlTest {
     }
 
     @Test
+    fun `decodedFragment is empty when the fragment is present but empty`() {
+        val url = parseOk("https://h/p#")
+
+        assertEquals("", url.fragment)
+        assertEquals("", url.decodedFragment)
+    }
+
+    @Test
     fun `decodedUsername mirrors username when there is nothing to decode`() {
         val url = parseOk("https://bob@h/p")
 
@@ -137,6 +145,16 @@ class UrlTest {
 
         assertEquals("50%25off", url.password)
         assertEquals("50%off", url.decodedPassword)
+    }
+
+    @Test
+    fun `decodedUsername and decodedPassword are empty when there is no userinfo`() {
+        val url = parseOk("https://h/p")
+
+        assertEquals("", url.username)
+        assertEquals("", url.decodedUsername)
+        assertEquals("", url.password)
+        assertEquals("", url.decodedPassword)
     }
 
     @Test

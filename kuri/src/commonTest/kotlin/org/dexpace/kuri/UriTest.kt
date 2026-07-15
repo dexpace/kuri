@@ -80,6 +80,14 @@ class UriTest {
     }
 
     @Test
+    fun `decodedFragment is empty when the fragment is present but empty`() {
+        val uri = parseOk("foo://h/p#")
+
+        assertEquals("", uri.fragment)
+        assertEquals("", uri.decodedFragment)
+    }
+
+    @Test
     fun `uriString and toString are the canonical unnormalized serialization`() {
         val input = "foo://u@h:8042/over/there?q#n"
         val uri = parseOk(input)
