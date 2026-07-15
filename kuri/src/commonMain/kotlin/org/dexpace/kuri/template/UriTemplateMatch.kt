@@ -33,7 +33,7 @@ import org.dexpace.kuri.query.QueryParameters
  * template uses an uninvertible feature.
  */
 public fun UriTemplate.match(input: String): Map<String, String>? {
-    val trailingQuery = (parts.lastOrNull() as? Part.Expression)?.takeIf { it.operator.named }
+    val trailingQuery = (parts.lastOrNull() as? Part.Expression)?.takeIf { isQueryOperator(it.operator) }
     if (trailingQuery != null && !isSupportedQuery(trailingQuery)) return null
 
     val pathParts = if (trailingQuery != null) parts.dropLast(1) else parts
@@ -93,6 +93,14 @@ private fun capturePatternFor(
         else -> null
     }
 }
+
+/**
+ * `true` only for the `?`/`&` operators — the ones that actually render as a `key=value` query string.
+ * `;` (`PARAMETER`) is also `named`, but renders as `;key=value` path segments, not a query string, so it
+ * must not be treated as the trailing query here.
+ */
+private fun isQueryOperator(operator: Operator): Boolean =
+    operator == Operator.QUERY || operator == Operator.CONTINUATION
 
 /** A trailing query expression is invertible only when every varspec is a plain name. */
 private fun isSupportedQuery(expression: Part.Expression): Boolean =

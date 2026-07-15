@@ -156,6 +156,17 @@ class UriTemplateTest {
     }
 
     @Test
+    fun `a dot is only valid strictly between two varchars`() {
+        // varname = varchar *( ["."] varchar ): a leading dot, a trailing dot, and consecutive dots are
+        // all invalid — the first varspec's leading dot is claimed by the `.` (LABEL) operator instead,
+        // so these use a second varspec, or a non-dot operator, to reach name validation with a dot first.
+        assertNull(UriTemplate.parseOrNull("{a,.b}"))
+        assertNull(UriTemplate.parseOrNull("{a,b.}"))
+        assertNull(UriTemplate.parseOrNull("{a,b..c}"))
+        assertNull(UriTemplate.parseOrNull("{+.foo}"))
+    }
+
+    @Test
     fun `percent-encoded variable names round-trip or reject malformed triplets`() {
         assertTrue(UriTemplate.parseOrNull("{va%7A}") != null)
         assertNull(UriTemplate.parseOrNull("{va%7}"))
@@ -257,5 +268,16 @@ class UriTemplateTest {
     @Test
     fun `match omits an absent trailing query variable`() {
         assertEquals(mapOf("tab" to "1"), UriTemplate.parse("/x{?tab,extra}").match("/x?tab=1"))
+    }
+
+    @Test
+    fun `match does not mistake a trailing path-style parameter expression for a query`() {
+        // Regression: `;` (PARAMETER) is `named` like `?`/`&`, but it renders as `;a=1` path segments,
+        // not a `?`-delimited query string. Treating it as "the trailing query" used to drop it from the
+        // path pattern and let an empty `queryInput` short-circuit `matchQuery` to `emptyMap()` — so
+        // matching the empty string against `{;a}` falsely reported a match with no bindings instead of
+        // correctly reporting no match at all.
+        assertNull(UriTemplate.parse("{;a}").match(""))
+        assertNull(UriTemplate.parse("{;a}").match(";a=5"))
     }
 }

@@ -87,20 +87,37 @@ private fun parsePlainOrPrefixedVarspec(
     return Varspec(name, explode = false, prefix = prefix)
 }
 
-/** Validates a varname against the RFC 6570 `varname` grammar (ASCII alnum / `_` / `.` / pct-encoded). */
+/**
+ * Validates a varname against the RFC 6570 grammar `varname = varchar *( ["."] varchar )`: a dot is
+ * accepted only strictly between two varchars, so a leading dot, a trailing dot, and consecutive dots
+ * (`.foo`, `foo.`, `a..b`) are all rejected, not just an isolated invalid character.
+ */
 private fun validateName(
     name: String,
     at: Int,
 ) {
     if (name.isEmpty()) throw UriTemplateException("empty variable name", at)
-    var i = 0
+    var i = requireVarchar(name, 0, at)
     while (i < name.length) {
-        val c = name[i]
-        when {
-            c == '%' -> i += validatePercentEncodedTriplet(name, i, at)
-            isVarchar(c) -> i++
-            else -> throw UriTemplateException("invalid character in variable name '$name'", at)
+        if (name[i] == '.') {
+            i++
+            if (i >= name.length) throw UriTemplateException("variable name '$name' cannot end in '.'", at)
         }
+        i += requireVarchar(name, i, at)
+    }
+}
+
+/** Consumes and validates one `varchar` (ALPHA / DIGIT / `_` / pct-encoded) at [i], returning its length. */
+private fun requireVarchar(
+    name: String,
+    i: Int,
+    at: Int,
+): Int {
+    val c = name[i]
+    return when {
+        c == '%' -> validatePercentEncodedTriplet(name, i, at)
+        isVarchar(c) -> 1
+        else -> throw UriTemplateException("invalid character in variable name '$name'", at)
     }
 }
 
@@ -122,6 +139,6 @@ private const val MAX_PREFIX: Int = 9999
 /** Length of a percent-encoded triplet, `%XX`. */
 private const val PERCENT_TRIPLET_LENGTH: Int = 3
 
-private fun isVarchar(c: Char): Boolean = c in 'A'..'Z' || c in 'a'..'z' || c in '0'..'9' || c == '_' || c == '.'
+private fun isVarchar(c: Char): Boolean = c in 'A'..'Z' || c in 'a'..'z' || c in '0'..'9' || c == '_'
 
 internal fun isHex(c: Char): Boolean = c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F'
