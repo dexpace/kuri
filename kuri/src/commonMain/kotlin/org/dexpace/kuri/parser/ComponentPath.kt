@@ -94,7 +94,7 @@ private const val URI_PATH_SEPARATOR: String = "/"
  * selects the absolute (`/a/b`) versus rootless (`a/b`) form, so a relative reference (`a/b`) and a
  * scheme-rootless path (`mailto:a@b`) each round-trip unchanged.
  */
-internal fun ComponentPath.Segments.toUriPathString(): String =
+internal fun ComponentPath.Segments.toSegmentsPathString(): String =
     when {
         segments.isEmpty() -> ""
         rooted -> URI_PATH_SEPARATOR + segments.joinToString(URI_PATH_SEPARATOR)
@@ -105,13 +105,14 @@ internal fun ComponentPath.Segments.toUriPathString(): String =
  * Encodes any [ComponentPath] back to its RFC 3986 §5.3 string form: an [Opaque][ComponentPath.Opaque] path
  * verbatim (no `/` guard, never dot-collapsed), else the [Segments][ComponentPath.Segments] join.
  *
- * The smart-cast `Segments` receiver dispatches to the more specific [toUriPathString] overload, so
- * this is a dispatch, not a recursion.
+ * Named distinctly from [toSegmentsPathString] (rather than overloading the same name) so dispatch
+ * never depends on the caller's static type: a `ComponentPath`-typed receiver always reaches this
+ * function, which then forwards the smart-cast `Segments` case explicitly.
  */
 internal fun ComponentPath.toUriPathString(): String =
     when (this) {
         is ComponentPath.Opaque -> path
-        is ComponentPath.Segments -> toUriPathString()
+        is ComponentPath.Segments -> toSegmentsPathString()
     }
 
 /**
@@ -352,10 +353,10 @@ internal data class BuilderPath(
      */
     fun effectivePath(hasHost: Boolean): String =
         when (rooting) {
-            PathRooting.ROOTED -> ComponentPath.Segments(segments, rooted = true).toUriPathString()
-            PathRooting.ROOTLESS -> ComponentPath.Segments(segments, rooted = false).toUriPathString()
+            PathRooting.ROOTED -> ComponentPath.Segments(segments, rooted = true).toSegmentsPathString()
+            PathRooting.ROOTLESS -> ComponentPath.Segments(segments, rooted = false).toSegmentsPathString()
             PathRooting.DEFERRED -> {
-                val rootless = ComponentPath.Segments(segments, rooted = false).toUriPathString()
+                val rootless = ComponentPath.Segments(segments, rooted = false).toSegmentsPathString()
                 if (hasHost) URI_PATH_SEPARATOR + rootless else rootless
             }
         }

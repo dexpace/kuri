@@ -43,6 +43,9 @@ internal object Ipv4Rfc3986 {
     /** Packs exactly four octets (high to low) into a single 32-bit [Int]. */
     private fun packOctets(octets: List<Int>): Int {
         require(octets.size == Ipv4.IPV4_OCTET_COUNT) { "expected four octets, got ${octets.size}" }
-        return octets.fold(0) { acc, octet -> (acc shl Ipv4.BITS_PER_OCTET) or octet }
+        return octets.fold(0) { acc, octet ->
+            val shifted = acc shl Ipv4.BITS_PER_OCTET
+            shifted or octet
+        }
     }
 }

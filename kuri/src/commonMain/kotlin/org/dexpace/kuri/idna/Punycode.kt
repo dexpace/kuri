@@ -210,7 +210,8 @@ internal object Punycode {
                 terminated = true
                 break
             }
-            output.append(digitToCodePoint(t + (q - t) % (BASE - t)))
+            val remainder = (q - t) % (BASE - t)
+            output.append(digitToCodePoint(t + remainder))
             q = (q - t) / (BASE - t)
         }
         check(terminated) { "generalized integer did not terminate" }
@@ -297,7 +298,9 @@ internal object Punycode {
             scaled /= (BASE - TMIN)
             k += BASE
         }
-        return k + ((BASE - TMIN + 1) * scaled) / (scaled + SKEW)
+        val numerator = (BASE - TMIN + 1) * scaled
+        val term = numerator / (scaled + SKEW)
+        return k + term
     }
 
     /** Clamps the digit threshold `t` for weight [k] under [bias] to `TMIN..TMAX`. */
