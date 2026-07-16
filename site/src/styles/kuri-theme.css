@@ -2,10 +2,10 @@
  * kuri docs theme.
  *
  * An original stylesheet authored for this site: the color/font/radius values match
- * the dexpace brand, but this file is not a copy of, and has no dependency on, any
- * dexpace-react source. Starlight's CSS custom-property contract (--sl-*) is the
- * documented, versioned theming surface this file overrides — see
- * @astrojs/starlight/style/props.css for the full set this project doesn't touch.
+ * the dexpace brand, but this file is an independent, from-scratch expression of them
+ * with no copied source and no external dependency. Starlight's CSS custom-property
+ * contract (--sl-*) is the documented, versioned theming surface this file overrides —
+ * see @astrojs/starlight/style/props.css for the full set this project doesn't touch.
  */
 
 @import '@fontsource-variable/sora';
