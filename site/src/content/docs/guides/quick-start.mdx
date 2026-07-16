@@ -1,0 +1,49 @@
+---
+title: Quick start
+description: Parse a URL and read its components in Kotlin or Java.
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Tabs syncKey="lang">
+  <TabItem label="Kotlin">
+    ```kotlin
+    import org.dexpace.kuri.Url
+
+    val url = Url.parse("https://Example.com:443/a/../b?q=1#frag").getOrThrow()
+
+    url.scheme                     // "https"
+    url.hostName                   // "example.com"  — lower-cased
+    url.port                       // null           — the default :443 is elided
+    url.effectivePort              // 443
+    url.pathSegments               // ["b"]          — /a/../b is resolved
+    url.queryParameters.get("q")   // "1"
+    url.toString()                 // "https://example.com/b?q=1#frag"
+    ```
+  </TabItem>
+  <TabItem label="Java">
+    Static factories, `()` accessors, no Kotlin-only syntax:
+
+    ```java
+    import org.dexpace.kuri.Url;
+
+    Url url = Url.parseOrThrow("https://Example.com:443/a/../b?q=1#frag");
+
+    url.scheme();                    // "https"
+    url.hostName();                  // "example.com"
+    url.port();                      // null (Integer)  — the default :443 is elided
+    url.effectivePort();             // 443
+    url.pathSegments();              // ["b"]
+    url.queryParameters().get("q");  // "1"
+    url.toString();                  // "https://example.com/b?q=1#frag"
+    ```
+  </TabItem>
+</Tabs>
+
+Both snippets parse the same input and read the same five things off the result: the
+lower-cased host, the elided default port versus the resolved `effectivePort`, the
+dot-segment-resolved path, and a decoded query parameter. See
+[Two models](/kuri/guides/two-models/) for why `Url` behaves this way (WHATWG canonicalization),
+and [Parsing and errors](/kuri/guides/parsing-and-errors/) for what happens on malformed input.

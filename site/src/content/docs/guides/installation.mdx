@@ -5,4 +5,65 @@ sidebar:
   order: 1
 ---
 
-Placeholder — replaced in Task 4.
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+kuri is published to **Maven Central**. The artifact id is identical across every Kotlin
+Multiplatform target — Gradle module metadata selects the right per-platform variant
+automatically.
+
+| Coordinate | Value           |
+| ---------- | --------------- |
+| Group      | `org.dexpace`   |
+| Artifact   | `kuri`          |
+| Version    | `0.1.0-alpha.1` |
+
+:::note
+kuri is in an early **alpha** series: the public API is not yet frozen and may change
+between releases. Pin to an exact version.
+:::
+
+<Tabs syncKey="buildtool">
+  <TabItem label="Gradle (Kotlin Multiplatform / JVM)">
+    Add the dependency to your common (or JVM) source set:
+
+    ```kotlin
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        implementation("org.dexpace:kuri:0.1.0-alpha.1")
+    }
+    ```
+  </TabItem>
+  <TabItem label="Maven (Java / JVM)">
+    Reference the JVM artifact explicitly:
+
+    ```xml
+    <dependency>
+      <groupId>org.dexpace</groupId>
+      <artifactId>kuri-jvm</artifactId>
+      <version>0.1.0-alpha.1</version>
+    </dependency>
+    ```
+  </TabItem>
+</Tabs>
+
+## Requirements
+
+| | |
+|---|---|
+| Java runtime | Java 8 or newer (the JVM artifact is compiled to `1.8` bytecode for broad compatibility) |
+| Kotlin consumers | Kotlin 2.0 or newer; the public API lives in common Kotlin |
+| Runtime dependencies | None beyond the Kotlin standard library |
+
+## Consuming from source
+
+To try an unreleased build, publish to your local Maven repository:
+
+```
+./gradlew publishToMavenLocal
+```
+
+then add `mavenLocal()` to your consumer's repositories — or wire a composite build with
+`includeBuild("../kuri")` in the consumer's `settings.gradle.kts`.
