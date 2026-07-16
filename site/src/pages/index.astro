@@ -1,0 +1,85 @@
+---
+import '../styles/kuri-theme.css';
+import '@fontsource-variable/sora';
+import '@fontsource-variable/space-grotesk';
+
+const installSnippet = `dependencies {
+    implementation("org.dexpace:kuri:0.1.0-alpha.1")
+}`;
+---
+
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>kuri — URI &amp; URL for Kotlin Multiplatform and Java</title>
+    <meta
+      name="description"
+      content="A standards-faithful URI and URL library for Kotlin Multiplatform and Java."
+    />
+  </head>
+  <body>
+    <main>
+      <h1>kuri</h1>
+      <p class="tagline">A standards-faithful URI and URL library for Kotlin Multiplatform and Java.</p>
+      <pre><code>{installSnippet}</code></pre>
+      <ul class="value-props">
+        <li>RFC 3986 + WHATWG URL conformance, measured against each standard's own test corpus</li>
+        <li>Kotlin Multiplatform — JVM, JS, Wasm, and native, from one common-Kotlin API</li>
+        <li>Java interop is first-class: static factories, plain accessors, no Kotlin-only syntax</li>
+      </ul>
+      <nav class="links">
+        <a href="/kuri/guides/installation/">Guides</a>
+        <a href="/kuri/api/">API reference</a>
+        <a href="https://github.com/dexpace/kuri">GitHub</a>
+      </nav>
+    </main>
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--sl-color-bg);
+        color: var(--sl-color-text);
+        font-family: var(--sl-font);
+      }
+      main {
+        max-width: 45rem;
+        margin: 0 auto;
+        padding: 4rem 1.5rem;
+      }
+      h1 {
+        font-family: 'Space Grotesk Variable', system-ui, sans-serif;
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
+      }
+      .tagline {
+        color: var(--sl-color-gray-2);
+        font-size: 1.25rem;
+      }
+      pre {
+        background: var(--sl-color-bg-inline-code);
+        border-radius: var(--kuri-radius);
+        padding: 1rem;
+        overflow-x: auto;
+      }
+      .value-props {
+        padding-left: 1.25rem;
+        line-height: 1.7;
+      }
+      .links {
+        display: flex;
+        gap: 1.5rem;
+        margin-top: 2rem;
+      }
+      .links a {
+        color: var(--sl-color-text-accent);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .links a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </body>
+</html>
