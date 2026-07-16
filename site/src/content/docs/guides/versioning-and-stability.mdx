@@ -1,0 +1,13 @@
+---
+title: Versioning and stability
+description: kuri's SemVer policy during the alpha series.
+sidebar:
+  order: 11
+---
+
+kuri follows [Semantic Versioning 2.0.0](https://semver.org/). At `0.1.0-alpha.1` the
+public API is not yet frozen and may change before `1.0.0`, and minor releases in the
+`0.x` series may carry breaking changes, so pin to an exact version. Every public
+signature is tracked in a checked-in binary-compatibility snapshot under `api/`, so an
+unintended API change fails the build — see
+[Building from source](/kuri/guides/building-from-source/).
