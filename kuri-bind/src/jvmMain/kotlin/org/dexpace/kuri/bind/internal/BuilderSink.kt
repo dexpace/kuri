@@ -86,21 +86,18 @@ internal class UrlBuilderSink(
     /**
      * Fully replaces the userinfo slot from decoded [username] and [password] (an empty or absent
      * password clears the slot), so an object's userinfo never leaks a base builder's existing
-     * password. The URL builder encodes each part under the userinfo set; the `:` separator is
-     * managed by the builder.
-     *
-     * A literal `%` in either part is escaped to `%25` first: the userinfo set doesn't reserve `%`
-     * itself, so an un-escaped `%` would read back as (or collide with) a percent-encoded escape.
+     * password. [Url.Builder.username]/[Url.Builder.password] each percent-encode under the userinfo
+     * set and escape a literal `%` themselves, so no manual escape is needed here.
      */
     override fun userInfo(
         username: String,
         password: String?,
     ) {
         require(username.isNotEmpty() || password != null) { "at least one of username or password must be present" }
-        builder.username(escapeLiteralPercent(username))
+        builder.username(username)
         // Always set the password (empty clears it) so the object's userinfo FULLY replaces a base
         // builder's slot — otherwise a username-only object would leak a base URL's existing password.
-        builder.password(password?.let { escapeLiteralPercent(it) } ?: "")
+        builder.password(password ?: "")
     }
 
     override fun hostText(value: String) {

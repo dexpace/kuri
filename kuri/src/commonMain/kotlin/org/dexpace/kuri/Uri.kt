@@ -649,9 +649,9 @@ public class Uri internal constructor(
      * string and re-parses it through the `Uri`-profile engine. Recomposition applies the RFC 3986
      * §3.3/§4.2 guards (a `./` before a colon-bearing first segment, a `/.` before a `//`-leading
      * authority-less path), so no component the caller set is silently reinterpreted, and it fails
-     * fast with [IllegalArgumentException] on unrepresentable combinations — a host-less [userInfo]
-     * or [port], or an authority paired with a non-rooted path. The produced [Uri] is therefore
-     * always a valid, canonical value. Use [Uri.newBuilder] for a pre-filled builder.
+     * fast with [IllegalArgumentException] on unrepresentable combinations — a host-less [userInfo],
+     * [username], [password], or [port], or an authority paired with a non-rooted path. The produced
+     * [Uri] is therefore always a valid, canonical value. Use [Uri.newBuilder] for a pre-filled builder.
      */
     @Suppress("TooManyFunctions") // One setter per RFC 3986 component; each is a one-liner.
     public class Builder {
@@ -730,11 +730,16 @@ public class Uri internal constructor(
          * matching [Uri.userInfo]'s own reconstruction rule. Call [userInfo] again to switch back
          * to verbatim mode.
          *
+         * A literal `%` in [username] is escaped to `%25` first, since the userinfo set does not
+         * reserve `%` itself — see [PercentCodec.escapeLiteralPercent] for the rationale.
+         * [Url.Builder.username] applies the same escape for the analogous `Url`-profile setter.
+         *
          * @param username the decoded username; `""` clears the username.
          * @return this builder, for chaining.
          */
         public fun username(username: String): Builder {
-            encodedUsername = PercentCodec.encode(escapeLiteralPercent(username), PercentEncodeSets.USERINFO)
+            val escaped = PercentCodec.escapeLiteralPercent(username)
+            encodedUsername = PercentCodec.encode(escaped, PercentEncodeSets.USERINFO)
             usesSplitUserInfo = true
             return this
         }
@@ -743,13 +748,15 @@ public class Uri internal constructor(
          * Sets the userinfo password, percent-encoding it under the userinfo set.
          *
          * As [username], switches this builder to split userinfo mode; see its doc for the
-         * priority and combination rules the two setters share.
+         * priority and combination rules the two setters share, and for the literal-`%` escape
+         * this setter also applies.
          *
          * @param password the decoded password; `""` clears the password.
          * @return this builder, for chaining.
          */
         public fun password(password: String): Builder {
-            encodedPassword = PercentCodec.encode(escapeLiteralPercent(password), PercentEncodeSets.USERINFO)
+            val escaped = PercentCodec.escapeLiteralPercent(password)
+            encodedPassword = PercentCodec.encode(escaped, PercentEncodeSets.USERINFO)
             usesSplitUserInfo = true
             return this
         }
@@ -1009,8 +1016,8 @@ public class Uri internal constructor(
          *
          * @return the [Uri] for the assembled components.
          * @throws IllegalArgumentException when the components cannot be represented as an RFC 3986
-         *   URI: a [userInfo] or [port] set without a [host], or an authority paired with a
-         *   non-rooted [encodedPath].
+         *   URI: a [userInfo], [username], [password], or [port] set without a [host], or an authority
+         *   paired with a non-rooted [encodedPath].
          * @throws UriSyntaxException when the components do not form a valid URI — a builder misuse is
          *   a programmer error rather than a recoverable parse failure.
          */
@@ -1026,8 +1033,9 @@ public class Uri internal constructor(
          *
          * The non-throwing sibling of [build]: it runs the same RFC 3986 recomposition and re-parse
          * but yields `null` for every failure [build] would raise — an unrepresentable component
-         * combination (a host-less [userInfo] or [port], or an authority with a rootless path) or a
-         * parse error — so a caller assembling untrusted input needs no `try`/`catch`.
+         * combination (a host-less [userInfo], [username], [password], or [port], or an authority
+         * with a rootless path) or a parse error — so a caller assembling untrusted input needs no
+         * `try`/`catch`.
          *
          * @return the assembled [Uri], or `null` when the components cannot form a valid URI.
          */
@@ -1053,8 +1061,9 @@ public class Uri internal constructor(
          * represent, or `null` when the accumulated components are composable.
          *
          * The single ordered source of the composability rules [build] and [buildOrNull] share, so a
-         * rule cannot drift between the throwing and the non-throwing path. `userinfo`/`port` are
-         * authority sub-components, so they require a host; a caller wanting an empty authority passes
+         * rule cannot drift between the throwing and the non-throwing path. `userinfo` (whether set
+         * verbatim via [userInfo] or split via [username]/[password]) and `port` are authority
+         * sub-components, so they require a host; a caller wanting an empty authority passes
          * `host("")`. A present authority forbids a rootless [path], which would otherwise merge into
          * the authority on re-parse; a segment-built path is already rooted by [effectivePath] when a
          * host is present, so only a verbatim rootless path can trip that rule.
@@ -1062,7 +1071,8 @@ public class Uri internal constructor(
         private fun composabilityError(path: String): String? =
             when {
                 !authorityHasHost() ->
-                    "userInfo/port require a host: set host(\"\") for an empty-authority URI, or drop them"
+                    "userInfo/username/password/port require a host: set host(\"\") for an empty-authority " +
+                        "URI, or drop them"
                 !pathFitsAuthority(path) ->
                     "a path with an authority must be empty or start with '/': $path"
                 host == null && path.startsWith("//") ->
@@ -1123,16 +1133,5 @@ public class Uri internal constructor(
             sb.append(authorityHost)
             if (port != null) sb.append(':').append(port)
         }
-
-        /**
-         * Escapes a literal `%` to `%25` before it reaches [PercentCodec.encode] under the userinfo
-         * set, which does not itself reserve `%` (SPEC §5.1.3, [PercentEncodeSets.COMPONENT] is the
-         * narrower set that does) — left unescaped, a literal `%` would pass through the encode
-         * call untouched and the strict `Uri` parser would then reject it at [build] as a malformed
-         * percent-triplet, the same hazard [addPathSegment] avoids by encoding under the wider
-         * [PercentEncodeSets.COMPONENT] set instead. This is safe from double-encoding: an
-         * already-escaped `%25` has no literal `%` left to escape a second time.
-         */
-        private fun escapeLiteralPercent(text: String): String = text.replace("%", "%25")
     }
 }
