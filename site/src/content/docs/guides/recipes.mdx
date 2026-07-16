@@ -1,0 +1,96 @@
+---
+title: Recipes
+description: Common query, path, and relativization patterns.
+sidebar:
+  order: 7
+---
+
+## Edit query parameters
+
+The builder edits follow `URLSearchParams`: `setQueryParameter` replaces,
+`addQueryParameter` appends (keeping duplicates), `removeAllQueryParameters` drops every
+match.
+
+```kotlin
+val url = Url.parseOrThrow("https://example.com/?a=1&a=2&b=3")
+    .newBuilder()
+    .setQueryParameter("a", "9")     // a=1, a=2  ->  a=9
+    .removeAllQueryParameters("b")
+    .build()                          // https://example.com/?a=9
+```
+
+Read the decoded pairs off a parsed value. `queryParameters` is duplicate-preserving;
+`get` returns the first value, and **`null` for both an absent name and a present name
+with no `=`** — use `has` or `getAll` to tell those apart.
+
+```kotlin
+val params = Url.parseOrThrow("https://h/?q=kotlin&q=jvm&flag").queryParameters
+params["q"]          // "kotlin"            — first value wins
+params.getAll("q")   // ["kotlin", "jvm"]
+params["flag"]       // null               — present, but has no '='...
+params.has("flag")   // true               — ...so check has()
+```
+
+## Multi-value query params
+
+`split(name, delimiter)` reads every pair for a name and splits each value on a
+delimiter, so a delimited list in one pair *and* repeated pairs both flatten into a
+single list. Splitting is literal and lossless — no trimming, empty tokens kept — and
+typing is just a `map`.
+
+```kotlin
+val q = Url.parseOrThrow("https://h/?roles=admin,user&perm=read|write&id=1,2&id=3").queryParameters
+q.split("roles", ',')                  // ["admin", "user"]
+q.split("perm", '|')                   // ["read", "write"]
+q.split("id", ',')                     // ["1", "2", "3"]   — pairs and delimiters both flatten
+q.split("id", ',').map(String::toInt)  // [1, 2, 3]         — conversion is just map()
+```
+
+The `Uri` profile computes its query on demand, so there it is a method —
+`uri.queryParameters()` — rather than a property.
+
+## Form encoding
+
+`toQueryString()` emits the generic `%20` dialect; `toFormUrlEncoded()` emits the HTML
+form dialect (space as `+`). `parse` reads a URL query; `parseForm` reads a form body.
+`of(Map)` collapses duplicate names, while `of(vararg QueryParameter)` preserves them.
+
+```kotlin
+import org.dexpace.kuri.query.QueryParameter
+import org.dexpace.kuri.query.QueryParameters
+
+val q = QueryParameters.of(QueryParameter("full name", "Ada Lovelace"))
+q.toQueryString()                                    // "full%20name=Ada%20Lovelace"
+q.toFormUrlEncoded()                                 // "full+name=Ada+Lovelace"
+QueryParameters.parseForm("a=b+c&a=d").getAll("a")   // ["b c", "d"]   — '+' decodes to space
+```
+
+## Edit the path
+
+Add or replace decoded segments — each is percent-encoded for you. `path` is the decoded
+path; `encodedPath` is the raw one.
+
+```kotlin
+val uri = Uri.parseOrThrow("http://h/a/b/c")
+    .newBuilder()
+    .setPathSegment(1, "x y")        // the space is encoded
+    .build()
+uri.encodedPath      // "/a/x%20y/c"
+uri.path             // "/a/x y/c"          — decoded
+uri.fileName()       // "c"
+```
+
+## Relativize
+
+`Uri.relativize` inverts `resolve`: it returns a reference that resolves back to the
+target against the same base, or `null` when there is no relative form (a differing
+scheme or authority, or an opaque path on either side). `Url.relativize` is the same,
+returning a `String?`.
+
+```kotlin
+val base = Uri.parseOrThrow("http://h/a/b/")
+val rel = base.relativize(Uri.parseOrThrow("http://h/a/b/c/d"))
+    ?: error("no relative form")     // a relative Uri, or null when none resolves back
+rel.uriString                        // "c/d"
+base.resolveOrThrow(rel.uriString)   // http://h/a/b/c/d  — round-trips to the target
+```
