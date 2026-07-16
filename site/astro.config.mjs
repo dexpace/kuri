@@ -22,7 +22,7 @@ export default defineConfig({
           label: 'Reference',
           items: [
             { label: 'Specification', slug: 'spec' },
-            { label: 'API reference', link: '/kuri/api/', attrs: { target: '_blank', rel: 'noopener' } },
+            { label: 'API reference', link: '/api/', attrs: { target: '_blank', rel: 'noopener' } },
           ],
         },
       ],
