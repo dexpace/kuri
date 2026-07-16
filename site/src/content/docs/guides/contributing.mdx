@@ -1,0 +1,15 @@
+---
+title: Contributing
+description: What a pull request needs before it can merge.
+sidebar:
+  order: 13
+---
+
+Issues and pull requests are welcome on the
+[project repository](https://github.com/dexpace/kuri). `./gradlew build` must pass — the
+full quality gate and the conformance baselines included — before a change can merge, and
+a public-API change must commit the regenerated `api/` snapshot (see
+[Building from source](/kuri/guides/building-from-source/)). New or changed behavior
+should be grounded in the relevant standard and reflected in
+[`docs/SPEC.md`](/kuri/spec/). Commits and pull-request titles use the `feat:` / `fix:` /
+`test:` / `docs:` / `chore:` prefix convention.
