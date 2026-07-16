@@ -1,0 +1,59 @@
+---
+title: Parsing and errors
+description: The four parse entry points, structured errors, and non-fatal validation warnings.
+sidebar:
+  order: 4
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Parsing never throws: every `parse` returns a `ParseResult<T>` — errors are values — and
+you choose how to consume it.
+
+```kotlin
+Url.parse(input)                 // ParseResult<Url>  (Ok or Err)
+Url.parseOrNull(input)           // Url?
+Url.parseOrThrow(input)          // Url, or throws UriSyntaxException
+Url.canParse(input)              // Boolean
+```
+
+`ParseResult` is a sealed type, so a `when` over it is exhaustive without an `else`, and
+the `Err` branch hands you the structured `UriParseError`.
+
+<Tabs syncKey="lang">
+  <TabItem label="Kotlin">
+    ```kotlin
+    import org.dexpace.kuri.error.ParseResult
+
+    when (val result = Url.parse("https://example.com/")) {
+        is ParseResult.Ok -> result.value.hostName    // "example.com"
+        is ParseResult.Err -> result.error.message     // human-readable reason
+    }
+    ```
+  </TabItem>
+  <TabItem label="Java">
+    Let the throwing factory raise `UriSyntaxException` and read the structured `error`
+    off it (or branch on `result instanceof ParseResult.Err`):
+
+    ```java
+    import org.dexpace.kuri.Url;
+    import org.dexpace.kuri.error.UriSyntaxException;
+
+    try {
+        Url.parseOrThrow("://no-scheme");   // throws on a malformed input
+    } catch (UriSyntaxException e) {
+        e.getError();     // the structured UriParseError
+        e.getMessage();   // its human-readable rendering
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+`getOrNull()` punts a failure to `null` from either language when you don't need the reason.
+
+## Non-fatal validation warnings
+
+Separately from fatal errors, `Url.validationErrors()` lists the non-fatal WHATWG
+anomalies a lenient parse silently repaired — a `\` read as `/`, a stripped tab — for
+linting or telemetry, never for control flow: a validation error never downgrades a
+successful parse.

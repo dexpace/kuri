@@ -1,0 +1,64 @@
+---
+title: Two models, one engine
+description: When to use Uri versus Url, and where their behavior deliberately differs.
+sidebar:
+  order: 3
+---
+
+kuri models two different specifications on one parsing engine.
+
+| | `Uri` | `Url` |
+|---|---|---|
+| Standard | RFC 3986 (RFC 3987-aware) | WHATWG URL |
+| Posture | preserve the input; normalize on request | canonicalize eagerly |
+| Scheme | any, and may be absent (relative reference) | always present; special schemes known |
+| Host | reg-name / IPv4 / IPv6 / IP-future | IDNA, IPv4 shorthand, opaque hosts |
+| Equality | structural, plus `normalizedEquals()` for RFC §6.2 | on the canonical serialization |
+
+`Url.toUri()` is near-lossless; `Uri.toUrl()` may fail when a generic URI is not a valid
+web URL.
+
+## Which do I use?
+
+- **`Url`** for WHATWG web URLs — `http` / `https` / `ws` / `wss` / `file`, the input a
+  browser or HTTP client hands you. It canonicalizes eagerly and always carries a scheme
+  (and, for a special scheme, a host).
+- **`Uri`** for RFC 3986 generic identifiers — `urn:`, `mailto:`, custom schemes, and
+  relative references. It preserves the input exactly and normalizes only when you ask,
+  via `uri.normalized()`.
+
+A few accessors differ between the profiles by design — getting them wrong is a common trap:
+
+| Reading | `Uri` (RFC 3986) | `Url` (WHATWG) |
+|---|---|---|
+| `port` | preserved verbatim | `null` when elided **or** equal to the scheme default |
+| port with no scheme default | `effectivePort()` → `null` | `effectivePort` → `-1` |
+| opaque origin | — | `origin` is the literal string `"null"`; test `hasOpaqueOrigin()` |
+
+Across both, `host` is the structured `Host` ADT and `hostName` is its serialized text; to
+render a `Host` you hold, call `host.asText()`.
+
+## Zone identifiers (RFC 6874)
+
+IPv6 zone identifiers are off by default and opt-in on the `Uri` profile only — the `Url`
+(WHATWG) profile always rejects them.
+
+```kotlin
+val options = ParseOptions.Builder().allowIpv6ZoneId(true).build()
+val uri = Uri.parse("http://[fe80::1%25eth0]/", options).getOrThrow()
+```
+
+## Internationalized identifiers (RFC 3987)
+
+For the `Uri` profile, IRI↔URI conversion is available through the `Iri` facility —
+`Iri.toUri(iri)` maps an IRI to its ASCII `Uri` and `Iri.toUnicode(uri)` renders the
+Unicode form; the `Url` profile applies host IDNA (UTS #46) by default.
+
+```kotlin
+import org.dexpace.kuri.Iri
+
+// toUri returns a ParseResult<Uri>; the mapped Uri is fully ASCII.
+val uri = Iri.toUri("http://bücher.example/qué").getOrThrow()
+uri.toString()          // host becomes Punycode (xn--…), non-ASCII path bytes percent-encoded
+Iri.toUnicode(uri)      // "http://bücher.example/qué" — best-effort Unicode display form
+```
