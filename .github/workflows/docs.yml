@@ -48,11 +48,27 @@ jobs:
           rm -rf site/public/api
           mkdir -p site/public/api
           cp -r kuri/build/dokka/html/. site/public/api/
+      - uses: oven-sh/setup-bun@v2
+      - name: Type-check content collections
+        working-directory: site
+        run: |
+          bun install --frozen-lockfile
+          bun run check
       - name: Install, build, and upload the site
         uses: withastro/action@v6
         with:
           path: site
           package-manager: bun
+      - name: Check internal links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --offline
+            --no-progress
+            --exclude-mail
+            --base site/dist
+            'site/dist/**/*.html'
+          fail: true
 
   deploy:
     name: Deploy to GitHub Pages
