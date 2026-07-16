@@ -189,6 +189,12 @@ dokka {
             "src/commonMain/kotlin/org/dexpace/kuri/query/package.md",
         )
     }
+
+    // Re-skins the generated HTML with kuri's brand colors (see ../docs/dokka-theme.css) so the
+    // API reference doesn't look like a stock Dokka site dropped into the themed docs site.
+    pluginsConfiguration.html {
+        customStyleSheets.from(rootProject.file("docs/dokka-theme.css"))
+    }
 }
 
 // Keep the code-generated version constant out of the ktlint set: it is machine-written, carries its

@@ -1,0 +1,31 @@
+/*
+ * kuri Dokka theme — overrides Dokka's own CSS custom properties (see
+ * kuri/build/dokka/html/styles/style.css) with kuri's brand colors. An independent,
+ * from-scratch stylesheet with no copied source and no external dependency — see
+ * site/src/styles/kuri-theme.css for the site-wide equivalent this mirrors.
+ */
+
+:root {
+  --background-color: #ffffff;
+  --color-dark: #15131f;
+  --default-font-color: #15131f;
+  --header-font-color: var(--default-font-color);
+  --hover-link-color: #3f5bd6;
+  --border-color: rgba(21, 19, 31, 0.12);
+  --code-background: rgba(21, 19, 31, 0.05);
+  --active-tab-border-color: #3f5bd6;
+  --active-section-color: #3f5bd6;
+  --sidemenu-section-active-color: #3f5bd6;
+}
+
+.theme-dark {
+  --background-color: #0c0a14;
+  --color-dark: #f3f1f7;
+  --default-font-color: rgba(243, 241, 247, 0.96);
+  --border-color: hsla(0, 0%, 100%, 0.15);
+  --code-background: hsla(0, 0%, 100%, 0.05);
+  --hover-link-color: #7e8dff;
+  --active-tab-border-color: #7e8dff;
+  --active-section-color: #7e8dff;
+  --sidemenu-section-active-color: #7e8dff;
+}
