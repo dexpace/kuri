@@ -1,0 +1,61 @@
+---
+title: Utilities
+description: Percent-coding, IDNA, and scheme-fact facades usable on their own.
+sidebar:
+  order: 6
+---
+
+The parsing engine's building blocks are public as small facades, for when you need one
+component rather than a whole reference. All are `object`/`static` methods that read the
+same from Kotlin and Java.
+
+## Percent-coding
+
+`Percent.encode` escapes for a chosen component; `Percent.decode` is lenient (a malformed
+`%` is left verbatim) and total. `Component.COMPONENT` is the strict `encodeURIComponent`
+set; `PATH_SEGMENT` leaves `/` unescaped.
+
+```kotlin
+import org.dexpace.kuri.percent.Percent
+
+Percent.encode("a b/c", Percent.Component.COMPONENT)    // "a%20b%2Fc"
+Percent.encode("/", Percent.Component.PATH_SEGMENT)     // "/"       — a slash is data in one segment
+Percent.decode("a%2Fb")                                 // "a/b"
+```
+
+## IDNA (UTS-46)
+
+`Idn.toAscii` is fallible — it returns a `ParseResult` — while `Idn.toUnicode` is
+best-effort and total.
+
+```kotlin
+import org.dexpace.kuri.idna.Idn
+
+Idn.toAscii("bücher.example").getOrNull()   // "xn--bcher-kva.example"
+Idn.toUnicode("xn--bcher-kva.example")      // "bücher.example"
+```
+
+## Scheme facts
+
+Profile-independent, case-insensitive, and total.
+
+```kotlin
+import org.dexpace.kuri.scheme.Schemes
+
+Schemes.defaultPort("https")   // 443
+Schemes.defaultPort("file")    // null   — special, but portless
+Schemes.isSpecial("http2")     // false
+Schemes.isValid("mailto")      // true
+```
+
+## From Java
+
+The same three facades are plain statics; `Kuri.VERSION` reports the running release
+(kuri has no facade type — start from `Url` or `Uri`):
+
+```java
+Percent.encode("a b/c", Percent.Component.COMPONENT);  // "a%20b%2Fc"
+Idn.toAscii("bücher.example").getOrNull();             // "xn--bcher-kva.example"
+Schemes.defaultPort("https");                          // 443 (Integer)
+String version = Kuri.VERSION;                          // e.g. "0.1.0-alpha.1"
+```
