@@ -1,4 +1,5 @@
 dist/
 .astro/
 node_modules/
-public/api/
+public/api/*
+!public/api/.gitkeep
