@@ -1,0 +1,78 @@
+---
+title: Standards and conformance
+description: Which specifications kuri implements, and how conformance is measured.
+sidebar:
+  order: 9
+---
+
+kuri implements the standards below; conformance against each is measured by the test
+corpus each standard ships with.
+
+## Core syntax
+
+| Standard | Governs | Compliance | Support |
+|---|---|---|---|
+| [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986) (STD 66) | URI generic syntax; the `Uri` model and parsing authority | Conformant | Default |
+| [RFC 3987](https://www.rfc-editor.org/rfc/rfc3987) | IRIs — one-way `Iri` mapping, not a validating parser* | Supported | Default |
+| [WHATWG URL Standard](https://url.spec.whatwg.org/) | the `Url` model — parser, special schemes, canonical serialization | Conformant | Default |
+
+\* kuri maps IRIs to URIs one-way (RFC 3987 §3.1/§3.2), rejecting a §2.2
+`ucschar`/`iprivate` repertoire violation and a §4.1 bidi formatting character; it does
+not enforce §4.2's per-component directionality restriction, which the RFC itself states
+as a SHOULD, not a MUST.
+
+## Hosts, internationalization, and IP addresses
+
+| Standard | Governs | Compliance | Support |
+|---|---|---|---|
+| [UTS #46](https://www.unicode.org/reports/tr46/) | Unicode IDNA Compatibility Processing (host ToASCII / ToUnicode) | Ratcheting | Default |
+| [RFC 5891](https://www.rfc-editor.org/rfc/rfc5891) | Internationalized Domain Names in Applications (IDNA2008) — protocol | Ratcheting | Default |
+| [RFC 5892](https://www.rfc-editor.org/rfc/rfc5892) | IDNA2008 — Unicode code points and derived properties | Ratcheting | Default |
+| [RFC 3492](https://www.rfc-editor.org/rfc/rfc3492) | Punycode — the Bootstring encoding of Unicode | Conformant | Default |
+| [UAX #15](https://www.unicode.org/reports/tr15/) | Unicode Normalization Forms (NFC) | Conformant | Default |
+| [RFC 5952](https://www.rfc-editor.org/rfc/rfc5952) | IPv6 address text representation (canonical form) | Conformant | Default |
+| [RFC 6874](https://www.rfc-editor.org/rfc/rfc6874) | IPv6 zone identifiers in URLs | Opt-in | Opt-in |
+
+## Query
+
+| Standard | Governs | Compliance | Support |
+|---|---|---|---|
+| [`application/x-www-form-urlencoded`](https://url.spec.whatwg.org/#application/x-www-form-urlencoded) | Form-encoded query parsing and serialization | Conformant | Default |
+
+## Notation and requirement levels
+
+| Standard | Governs | Compliance | Support |
+|---|---|---|---|
+| [RFC 5234](https://www.rfc-editor.org/rfc/rfc5234) (STD 68) | ABNF — the grammar notation used by the specification | Notation | — |
+| [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) · [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174) (BCP 14) | Requirement-level keywords (MUST / SHOULD / MAY) | Notation | — |
+
+**Compliance** — *Conformant*: passes the standard's conformance corpus, or its
+controlling table, with no known failures · *Ratcheting*: conformant except for cases
+pinned in the known-failures baseline, which can only shrink · *Opt-in*: conformant when
+explicitly enabled · *Supported*: implemented as an input dialect, not measured by a
+dedicated corpus · *Notation*: used to author the specification, with no runtime behavior
+to conform to.
+
+**Support** — *Default*: active in the default configuration of both profiles ·
+*Opt-in*: available behind an explicit flag, off by default · *—*: not applicable.
+
+## Conformance results
+
+Behavior is checked against the conformance corpora the standards ship with:
+
+| Suite | Result |
+|---|---|
+| WHATWG `urltestdata.json` — parsing | 888 / 888 |
+| WHATWG `urltestdata.json` — parse → serialize (`href`) | 621 / 621 |
+| IDNA `IdnaTestV2` + `toascii` | 2756 / 2760 |
+| Unicode `NormalizationTest.txt` (NFC) | 20 034 / 20 034 |
+| RFC 3986 §5.4 reference resolution | all rows |
+| WHATWG `urlencoded-parser.any.js` — form parsing | 35 / 35 |
+
+Any case that does not yet pass is pinned in a checked-in known-failures baseline; the
+build fails if a passing case later regresses.
+
+:::note
+These results are a snapshot taken when this page was written. For the exact current
+counts, see the badges and tables in the [project README](https://github.com/dexpace/kuri#standards).
+:::
