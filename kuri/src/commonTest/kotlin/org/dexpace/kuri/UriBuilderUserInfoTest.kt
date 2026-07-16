@@ -10,10 +10,11 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 /**
- * [Uri.Builder]'s userinfo handling: the "authority requires a host" guard shared by [Uri.Builder.userInfo]
- * and [Uri.Builder.port], and the split ([Uri.Builder.username]/[Uri.Builder.password]) vs. verbatim
- * ([Uri.Builder.userInfo]) mode transitions. Split out of `UriBuilderTest` to keep that class within the
- * detekt `LargeClass` size budget.
+ * [Uri.Builder]'s userinfo handling: the "authority requires a host" guard shared by
+ * [Uri.Builder.userInfo], [Uri.Builder.username], [Uri.Builder.password], and [Uri.Builder.port],
+ * and the split ([Uri.Builder.username]/[Uri.Builder.password]) vs. verbatim ([Uri.Builder.userInfo])
+ * mode transitions. Split out of `UriBuilderTest` to keep that class within the detekt `LargeClass`
+ * size budget.
  */
 class UriBuilderUserInfoTest {
     @Test
@@ -160,6 +161,39 @@ class UriBuilderUserInfoTest {
                 .encodedPath("/p")
                 .build()
         }
+    }
+
+    @Test
+    fun `password without a host is rejected`() {
+        assertFailsWith<IllegalArgumentException> {
+            Uri
+                .Builder()
+                .password("pw")
+                .encodedPath("/p")
+                .build()
+        }
+    }
+
+    @Test
+    fun `username with an empty host is allowed`() {
+        val uri =
+            Uri
+                .Builder()
+                .username("u")
+                .host("")
+                .encodedPath("/p")
+                .build()
+
+        assertEquals("//u@/p", uri.uriString)
+    }
+
+    @Test
+    fun `username on a builder seeded from a parsed Uri overrides the inherited verbatim userInfo`() {
+        val source = Uri.parseOrThrow("foo://old:pw@h/p")
+
+        val uri = source.newBuilder().username("new").build()
+
+        assertEquals("new", uri.userInfo)
     }
 
     @Test

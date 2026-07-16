@@ -4,6 +4,7 @@
  */
 package org.dexpace.kuri.bind
 
+import org.dexpace.kuri.percent.Percent
 import java.math.BigDecimal
 import java.time.Instant
 import java.util.UUID
@@ -501,6 +502,33 @@ private class PercentValue(
     @Query("q") val q: String = "a%2Bb",
 )
 
+// As [PercentValue], but on the `@Uri` profile: no `@Uri` fixture elsewhere in this file exercises
+// `@Query`, so this proves the same query-value escape end-to-end for that profile too.
+@Uri
+private class UriPercentValue(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Query("q") val q: String = "a%2Bb",
+)
+
+// As [UrlCreds], but with a literal `%` in each credential: proves the builder-level escape
+// (BuilderSinkTest's direct-Sink coverage) also holds through the full annotation-binding path.
+@Url
+private class UrlCredsPercent(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Username val user: String = "50%",
+    @Password val pass: String = "60%",
+)
+
+// As [UriCreds], but with a literal `%` in each half of the userinfo token.
+@Uri
+private class UriCredsPercent(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @UserInfo val creds: String = "50%:60%",
+)
+
 // A delimited `@Query` list: its elements join into one comma-separated parameter value instead of
 // fanning out, and `QueryParameters.split` (core, `feat/query-value-split`) is its read-side inverse.
 @Url
@@ -944,6 +972,34 @@ class IntegrationTest {
 
         assertEquals("q=a%252Bb", url.query)
         assertEquals("a%2Bb", url.queryParameters.get("q"))
+    }
+
+    @Test
+    fun `escapes a literal percent sign in a uri profile query value so it round-trips through decode`() {
+        // As above, but through the `@Uri` profile end-to-end path — no other `@Uri` fixture in this
+        // file exercises `@Query` at all.
+        val uri = KuriBind.toUri(UriPercentValue())
+
+        assertEquals("q=a%252Bb", uri.query)
+        assertEquals("a%2Bb", uri.queryParameters().get("q"))
+    }
+
+    @Test
+    fun `pairs a literal percent sign in sibling username and password into split url userinfo`() {
+        val url = KuriBind.toUrl(UrlCredsPercent())
+
+        assertEquals("50%", url.decodedUsername)
+        assertEquals("60%", url.decodedPassword)
+    }
+
+    @Test
+    fun `encodes a literal percent sign in a whole userinfo token on the uri profile`() {
+        val uri = KuriBind.toUri(UriCredsPercent())
+        val userInfo = requireNotNull(uri.userInfo)
+        val (user, pass) = userInfo.split(':', limit = 2)
+
+        assertEquals("50%", Percent.decode(user))
+        assertEquals("60%", Percent.decode(pass))
     }
 
     @Test
