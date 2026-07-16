@@ -108,6 +108,30 @@ class UrlBuilderTest {
     }
 
     @Test
+    fun `a literal percent sign in a builder username is escaped rather than left bare`() {
+        val rebuilt =
+            parseOk("https://example.com/")
+                .newBuilder()
+                .username("50%")
+                .build()
+
+        assertEquals("50%25", rebuilt.username)
+        assertEquals("50%", rebuilt.decodedUsername)
+    }
+
+    @Test
+    fun `a literal percent sign in a builder password is escaped rather than left bare`() {
+        val rebuilt =
+            parseOk("https://example.com/")
+                .newBuilder()
+                .password("50%")
+                .build()
+
+        assertEquals("50%25", rebuilt.password)
+        assertEquals("50%", rebuilt.decodedPassword)
+    }
+
+    @Test
     fun `encodedPath replaces the whole path`() {
         val rebuilt = parseOk("https://example.com/a/b").newBuilder().encodedPath("/c/d").build()
 

@@ -143,6 +143,11 @@ public class Uri internal constructor(
     public val fragment: String?
         get() = components.fragment
 
+    /** The decoded fragment (percent-decoded [fragment]), or `null` when no `#` was present. */
+    @get:JvmName("decodedFragment")
+    public val decodedFragment: String?
+        get() = decodedFragmentValue
+
     /** The `[userinfo@]host[:port]` authority, or `null` when the URI has no authority. */
     @get:JvmName("authority")
     public val authority: String?
@@ -528,6 +533,9 @@ public class Uri internal constructor(
     private val encodedPathText: String by lazy { components.path.toUriPathString() }
     private val queryParameterSnapshot: QueryParameters by lazy { QueryParameters.parseOrEmpty(query) }
 
+    /** Decoded fragment backing [decodedFragment], computed once; immutable, mirroring [canonicalUri]. */
+    private val decodedFragmentValue: String? by lazy { fragment?.let { PercentCodec.decode(it) } }
+
     /**
      * Percent-decodes the stored path — an opaque path whole, else each segment — backing [path].
      *
@@ -641,14 +649,17 @@ public class Uri internal constructor(
      * string and re-parses it through the `Uri`-profile engine. Recomposition applies the RFC 3986
      * §3.3/§4.2 guards (a `./` before a colon-bearing first segment, a `/.` before a `//`-leading
      * authority-less path), so no component the caller set is silently reinterpreted, and it fails
-     * fast with [IllegalArgumentException] on unrepresentable combinations — a host-less [userInfo]
-     * or [port], or an authority paired with a non-rooted path. The produced [Uri] is therefore
-     * always a valid, canonical value. Use [Uri.newBuilder] for a pre-filled builder.
+     * fast with [IllegalArgumentException] on unrepresentable combinations — a host-less [userInfo],
+     * [username], [password], or [port], or an authority paired with a non-rooted path. The produced
+     * [Uri] is therefore always a valid, canonical value. Use [Uri.newBuilder] for a pre-filled builder.
      */
     @Suppress("TooManyFunctions") // One setter per RFC 3986 component; each is a one-liner.
     public class Builder {
         private var scheme: String? = null
         private var userInfo: String? = null
+        private var encodedUsername: String = ""
+        private var encodedPassword: String = ""
+        private var usesSplitUserInfo: Boolean = false
         private var host: String? = null
         private var port: Int? = null
 
@@ -694,10 +705,59 @@ public class Uri internal constructor(
         /**
          * Sets or clears the raw `userinfo` component (without its trailing `@`), kept verbatim.
          *
+         * Switches this builder back to verbatim mode: a [username]/[password] pair set earlier is
+         * discarded from the built authority in favour of [userInfo], matching last-setter-wins. The
+         * discarded pair is also cleared from the split-mode state, so a later [username] or
+         * [password] call made alone (without re-setting the other) starts from `""` rather than
+         * leaking the value this call just discarded.
+         *
          * @param userInfo the encoded userinfo (e.g. `user` or `user:password`), or `null` to clear it.
          */
         public fun userInfo(userInfo: String?): Builder {
             this.userInfo = userInfo
+            usesSplitUserInfo = false
+            encodedUsername = ""
+            encodedPassword = ""
+            return this
+        }
+
+        /**
+         * Sets the userinfo username, percent-encoding it under the userinfo set.
+         *
+         * Switches this builder to split userinfo mode: the username/password pair accumulated
+         * through this and [password] takes priority at [build] over a verbatim [userInfo] set
+         * earlier, and the two are joined with `:` — an empty password collapses to no colon,
+         * matching [Uri.userInfo]'s own reconstruction rule. Call [userInfo] again to switch back
+         * to verbatim mode.
+         *
+         * A literal `%` in [username] is escaped to `%25` first, since the userinfo set does not
+         * reserve `%` itself — see [PercentCodec.escapeLiteralPercent] for the rationale.
+         * [Url.Builder.username] applies the same escape for the analogous `Url`-profile setter.
+         *
+         * @param username the decoded username; `""` clears the username.
+         * @return this builder, for chaining.
+         */
+        public fun username(username: String): Builder {
+            val escaped = PercentCodec.escapeLiteralPercent(username)
+            encodedUsername = PercentCodec.encode(escaped, PercentEncodeSets.USERINFO)
+            usesSplitUserInfo = true
+            return this
+        }
+
+        /**
+         * Sets the userinfo password, percent-encoding it under the userinfo set.
+         *
+         * As [username], switches this builder to split userinfo mode; see its doc for the
+         * priority and combination rules the two setters share, and for the literal-`%` escape
+         * this setter also applies.
+         *
+         * @param password the decoded password; `""` clears the password.
+         * @return this builder, for chaining.
+         */
+        public fun password(password: String): Builder {
+            val escaped = PercentCodec.escapeLiteralPercent(password)
+            encodedPassword = PercentCodec.encode(escaped, PercentEncodeSets.USERINFO)
+            usesSplitUserInfo = true
             return this
         }
 
@@ -956,8 +1016,8 @@ public class Uri internal constructor(
          *
          * @return the [Uri] for the assembled components.
          * @throws IllegalArgumentException when the components cannot be represented as an RFC 3986
-         *   URI: a [userInfo] or [port] set without a [host], or an authority paired with a
-         *   non-rooted [encodedPath].
+         *   URI: a [userInfo], [username], [password], or [port] set without a [host], or an authority
+         *   paired with a non-rooted [encodedPath].
          * @throws UriSyntaxException when the components do not form a valid URI — a builder misuse is
          *   a programmer error rather than a recoverable parse failure.
          */
@@ -973,8 +1033,9 @@ public class Uri internal constructor(
          *
          * The non-throwing sibling of [build]: it runs the same RFC 3986 recomposition and re-parse
          * but yields `null` for every failure [build] would raise — an unrepresentable component
-         * combination (a host-less [userInfo] or [port], or an authority with a rootless path) or a
-         * parse error — so a caller assembling untrusted input needs no `try`/`catch`.
+         * combination (a host-less [userInfo], [username], [password], or [port], or an authority
+         * with a rootless path) or a parse error — so a caller assembling untrusted input needs no
+         * `try`/`catch`.
          *
          * @return the assembled [Uri], or `null` when the components cannot form a valid URI.
          */
@@ -1000,8 +1061,9 @@ public class Uri internal constructor(
          * represent, or `null` when the accumulated components are composable.
          *
          * The single ordered source of the composability rules [build] and [buildOrNull] share, so a
-         * rule cannot drift between the throwing and the non-throwing path. `userinfo`/`port` are
-         * authority sub-components, so they require a host; a caller wanting an empty authority passes
+         * rule cannot drift between the throwing and the non-throwing path. `userinfo` (whether set
+         * verbatim via [userInfo] or split via [username]/[password]) and `port` are authority
+         * sub-components, so they require a host; a caller wanting an empty authority passes
          * `host("")`. A present authority forbids a rootless [path], which would otherwise merge into
          * the authority on re-parse; a segment-built path is already rooted by [effectivePath] when a
          * host is present, so only a verbatim rootless path can trip that rule.
@@ -1009,7 +1071,8 @@ public class Uri internal constructor(
         private fun composabilityError(path: String): String? =
             when {
                 !authorityHasHost() ->
-                    "userInfo/port require a host: set host(\"\") for an empty-authority URI, or drop them"
+                    "userInfo/username/password/port require a host: set host(\"\") for an empty-authority " +
+                        "URI, or drop them"
                 !pathFitsAuthority(path) ->
                     "a path with an authority must be empty or start with '/': $path"
                 host == null && path.startsWith("//") ->
@@ -1019,11 +1082,32 @@ public class Uri internal constructor(
                 else -> null
             }
 
-        /** True when a [host] is present, or neither [userInfo] nor [port] (which require one) is set. */
-        private fun authorityHasHost(): Boolean = host != null || (userInfo.isNullOrEmpty() && port == null)
+        /** True when a [host] is present, or neither the effective userinfo nor [port] (which require one) is set. */
+        private fun authorityHasHost(): Boolean = host != null || (effectiveUserInfoIsEmpty() && port == null)
 
         /** True when [path] fits beside the current authority: no host, or an empty or rooted path. */
         private fun pathFitsAuthority(path: String): Boolean = host == null || path.isEmpty() || path.startsWith(SLASH)
+
+        /**
+         * True when the userinfo this builder would emit is empty — whichever representation
+         * ([usesSplitUserInfo] or verbatim [userInfo]) is currently active, mirroring the choice
+         * [appendAuthority] makes.
+         */
+        private fun effectiveUserInfoIsEmpty(): Boolean =
+            if (usesSplitUserInfo) combinedUserInfo() == null else userInfo.isNullOrEmpty()
+
+        /**
+         * Joins the split-mode [encodedUsername]/[encodedPassword] into one `userinfo` string for
+         * [appendAuthority], or `null` when both are empty — an empty password collapses to no
+         * colon, the same convention [Uri.reconstructUserInfo] applies when reading a parsed value
+         * back.
+         */
+        private fun combinedUserInfo(): String? =
+            when {
+                encodedUsername.isEmpty() && encodedPassword.isEmpty() -> null
+                encodedPassword.isEmpty() -> encodedUsername
+                else -> "$encodedUsername:$encodedPassword"
+            }
 
         /** The path [recompose] serializes, resolving the [BuilderPath] rooting against the current authority. */
         private fun effectivePath(): String = path.effectivePath(host != null)
@@ -1043,8 +1127,9 @@ public class Uri internal constructor(
         /** Appends `//[userinfo@]host[:port]` for a present authority (RFC 3986 §3.2). */
         private fun appendAuthority(sb: StringBuilder) {
             val authorityHost = requireNotNull(host) { "authority requires a host" }
+            val effectiveUserInfo = if (usesSplitUserInfo) combinedUserInfo() else userInfo
             sb.append(SLASH).append(SLASH)
-            if (!userInfo.isNullOrEmpty()) sb.append(userInfo).append('@')
+            if (!effectiveUserInfo.isNullOrEmpty()) sb.append(effectiveUserInfo).append('@')
             sb.append(authorityHost)
             if (port != null) sb.append(':').append(port)
         }

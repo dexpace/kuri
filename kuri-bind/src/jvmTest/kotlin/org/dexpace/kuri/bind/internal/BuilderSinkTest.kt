@@ -6,6 +6,7 @@ package org.dexpace.kuri.bind.internal
 
 import org.dexpace.kuri.Uri
 import org.dexpace.kuri.Url
+import org.dexpace.kuri.percent.Percent
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -96,5 +97,138 @@ class BuilderSinkTest {
         sink.addQueryParameter("k", "v")
         val uri = b.build()
         assertEquals("https://h?k=v", uri.toString())
+    }
+
+    // A literal '%' in a decoded value must survive as data, not be misread as a percent-escape
+    // introducer, once it reaches the wire — the query/fragment/userinfo encode sets don't reserve
+    // '%' themselves (issue #76).
+
+    @Test
+    fun `url sink escapes a literal percent in a query value so it reads back literally`() {
+        val b = Url.Builder().scheme("https").host("h")
+        val sink = UrlBuilderSink(b)
+        sink.addQueryParameter("q", "100%3Doff")
+        val url = b.build()
+        assertEquals("100%3Doff", url.queryParameters.get("q"))
+    }
+
+    @Test
+    fun `uri sink escapes a literal percent in a query value so it reads back literally`() {
+        val b = Uri.Builder().scheme("https").host("h")
+        val sink = UriBuilderSink(b)
+        sink.addQueryParameter("q", "100%3Doff")
+        val uri = b.build()
+        assertEquals("100%3Doff", uri.queryParameters().get("q"))
+    }
+
+    @Test
+    fun `url sink escapes a literal percent in a query parameter name so it reads back literally`() {
+        val b = Url.Builder().scheme("https").host("h")
+        val sink = UrlBuilderSink(b)
+        sink.addQueryParameter("100%3Doff", "v")
+        val url = b.build()
+        assertEquals("v", url.queryParameters.get("100%3Doff"))
+    }
+
+    @Test
+    fun `uri sink escapes a literal percent in a query parameter name so it reads back literally`() {
+        val b = Uri.Builder().scheme("https").host("h")
+        val sink = UriBuilderSink(b)
+        sink.addQueryParameter("100%3Doff", "v")
+        val uri = b.build()
+        assertEquals("v", uri.queryParameters().get("100%3Doff"))
+    }
+
+    @Test
+    fun `url sink escapes a literal percent in a decoded fragment so it reads back literally`() {
+        val b = Url.Builder().scheme("https").host("h")
+        val sink = UrlBuilderSink(b)
+        sink.fragmentDecoded("100%3Doff")
+        val url = b.build()
+        assertEquals("100%3Doff", Percent.decode(requireNotNull(url.encodedFragment)))
+    }
+
+    @Test
+    fun `uri sink escapes a literal percent in a decoded fragment so it reads back literally`() {
+        val b = Uri.Builder().scheme("https").host("h")
+        val sink = UriBuilderSink(b)
+        sink.fragmentDecoded("100%3Doff")
+        val uri = b.build()
+        assertEquals("100%3Doff", Percent.decode(requireNotNull(uri.fragment)))
+    }
+
+    @Test
+    fun `url sink escapes a literal percent in a username so it reads back literally`() {
+        val b = Url.Builder().scheme("https").host("h")
+        val sink = UrlBuilderSink(b)
+        sink.userInfo("100%3Doff", null)
+        val url = b.build()
+        assertEquals("100%3Doff", Percent.decode(url.username))
+    }
+
+    @Test
+    fun `url sink escapes a literal percent in a password so it reads back literally`() {
+        val b = Url.Builder().scheme("https").host("h")
+        val sink = UrlBuilderSink(b)
+        sink.userInfo("bob", "100%3Doff")
+        val url = b.build()
+        assertEquals("100%3Doff", Percent.decode(url.password))
+    }
+
+    @Test
+    fun `uri sink escapes a literal percent in a username so it reads back literally`() {
+        val b = Uri.Builder().scheme("https").host("h")
+        val sink = UriBuilderSink(b)
+        sink.userInfo("100%3Doff", null)
+        val uri = b.build()
+        assertEquals("100%3Doff", Percent.decode(requireNotNull(uri.userInfo)))
+    }
+
+    @Test
+    fun `uri sink escapes a literal percent in a password so it reads back literally`() {
+        val b = Uri.Builder().scheme("https").host("h")
+        val sink = UriBuilderSink(b)
+        sink.userInfo("bob", "100%3Doff")
+        val uri = b.build()
+        val password = requireNotNull(uri.userInfo).substringAfter(':')
+        assertEquals("100%3Doff", Percent.decode(password))
+    }
+
+    @Test
+    fun `url sink escaping round-trips a bare percent beside a character the set reserves`() {
+        val b = Url.Builder().scheme("https").host("h")
+        val sink = UrlBuilderSink(b)
+        sink.addQueryParameter("q", "100% off")
+        val url = b.build()
+        assertEquals("100% off", url.queryParameters.get("q"))
+    }
+
+    @Test
+    fun `uri sink escaping round-trips a bare percent beside a character the set reserves`() {
+        val b = Uri.Builder().scheme("https").host("h")
+        val sink = UriBuilderSink(b)
+        sink.addQueryParameter("q", "100% off")
+        val uri = b.build()
+        assertEquals("100% off", uri.queryParameters().get("q"))
+    }
+
+    @Test
+    fun `url sink query value with no percent sign is unaffected by the escape`() {
+        val b = Url.Builder().scheme("https").host("h")
+        val sink = UrlBuilderSink(b)
+        sink.addQueryParameter("q", "hello world")
+        val url = b.build()
+        assertEquals("q=hello%20world", url.query)
+        assertEquals("hello world", url.queryParameters.get("q"))
+    }
+
+    @Test
+    fun `uri sink query value with no percent sign is unaffected by the escape`() {
+        val b = Uri.Builder().scheme("https").host("h")
+        val sink = UriBuilderSink(b)
+        sink.addQueryParameter("q", "hello world")
+        val uri = b.build()
+        assertEquals("q=hello%20world", uri.query)
+        assertEquals("hello world", uri.queryParameters().get("q"))
     }
 }

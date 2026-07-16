@@ -4,6 +4,7 @@
  */
 package org.dexpace.kuri.bind
 
+import org.dexpace.kuri.percent.Percent
 import java.math.BigDecimal
 import java.time.Instant
 import java.util.UUID
@@ -492,12 +493,40 @@ private class DotSegment(
     @Path val b: String = "..",
 )
 
-// Pins the inherited `%`-under-encoding of the core query set.
+// A literal `%` in a decoded query value: the core query set doesn't reserve `%` itself, so the
+// binder boundary escapes it to `%25` before that value reaches the core encode call (#76).
 @Url
 private class PercentValue(
     @Scheme val scheme: String = "https",
     @Host val host: String = "h",
     @Query("q") val q: String = "a%2Bb",
+)
+
+// As [PercentValue], but on the `@Uri` profile: no `@Uri` fixture elsewhere in this file exercises
+// `@Query`, so this proves the same query-value escape end-to-end for that profile too.
+@Uri
+private class UriPercentValue(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Query("q") val q: String = "a%2Bb",
+)
+
+// As [UrlCreds], but with a literal `%` in each credential: proves the builder-level escape
+// (BuilderSinkTest's direct-Sink coverage) also holds through the full annotation-binding path.
+@Url
+private class UrlCredsPercent(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @Username val user: String = "50%",
+    @Password val pass: String = "60%",
+)
+
+// As [UriCreds], but with a literal `%` in each half of the userinfo token.
+@Uri
+private class UriCredsPercent(
+    @Scheme val scheme: String = "https",
+    @Host val host: String = "h",
+    @UserInfo val creds: String = "50%:60%",
 )
 
 // A delimited `@Query` list: its elements join into one comma-separated parameter value instead of
@@ -934,10 +963,43 @@ class IntegrationTest {
     }
 
     @Test
-    fun `pins the inherited percent under-encoding of the query set`() {
+    fun `escapes a literal percent sign in a query value so it round-trips through decode`() {
         // The core query set leaves `%` literal (WHATWG "already-encoded" convention) rather than
-        // re-encoding it to `%25` — pinned to document the contract, not a binder-level choice.
-        assertEquals("q=a%2Bb", KuriBind.toUrl(PercentValue()).query)
+        // re-encoding it to `%25`, so the binder boundary escapes it first: "a%2Bb" reaches the wire
+        // as "a%252Bb", which decodes back to the original literal "a%2Bb" rather than misreading the
+        // embedded "%2B" as an escaped '+'.
+        val url = KuriBind.toUrl(PercentValue())
+
+        assertEquals("q=a%252Bb", url.query)
+        assertEquals("a%2Bb", url.queryParameters.get("q"))
+    }
+
+    @Test
+    fun `escapes a literal percent sign in a uri profile query value so it round-trips through decode`() {
+        // As above, but through the `@Uri` profile end-to-end path — no other `@Uri` fixture in this
+        // file exercises `@Query` at all.
+        val uri = KuriBind.toUri(UriPercentValue())
+
+        assertEquals("q=a%252Bb", uri.query)
+        assertEquals("a%2Bb", uri.queryParameters().get("q"))
+    }
+
+    @Test
+    fun `pairs a literal percent sign in sibling username and password into split url userinfo`() {
+        val url = KuriBind.toUrl(UrlCredsPercent())
+
+        assertEquals("50%", url.decodedUsername)
+        assertEquals("60%", url.decodedPassword)
+    }
+
+    @Test
+    fun `encodes a literal percent sign in a whole userinfo token on the uri profile`() {
+        val uri = KuriBind.toUri(UriCredsPercent())
+        val userInfo = requireNotNull(uri.userInfo)
+        val (user, pass) = userInfo.split(':', limit = 2)
+
+        assertEquals("50%", Percent.decode(user))
+        assertEquals("60%", Percent.decode(pass))
     }
 
     @Test

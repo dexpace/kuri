@@ -94,10 +94,33 @@ public class Url internal constructor(
     public val username: String
         get() = components.username
 
+    /**
+     * The decoded userinfo username (percent-decoded [username]), `""` when absent or empty.
+     *
+     * Round-trips a value set via [Builder.username] or obtained from [parse] (both escape a
+     * literal `%` first). A value set via the [withUsername] WHATWG setter does not get that
+     * escape — matching real browsers' own `username` setter — so a literal `%` there followed by
+     * two hex digits is misread as a percent-triplet on decode.
+     */
+    @get:JvmName("decodedUsername")
+    public val decodedUsername: String
+        get() = decodedUsernameValue
+
     /** The percent-encoded userinfo password, or `""` when absent or empty. */
     @get:JvmName("password")
     public val password: String
         get() = components.password
+
+    /**
+     * The decoded userinfo password (percent-decoded [password]), `""` when absent or empty.
+     *
+     * Round-trips a value set via [Builder.password] or obtained from [parse]; as [decodedUsername],
+     * it does not round-trip a value set via the [withPassword] WHATWG setter when that value
+     * contains a literal `%`.
+     */
+    @get:JvmName("decodedPassword")
+    public val decodedPassword: String
+        get() = decodedPasswordValue
 
     /** The structured host, or `null` when the URL has no authority. */
     @get:JvmName("host")
@@ -175,6 +198,17 @@ public class Url internal constructor(
     public val encodedFragment: String?
         get() = components.fragment
 
+    /**
+     * The decoded fragment (percent-decoded [fragment]), or `null` when no `#` was present.
+     *
+     * Round-trips a value obtained from [parse]. A value set via the [withHash] WHATWG setter is
+     * not pre-escaped for a literal `%` (matching real browsers' own `hash` setter), so such a
+     * fragment does not round-trip through this accessor.
+     */
+    @get:JvmName("decodedFragment")
+    public val decodedFragment: String?
+        get() = decodedFragmentValue
+
     /** The `userinfo@host:port` authority, or `null` when the URL has no authority. */
     @get:JvmName("authority")
     public val authority: String?
@@ -226,6 +260,11 @@ public class Url internal constructor(
     // (needed only to keep href re-parseable) does not belong in its output (SPEC §11.2).
     private val encodedPathText: String by lazy { serializeUrlPath(components, guardAgainstAuthority = false) }
     private val queryParameterSnapshot: QueryParameters by lazy { QueryParameters.parseOrEmpty(components.query) }
+
+    /** Decoded fragment/userinfo projections, each computed once; immutable, mirroring [canonicalHref]. */
+    private val decodedFragmentValue: String? by lazy { fragment?.let { PercentCodec.decode(it) } }
+    private val decodedUsernameValue: String by lazy { PercentCodec.decode(username) }
+    private val decodedPasswordValue: String by lazy { PercentCodec.decode(password) }
 
     /**
      * The canonical serialized URL; the basis of [toString], [equals], and [hashCode].
@@ -439,6 +478,9 @@ public class Url internal constructor(
      * leading `#` stripped and percent-encoded with the fragment set, or with the fragment
      * removed when [value] is empty. Never throws.
      *
+     * Matches real browsers' `hash` setter in not escaping a literal `%` first, so [value] does
+     * not necessarily round-trip through [decodedFragment] — see its KDoc.
+     *
      * @param value the new fragment text, with or without a leading `#`; `""` removes the fragment.
      * @return the updated [Url].
      */
@@ -497,6 +539,9 @@ public class Url internal constructor(
      * percent-encoded with the userinfo set, or `this` when the URL cannot have credentials
      * (no host, empty host, or a `file` scheme). Never throws.
      *
+     * Matches real browsers' `username` setter in not escaping a literal `%` first, so [value]
+     * does not necessarily round-trip through [decodedUsername] — see its KDoc.
+     *
      * @param value the decoded username to set.
      * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
      */
@@ -507,7 +552,8 @@ public class Url internal constructor(
     }
 
     /**
-     * The WHATWG `password` setter (URL §5): as [withUsername], for the password half.
+     * The WHATWG `password` setter (URL §5): as [withUsername], for the password half — including
+     * not round-tripping a literal `%` through [decodedPassword].
      *
      * @param value the decoded password to set.
      * @return the updated [Url], or `this` when the setter is a WHATWG no-op.
@@ -718,20 +764,29 @@ public class Url internal constructor(
         /**
          * Sets the userinfo username, percent-encoding it under the userinfo set.
          *
+         * A literal `%` in [username] is escaped to `%25` first, since the userinfo set does not
+         * reserve `%` itself — see [PercentCodec.escapeLiteralPercent] for the rationale. This mirrors
+         * [Uri.Builder.username], which applies the same escape.
+         *
          * @param username the decoded username; `""` clears the username.
          */
         public fun username(username: String): Builder {
-            encodedUsername = PercentCodec.encode(username, PercentEncodeSets.USERINFO)
+            val escaped = PercentCodec.escapeLiteralPercent(username)
+            encodedUsername = PercentCodec.encode(escaped, PercentEncodeSets.USERINFO)
             return this
         }
 
         /**
          * Sets the userinfo password, percent-encoding it under the userinfo set.
          *
+         * As [username], a literal `%` in [password] is escaped to `%25` first; see
+         * [PercentCodec.escapeLiteralPercent] for the rationale.
+         *
          * @param password the decoded password; `""` clears the password.
          */
         public fun password(password: String): Builder {
-            encodedPassword = PercentCodec.encode(password, PercentEncodeSets.USERINFO)
+            val escaped = PercentCodec.escapeLiteralPercent(password)
+            encodedPassword = PercentCodec.encode(escaped, PercentEncodeSets.USERINFO)
             return this
         }
 

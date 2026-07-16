@@ -271,4 +271,22 @@ internal object PercentCodec {
         }
         return bytes
     }
+
+    /**
+     * Escapes a literal `%` to `%25` before [input] reaches [encode] under a set that does not
+     * itself reserve `%` — e.g. [PercentEncodeSets.USERINFO], used by the userinfo `username`/
+     * `password` builder setters ([PercentEncodeSets.COMPONENT] is the wider set that does reserve
+     * `%`, per SPEC §5.1.3). Left un-escaped, a literal `%` would pass through [encode] untouched
+     * and could then be misread as (or collide with) a percent-encoded escape when the stored value
+     * is later decoded — the same hazard `addPathSegment` avoids by encoding under the wider
+     * [PercentEncodeSets.COMPONENT] set instead.
+     *
+     * This does not double-encode: [encode] only re-visits code points [PercentEncodeSet.shouldEncode]
+     * selects, and neither [PercentEncodeSets.USERINFO] nor [PercentEncodeSets.FRAGMENT] selects `%`,
+     * so the `%25` this function inserts passes through a subsequent [encode] call unchanged.
+     *
+     * @param input decoded text that may contain a literal `%`.
+     * @return [input] with every literal `%` replaced by `%25`.
+     */
+    internal fun escapeLiteralPercent(input: String): String = input.replace("%", "%25")
 }

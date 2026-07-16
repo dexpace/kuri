@@ -60,6 +60,104 @@ class UrlTest {
     }
 
     @Test
+    fun `decodedFragment mirrors fragment when there is nothing to decode`() {
+        val url = parseOk("https://h/p#plain")
+
+        assertEquals("plain", url.fragment)
+        assertEquals("plain", url.decodedFragment)
+    }
+
+    @Test
+    fun `decodedFragment percent-decodes a triplet`() {
+        val url = parseOk("https://h/p#a%20b")
+
+        assertEquals("a%20b", url.fragment)
+        assertEquals("a b", url.decodedFragment)
+    }
+
+    @Test
+    fun `decodedFragment is null when there is no fragment`() {
+        val url = parseOk("https://h/p")
+
+        assertNull(url.fragment)
+        assertNull(url.decodedFragment)
+    }
+
+    @Test
+    fun `decodedFragment decodes an already-escaped literal percent sign back to the original text`() {
+        val url = parseOk("https://h/p#50%25off")
+
+        assertEquals("50%25off", url.fragment)
+        assertEquals("50%off", url.decodedFragment)
+    }
+
+    @Test
+    fun `decodedFragment is empty when the fragment is present but empty`() {
+        val url = parseOk("https://h/p#")
+
+        assertEquals("", url.fragment)
+        assertEquals("", url.decodedFragment)
+    }
+
+    @Test
+    fun `decodedUsername mirrors username when there is nothing to decode`() {
+        val url = parseOk("https://bob@h/p")
+
+        assertEquals("bob", url.username)
+        assertEquals("bob", url.decodedUsername)
+    }
+
+    @Test
+    fun `decodedUsername percent-decodes a triplet`() {
+        val url = parseOk("https://a%20b@h/p")
+
+        assertEquals("a%20b", url.username)
+        assertEquals("a b", url.decodedUsername)
+    }
+
+    @Test
+    fun `decodedUsername decodes an already-escaped literal percent sign back to the original text`() {
+        val url = parseOk("https://50%25off@h/p")
+
+        assertEquals("50%25off", url.username)
+        assertEquals("50%off", url.decodedUsername)
+    }
+
+    @Test
+    fun `decodedPassword mirrors password when there is nothing to decode`() {
+        val url = parseOk("https://bob:secret@h/p")
+
+        assertEquals("secret", url.password)
+        assertEquals("secret", url.decodedPassword)
+    }
+
+    @Test
+    fun `decodedPassword percent-decodes a triplet`() {
+        val url = parseOk("https://bob:a%20b@h/p")
+
+        assertEquals("a%20b", url.password)
+        assertEquals("a b", url.decodedPassword)
+    }
+
+    @Test
+    fun `decodedPassword decodes an already-escaped literal percent sign back to the original text`() {
+        val url = parseOk("https://bob:50%25off@h/p")
+
+        assertEquals("50%25off", url.password)
+        assertEquals("50%off", url.decodedPassword)
+    }
+
+    @Test
+    fun `decodedUsername and decodedPassword are empty when there is no userinfo`() {
+        val url = parseOk("https://h/p")
+
+        assertEquals("", url.username)
+        assertEquals("", url.decodedUsername)
+        assertEquals("", url.password)
+        assertEquals("", url.decodedPassword)
+    }
+
+    @Test
     fun `parseOrNull returns null on failure`() {
         assertNull(Url.parseOrNull("http://["))
     }

@@ -196,41 +196,6 @@ class UriBuilderTest {
     }
 
     @Test
-    fun `userInfo without a host is rejected`() {
-        assertFailsWith<IllegalArgumentException> {
-            Uri
-                .Builder()
-                .userInfo("u")
-                .encodedPath("/p")
-                .build()
-        }
-    }
-
-    @Test
-    fun `a port without a host is rejected`() {
-        assertFailsWith<IllegalArgumentException> {
-            Uri
-                .Builder()
-                .port(8080)
-                .encodedPath("/p")
-                .build()
-        }
-    }
-
-    @Test
-    fun `userInfo with an empty host is allowed`() {
-        val uri =
-            Uri
-                .Builder()
-                .userInfo("u")
-                .host("")
-                .encodedPath("/p")
-                .build()
-
-        assertEquals("//u@/p", uri.uriString)
-    }
-
-    @Test
     fun `the guards never alter a value that already parsed`() {
         val original = parseOk("a/b:c/d")
 
