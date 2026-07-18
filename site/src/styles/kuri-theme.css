@@ -1,0 +1,95 @@
+/*
+ * kuri docs theme.
+ *
+ * An original stylesheet authored for this site: the color/font/radius values match
+ * the dexpace brand, but this file is an independent, from-scratch expression of them
+ * with no copied source and no external dependency. Starlight's CSS custom-property
+ * contract (--sl-*) is the documented, versioned theming surface this file overrides —
+ * see @astrojs/starlight/style/props.css for the full set this project doesn't touch.
+ */
+
+@import '@fontsource-variable/sora';
+@import '@fontsource-variable/space-grotesk';
+@import '@fontsource-variable/jetbrains-mono';
+
+/* Dark is Starlight's default (:root); light overrides via [data-theme='light']. */
+:root {
+  --sl-color-accent-low: #1f2c63;
+  --sl-color-accent: #4f63e0;
+  --sl-color-accent-high: #cdd2ff;
+
+  --sl-color-white: #f3f1f7;
+  --sl-color-gray-1: #e5e2ec;
+  --sl-color-gray-2: #9c95a8;
+  --sl-color-gray-3: #6a6470;
+  --sl-color-gray-4: #4a4454;
+  --sl-color-gray-5: #2a2433;
+  --sl-color-gray-6: #1f1a28;
+  --sl-color-gray-7: #15111f;
+  --sl-color-black: #0c0a14;
+
+  --sl-color-bg: var(--sl-color-black);
+  --sl-color-bg-nav: var(--sl-color-gray-7);
+  --sl-color-bg-sidebar: var(--sl-color-gray-7);
+  --sl-color-bg-inline-code: var(--sl-color-gray-5);
+  --sl-color-bg-accent: var(--sl-color-accent-high);
+  --sl-color-text: #f3f1f7;
+  --sl-color-text-accent: #7e8dff;
+  --sl-color-hairline-light: var(--sl-color-gray-4);
+  --sl-color-hairline: var(--sl-color-gray-5);
+  --sl-color-hairline-shade: var(--sl-color-black);
+
+  /* Aside (note/tip/caution/danger) hues re-tinted to kuri's semantic colors —
+     Starlight derives every low/high shade from these four hue angles, so
+     overriding the hue alone re-themes all three shades of each without
+     redefining every triplet by hand. Angles derived from the brand hex values
+     (--info #2563c0, --success #116539, --warning #8a5400, --destructive #d92d3a). */
+  --sl-hue-blue: 216;
+  --sl-hue-green: 149;
+  --sl-hue-orange: 36;
+  --sl-hue-red: 355;
+
+  --sl-font: 'Sora Variable', system-ui, sans-serif;
+  --sl-font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  --kuri-radius: 0.75rem;
+  --kuri-shadow-sm: 0 1px 2px rgba(20, 18, 30, 0.06), 0 1px 1px rgba(20, 18, 30, 0.04);
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #eef1fe;
+  --sl-color-accent: #3f5bd6;
+  --sl-color-accent-high: #3147ad;
+
+  --sl-color-white: #15131f;
+  --sl-color-gray-1: #1f1a28;
+  --sl-color-gray-2: #6a6470;
+  --sl-color-gray-3: #9c95a8;
+  --sl-color-gray-4: #cbc7d3;
+  --sl-color-gray-5: #e5e2ec;
+  --sl-color-gray-6: #f2f0f5;
+  --sl-color-gray-7: #fafafb;
+  --sl-color-black: #ffffff;
+
+  --sl-color-bg: var(--sl-color-black);
+  --sl-color-bg-nav: var(--sl-color-gray-7);
+  --sl-color-bg-sidebar: var(--sl-color-gray-7);
+  --sl-color-bg-inline-code: var(--sl-color-gray-6);
+  --sl-color-bg-accent: var(--sl-color-accent);
+  --sl-color-text: #15131f;
+  --sl-color-text-accent: #3f5bd6;
+  --sl-color-hairline-light: var(--sl-color-gray-5);
+  --sl-color-hairline: var(--sl-color-gray-5);
+  --sl-color-hairline-shade: var(--sl-color-gray-6);
+}
+
+/* Headings use the display face; body text (--sl-font) stays Sora. .sl-markdown-content
+   is Starlight's documented wrapper class for rendered page content. */
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6) {
+  font-family: 'Space Grotesk Variable', system-ui, sans-serif;
+}
+
+.sl-markdown-content pre {
+  border-radius: var(--kuri-radius);
+  box-shadow: var(--kuri-shadow-sm);
+}

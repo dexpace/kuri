@@ -1,0 +1,85 @@
+name: Deploy docs site
+
+# Path-filtered so an internal-only Kotlin change doesn't retrigger a deploy, but a
+# public-API change (which Dokka's output depends on) or any docs/site change does.
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'site/**'
+      - 'README.md'
+      - 'docs/**'
+      - 'kuri/src/commonMain/**'
+      - 'kuri/src/jvmMain/**'
+      - 'kuri/build.gradle.kts'
+  workflow_dispatch:
+
+# cancel-in-progress: false queues a newer push behind an in-flight deploy rather than cancelling it,
+# so a production deploy always runs to completion once started — the standard GitHub Pages template
+# setting. The queued run still deploys once the current one finishes, so the latest content lands.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build (Dokka + Astro)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: corretto
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Generate the Dokka API reference
+        run: ./gradlew :kuri:dokkaGeneratePublicationHtml --stacktrace
+      - name: Copy the API reference into the site build
+        run: |
+          rm -rf site/public/api
+          mkdir -p site/public/api
+          cp -r kuri/build/dokka/html/. site/public/api/
+      - uses: oven-sh/setup-bun@v2
+      - name: Type-check content collections
+        working-directory: site
+        run: |
+          bun install --frozen-lockfile
+          bun run check
+      - name: Install, build, and upload the site
+        uses: withastro/action@v6
+        with:
+          path: site
+          package-manager: bun
+      - name: Check internal links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --offline
+            --no-progress
+            --exclude-mail
+            --base site/dist
+            'site/dist/**/*.html'
+          fail: true
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

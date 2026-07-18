@@ -1,0 +1,29 @@
+---
+title: Building from source
+description: The JDK requirement and the full quality-gate command.
+sidebar:
+  order: 12
+---
+
+Building kuri requires a JDK 21 toolchain; the bundled Gradle wrapper provisions the rest.
+
+```
+./gradlew build
+```
+
+`build` compiles every target and runs the full quality gate. Each check below fails the
+build:
+
+- `ktlint` (formatting) and `detekt` (static analysis)
+- Kotlin `allWarningsAsErrors`
+- explicit-API strict mode
+- the binary-compatibility validator (`apiCheck`)
+- per-module Kover line/branch floors: `kuri` and `kuri-bind` at 99% line / 85% and 88% branch
+  respectively, `kuri-serde-kotlinx` at 90% line / 80% branch
+
+After an intentional public-API change, regenerate and commit the API snapshot in the
+same change:
+
+```
+./gradlew apiDump
+```

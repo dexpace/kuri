@@ -1,0 +1,66 @@
+---
+title: Building and resolving
+description: Immutable values, builders, and reference resolution.
+sidebar:
+  order: 5
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Values are immutable. A `Builder` produces new ones, and `newBuilder()` returns a builder
+pre-filled from an existing value, so a **parse → modify → build** round-trip is clean:
+
+```kotlin
+val url = Url.parseOrThrow("https://example.com/v1/users?page=1")
+    .newBuilder()
+    .addPathSegment("42")
+    .setQueryParameter("page", "2")
+    .build()                                  // https://example.com/v1/users/42?page=2
+```
+
+`build()` **throws** (`UriSyntaxException` or `IllegalArgumentException`) when the
+assembled components can't form a valid value — a special-scheme `Url` with no host, say.
+`buildOrNull()` is the non-throwing sibling for untrusted input:
+
+```kotlin
+Url.Builder().scheme("https").host("example.com").buildOrNull()  // https://example.com/  (a Url)
+Url.Builder().scheme("https").buildOrNull()                      // null — a special scheme needs a host
+```
+
+<Tabs syncKey="lang">
+  <TabItem label="Kotlin">
+    ```kotlin
+    val base = Url.parseOrThrow("https://example.com/a/b")
+    base.resolveOrThrow("../c")                   // https://example.com/c
+    ```
+  </TabItem>
+  <TabItem label="Java">
+    Construct the builder with `new`, chain setters, and call `build()`:
+
+    ```java
+    Url url = new Url.Builder()
+        .scheme("https")
+        .host("example.com")
+        .addPathSegment("v1")
+        .addPathSegment("users")
+        .setQueryParameter("page", "2")
+        .build();                                 // https://example.com/v1/users?page=2
+    ```
+  </TabItem>
+</Tabs>
+
+`resolve` applies a reference to a base (RFC 3986 §5.2 / WHATWG); `resolveOrThrow` and
+`resolveOrNull` are the throwing and punning variants. `Uri.relativize` is the inverse
+(see [Recipes](/kuri/guides/recipes/)).
+
+For a single-component edit without a builder, both profiles offer copy-with helpers —
+`withPort`, `withFragment`, and `withoutFragment` — and predicates round out the surface:
+`Uri.isAbsolute()` / `Uri.isOpaquePath()` and `Url.isSpecial()`.
+
+The generic `Uri` preserves what you parsed and normalizes only when asked:
+
+```kotlin
+val uri = Uri.parseOrThrow("HTTP://Example.com/a/../b")
+uri.toString()                 // "HTTP://Example.com/a/../b"  — verbatim
+uri.normalized().toString()    // "http://example.com/b"       — RFC 3986 §6.2
+```

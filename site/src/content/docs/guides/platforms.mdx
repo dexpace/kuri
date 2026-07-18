@@ -1,0 +1,21 @@
+---
+title: Platforms
+description: Every Kotlin Multiplatform target kuri compiles for.
+sidebar:
+  order: 10
+---
+
+The entire public API lives in common Kotlin and compiles for every target below.
+
+| Tier | Targets |
+|---|---|
+| JVM | `jvm` |
+| JavaScript | `js` (browser, Node.js) |
+| WebAssembly | `wasmJs` (browser, Node.js) |
+| Native — Apple | `macosArm64`, `iosArm64`, `iosX64`, `iosSimulatorArm64`, `watchosArm64`, `watchosSimulatorArm64`, `tvosArm64`, `tvosSimulatorArm64` |
+| Native — Linux | `linuxX64`, `linuxArm64` |
+| Native — Windows | `mingwX64` |
+
+The `java.net.URI` / `java.net.URL` conversions are JVM-only extensions. Every target
+compiles on any host; executing the native test suites requires a matching operating
+system or simulator.
