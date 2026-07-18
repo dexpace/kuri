@@ -1962,9 +1962,9 @@ For a `QueryParameters` holding pairs `p[0..size)` where `p[i] = (nameAt(i), val
 
 **[QUERY-17]** `removeAll(name: String): Builder` MUST remove every pair whose name equals `name`, preserving the relative order of the remaining pairs. If no pair matches, the list MUST be unchanged.
 
-**[QUERY-18]** `sort(): Builder` MUST perform a **stable** sort of the pair list by **name only**, comparing names by Unicode **code point** sequence. The comparison MUST be surrogate-aware: a name MUST be compared as a sequence of code points (UTF-16 surrogate pairs combined into a single supplementary code point), so that supplementary-plane characters (`> U+FFFF`) sort after all Basic-Multilingual-Plane characters. Stability MUST be preserved: pairs with equal names MUST retain their pre-sort relative order (and thus their associated values' order). The comparison MUST NOT consider values.
+**[QUERY-18]** `sort(): Builder` MUST perform a **stable** sort of the pair list by **name only**, comparing names by raw UTF-16 **code unit** sequence (i.e. `char`-by-`char`, without combining surrogate pairs into code points), matching the WHATWG URL specification. Because this comparison is not surrogate-aware, a supplementary-plane name's leading surrogate (`U+D800`-`U+DBFF`) can compare below a Basic-Multilingual-Plane character at or above `U+D800`, so a supplementary-plane name can sort before a BMP name that would precede it under code-point order. Stability MUST be preserved: pairs with equal names MUST retain their pre-sort relative order (and thus their associated values' order). The comparison MUST NOT consider values.
 
-> Note: ada `url_search_params::sort` uses a `stable_sort` and decodes UTF-8 into code points (combining surrogates) rather than comparing raw code units; kuri adopts code-point order per this section. WHATWG's own `sort()` is specified over code units — kuri deliberately specifies code-point order for surrogate correctness.
+> Note: ada `url_search_params::sort` uses a `stable_sort` and decodes UTF-8 into code points (combining surrogates) rather than comparing raw code units, diverging from the WHATWG algorithm for names containing supplementary-plane characters; kuri instead follows WHATWG's own `sort()`, which is specified over raw code units.
 
 #### 10.3.3 Serialization back to a raw query
 
