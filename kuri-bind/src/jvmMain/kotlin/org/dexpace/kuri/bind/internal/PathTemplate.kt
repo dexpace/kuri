@@ -55,6 +55,7 @@ internal class PathTemplate private constructor(
             }
             if (literal.isNotEmpty()) tokens.add(PathToken.Literal(literal.toString()))
             requireCatchAllIsFinal(holes, tokens, template)
+            requireHolesAtSegmentBoundaries(tokens, template)
             check(holes.all { it.name.isNotEmpty() }) { "hole names validated above" }
             return PathTemplate(tokens, holes)
         }
@@ -110,6 +111,31 @@ internal class PathTemplate private constructor(
             val last = holes.lastOrNull() ?: return
             if (last.catchAll && tokens.lastOrNull() != last) {
                 throw KuriBindException("catch-all '{${last.name}...}' must be the final token: $template")
+            }
+        }
+
+        /**
+         * A hole must occupy a whole path segment, matching `net/http.ServeMux`: literal text sharing a
+         * segment with a hole (`{id}.json`, `v{version}`) is rejected rather than silently re-segmented
+         * when the path is composed (issue #82). A hole is exempt from this check on the side that abuts
+         * another hole (`{a}{b}`) or a template boundary (start/end of string) — only an adjacent
+         * [PathToken.Literal] that fails to carry a `/` at the shared edge is a violation.
+         */
+        private fun requireHolesAtSegmentBoundaries(
+            tokens: List<PathToken>,
+            template: String,
+        ) {
+            for (i in tokens.indices) {
+                val hole = tokens[i] as? PathToken.Hole ?: continue
+                val before = tokens.getOrNull(i - 1) as? PathToken.Literal
+                val after = tokens.getOrNull(i + 1) as? PathToken.Literal
+                val boundedBefore = before == null || before.raw.endsWith('/')
+                val boundedAfter = after == null || after.raw.startsWith('/')
+                if (!boundedBefore || !boundedAfter) {
+                    throw KuriBindException(
+                        "template hole '{${hole.name}}' must occupy a whole '/'-delimited path segment: $template",
+                    )
+                }
             }
         }
     }
