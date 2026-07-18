@@ -14,8 +14,9 @@ on:
       - 'kuri/build.gradle.kts'
   workflow_dispatch:
 
-# A newer push to main supersedes an in-flight deploy rather than queueing behind it —
-# only the latest content should ever end up live.
+# cancel-in-progress: false queues a newer push behind an in-flight deploy rather than cancelling it,
+# so a production deploy always runs to completion once started — the standard GitHub Pages template
+# setting. The queued run still deploys once the current one finishes, so the latest content lands.
 concurrency:
   group: pages
   cancel-in-progress: false
