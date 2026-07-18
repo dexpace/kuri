@@ -54,4 +54,24 @@ class UriUrlBridgeTest {
 
         assertTrue(converted.href.startsWith("http://u@h:8080/p"))
     }
+
+    @Test
+    fun `toUri repairs a mid-path malformed percent triplet instead of throwing`() {
+        // WHATWG's path percent-encode set does not reserve `%`, so "a%zzb" is a valid path segment
+        // for a Url even though "%zz" is not a valid RFC 3986 pct-encoded triplet.
+        val source = url("http://h/a%zzb")
+
+        val bridged = source.toUri()
+
+        assertEquals("http://h/a%25zzb", bridged.uriString)
+    }
+
+    @Test
+    fun `toUri repairs a trailing incomplete percent escape instead of throwing`() {
+        val source = url("http://h/a%")
+
+        val bridged = source.toUri()
+
+        assertEquals("http://h/a%25", bridged.uriString)
+    }
 }

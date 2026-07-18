@@ -28,6 +28,7 @@ import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.serialize.UrlSerializer
 import org.dexpace.kuri.serialize.serializeAuthority
 import org.dexpace.kuri.serialize.serializeUrlPath
+import org.dexpace.kuri.text.hasPercentHexPairAt
 import kotlin.jvm.JvmName
 import kotlin.jvm.JvmOverloads
 import kotlin.jvm.JvmStatic
@@ -60,6 +61,33 @@ private const val FILE_SCHEME: String = "file"
 
 /** The inner schemes whose origin a `blob:` URL adopts; any other inner scheme is opaque. */
 private val BLOB_INNER_ORIGIN_SCHEMES: Set<String> = setOf("http", "https", FILE_SCHEME)
+
+/** The canonical escape for a literal `%`, substituted for a `%` that fails to introduce a triplet. */
+private const val ESCAPED_PERCENT: String = "%25"
+
+/**
+ * Rewrites every `%` in [input] that fails to introduce a valid `%XX` triplet to the literal
+ * escape [ESCAPED_PERCENT], leaving every already-valid triplet untouched (RFC 3986 §2.1).
+ *
+ * None of the WHATWG percent-encode sets reserve `%` itself (see `PercentEncodeSets`), so a
+ * WHATWG-canonical [Url.href] can carry a bare `%` or a triplet whose next two code units are not
+ * both ASCII hex digits — a value the strict RFC 3986 [Uri] parser rejects outright. [Url.toUri]
+ * runs [input] through this repair first so the profile bridge from [Url] to [Uri] is total.
+ *
+ * @param input the href-derived string to repair before handing it to the [Uri] parser.
+ * @return [input] unchanged when it contains no malformed `%`, otherwise a copy with each
+ *   malformed `%` replaced by [ESCAPED_PERCENT].
+ */
+private fun escapeMalformedPercent(input: String): String {
+    if (input.indexOf('%') < 0) return input
+    val repaired = StringBuilder(input.length)
+    for (index in input.indices) {
+        val c = input[index]
+        if (c == '%' && !hasPercentHexPairAt(input, index)) repaired.append(ESCAPED_PERCENT) else repaired.append(c)
+    }
+    check(repaired.length >= input.length) { "repair must never shrink the input" }
+    return repaired.toString()
+}
 
 /**
  * An immutable, fully-canonical WHATWG URL value (SPEC §3, §11; WHATWG URL Living Standard).
@@ -336,14 +364,17 @@ public class Url internal constructor(
     /**
      * Converts this WHATWG URL to a generic RFC 3986 [Uri] (SPEC §11.5; profile bridge).
      *
-     * This is near-lossless and does not fail: a canonical WHATWG [href] is always a valid RFC 3986
-     * URI, so the conversion re-parses [href] under the `Uri` profile and returns the value directly
-     * rather than a [ParseResult]. The resulting [Uri] preserves this URL's canonical form (the
-     * WHATWG canonicalization has already been applied), so it carries a non-null `scheme`.
+     * This is total and does not fail: a canonical WHATWG [href] is always a valid RFC 3986 URI
+     * once one WHATWG/RFC 3986 mismatch is reconciled first. The WHATWG percent-encode sets never
+     * reserve `%` itself, so [href] can carry a bare `%` or a triplet whose next two code units
+     * are not both hex digits — a byte sequence the strict RFC 3986 `Uri` engine would otherwise
+     * reject as a malformed percent-encoding. [escapeMalformedPercent] rewrites exactly that case
+     * to `%25` before the re-parse, so every other byte of [href] — and thus the resulting [Uri]'s
+     * canonical form — is unchanged. The result carries a non-null `scheme`.
      *
      * @return the equivalent generic [Uri].
      */
-    public fun toUri(): Uri = Uri.parse(href).getOrThrow()
+    public fun toUri(): Uri = Uri.parse(escapeMalformedPercent(href)).getOrThrow()
 
     /**
      * Computes a relative reference that [resolve]s back to [target], or `null` when the two share no
