@@ -13,7 +13,7 @@
   <a href="https://kotlinlang.org"><img alt="Kotlin" src="https://img.shields.io/badge/kotlin-2.4.0-7F52FF.svg?logo=kotlin&logoColor=white"></a>
   <img alt="Kotlin Multiplatform" src="https://img.shields.io/badge/kotlin-multiplatform-7F52FF.svg?logo=kotlin&logoColor=white">
   <img alt="JDK" src="https://img.shields.io/badge/JDK-8%2B-437291.svg?logo=openjdk&logoColor=white">
-  <img alt="Coverage" src="https://img.shields.io/badge/coverage-%E2%89%A580%25-success.svg">
+  <img alt="Coverage" src="https://img.shields.io/badge/coverage-%E2%89%A590%25-success.svg">
 </p>
 
 ## Contents
@@ -592,7 +592,8 @@ Building kuri requires a JDK 21 toolchain; the bundled Gradle wrapper provisions
 - Kotlin `allWarningsAsErrors`
 - explicit-API strict mode
 - the binary-compatibility validator (`apiCheck`)
-- an 80% Kover line-coverage floor
+- per-module Kover line/branch floors: `kuri` and `kuri-bind` at 99% line / 85% and 88% branch
+  respectively, `kuri-serde-kotlinx` at 90% line / 80% branch
 
 After an intentional public-API change, regenerate and commit the API snapshot in the same change:
 
