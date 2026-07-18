@@ -89,10 +89,16 @@ public class Url internal constructor(
     public val scheme: String
         get() = requireNotNull(components.scheme) { "a parsed Url always carries a scheme" }
 
-    /** The percent-encoded userinfo username, or `""` when no credentials are present. */
+    /**
+     * The percent-encoded userinfo username, or `""` when no credentials are present.
+     *
+     * The `Url` profile has no absent-vs-present-empty distinction ([NORM-30]): [components] never
+     * actually stores a `null` username for a parsed `Url`, but the `?:` guard keeps this accessor
+     * total against the shared, nullable [ParsedComponents] shape.
+     */
     @get:JvmName("username")
     public val username: String
-        get() = components.username
+        get() = components.username ?: ""
 
     /**
      * The decoded userinfo username (percent-decoded [username]), `""` when absent or empty.
@@ -106,10 +112,15 @@ public class Url internal constructor(
     public val decodedUsername: String
         get() = decodedUsernameValue
 
-    /** The percent-encoded userinfo password, or `""` when absent or empty. */
+    /**
+     * The percent-encoded userinfo password, or `""` when absent or empty.
+     *
+     * As [username], the `?:` guard keeps this accessor total; [components] never actually stores
+     * a `null` password for a parsed `Url` ([NORM-30]).
+     */
     @get:JvmName("password")
     public val password: String
-        get() = components.password
+        get() = components.password ?: ""
 
     /**
      * The decoded userinfo password (percent-decoded [password]), `""` when absent or empty.

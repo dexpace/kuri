@@ -28,12 +28,19 @@ import org.dexpace.kuri.host.Host
  * - [query] `null` = no `?`; `""` = `?` present with empty content ([MODEL-30]).
  * - [fragment] `null` = no `#`; `""` = `#` present with empty content ([PARSE-8]).
  *
- * [username]/[password] default to `""` (absent userinfo) rather than `null`; the
- * `Uri`/`Url` facades map them to their nullable public accessors ([MODEL-13]). Their
- * encoding is profile-specific: for `Uri` they are a raw, unmodified pass-through of
- * whatever the input contained — split off the userinfo span verbatim, with no decode
- * and no encode, the same treatment as every other `Uri`-profile component; for `Url`
- * they are already percent-encoded under the userinfo percent-encode set at parse time
+ * [username]/[password] are independently nullable ([MODEL-10], [MODEL-11]) so that an
+ * absent userinfo/password stays distinct from a present-but-empty one all the way
+ * through to serialization: `username == null` means no userinfo at all (no `@` in the
+ * source), `username == ""` means an `@` was present with nothing before it; likewise
+ * `password == null` means no `:` was present within the userinfo, `password == ""`
+ * means a `:` was present with nothing after it. A non-null `password` therefore never
+ * pairs with a `null` `username` ([MODEL-13]) — the `Uri`/`Url` facades map the fields to
+ * their nullable/non-null public accessors respectively. Their encoding is
+ * profile-specific: for `Uri` they are a raw, unmodified pass-through of whatever the
+ * input contained — split off the userinfo span verbatim, with no decode and no encode,
+ * the same treatment as every other `Uri`-profile component; for `Url` they are never
+ * `null` (the WHATWG profile has no absent/present-empty userinfo distinction, [NORM-30])
+ * and are already percent-encoded under the userinfo percent-encode set at parse time
  * (§5), matching `Url.username`/`Url.password`'s own documented contract.
  *
  * As a value record this type performs no inline validation — the §7/§8 modules that
@@ -41,10 +48,12 @@ import org.dexpace.kuri.host.Host
  *
  * @property scheme the parsed scheme (lowercased for storage in the `Url` profile),
  *   or `null` for a `Uri` relative reference.
- * @property username the userinfo user (raw for `Uri`, percent-encoded for `Url`),
- *   `""` when no userinfo is present.
- * @property password the userinfo password (raw for `Uri`, percent-encoded for `Url`),
- *   `""` when absent or empty.
+ * @property username the userinfo user (raw for `Uri`, percent-encoded and never `null`
+ *   for `Url`); `null` when no userinfo (no `@`) is present, `""` when an `@` was
+ *   present with an empty user.
+ * @property password the userinfo password (raw for `Uri`, percent-encoded and never
+ *   `null` for `Url`); `null` when no `:` was present in the userinfo, `""` when a `:`
+ *   was present with nothing after it.
  * @property host the parsed host, `null` when there is no authority, [Host.Empty]
  *   for an empty authority.
  * @property port the explicit port, or `null` when unspecified / default-elided.
@@ -58,8 +67,8 @@ import org.dexpace.kuri.host.Host
  */
 internal data class ParsedComponents(
     val scheme: String? = null,
-    val username: String = "",
-    val password: String = "",
+    val username: String? = null,
+    val password: String? = null,
     val host: Host? = null,
     val port: Int? = null,
     val path: ComponentPath = ComponentPath.Segments(emptyList()),
