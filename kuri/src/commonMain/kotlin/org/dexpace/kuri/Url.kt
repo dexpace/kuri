@@ -32,9 +32,6 @@ import kotlin.jvm.JvmName
 import kotlin.jvm.JvmOverloads
 import kotlin.jvm.JvmStatic
 
-/** The sentinel [Url.effectivePort] returns when a port is neither stated nor defaulted by the scheme. */
-private const val NO_DEFAULT_PORT: Int = -1
-
 /** Inclusive upper bound of a WHATWG URL port (`0..65535`); a larger value is a parse failure. */
 private const val MAX_PORT: Int = 65535
 
@@ -151,12 +148,16 @@ public class Url internal constructor(
     /**
      * The port a consumer should connect to: the explicit [port], else the scheme default.
      *
-     * @return the stated or default port, or `-1` when the scheme has no default (a non-special
-     *   scheme, or `file`); `-1` is the only value the caller must treat as "no port".
+     * Falls back to the scheme's registered default port when no [port] is stated, and to `null`
+     * when the port is neither stated nor defaulted — a non-special scheme, or `file` (special, yet
+     * portless). Matches [Uri.effectivePort]'s sentinel-free contract rather than the `java.net`
+     * `-1` convention SPEC.md's `[MODEL-24]` forbids.
+     *
+     * @return the stated or default port, or `null` when the scheme has no default.
      */
     @get:JvmName("effectivePort")
-    public val effectivePort: Int
-        get() = components.port ?: Scheme.defaultPort(scheme) ?: NO_DEFAULT_PORT
+    public val effectivePort: Int?
+        get() = components.port ?: Scheme.defaultPort(scheme)
 
     /** The decoded path segments in order (read-only); an opaque path yields its single decoded value. */
     @get:JvmName("pathSegments")
@@ -375,7 +376,7 @@ public class Url internal constructor(
      *
      * The special schemes are `http`, `https`, `ws`, `wss`, `ftp`, and `file`; special-ness governs
      * host parsing, the `\`-as-`/` rule, and default-port handling. `file` is special yet portless, so
-     * [effectivePort] can still be `-1` for a special URL.
+     * [effectivePort] can still be `null` for a special URL.
      *
      * @return `true` iff [scheme] is a special scheme.
      */

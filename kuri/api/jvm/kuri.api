@@ -141,7 +141,7 @@ public final class org/dexpace/kuri/Url {
 	public final fun decodedFragment ()Ljava/lang/String;
 	public final fun decodedPassword ()Ljava/lang/String;
 	public final fun decodedUsername ()Ljava/lang/String;
-	public final fun effectivePort ()I
+	public final fun effectivePort ()Ljava/lang/Integer;
 	public final fun encodedFragment ()Ljava/lang/String;
 	public final fun encodedPath ()Ljava/lang/String;
 	public fun equals (Ljava/lang/Object;)Z
