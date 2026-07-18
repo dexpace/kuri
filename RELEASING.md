@@ -108,20 +108,23 @@ While on the alpha series, `feat` and `fix` both advance the prerelease counter
 as `0.2.0-alpha.1`), either add a `Release-As: 0.1.0` footer to a commit, or drop the
 `"versioning": "prerelease"` / `"prerelease"` settings in `release-please-config.json`.
 
-## Publishing the initial `0.1.0-alpha.1`
+## Bootstrapping publishing for a version with no prior tag
 
-`.release-please-manifest.json` records `0.1.0-alpha.1` as the *current* version, so release-please's
-first *automated* release will be `0.1.0-alpha.2`. To put `0.1.0-alpha.1` itself on Maven Central,
-publish it manually once (after the secrets above are configured):
+release-please's publish job runs off a GitHub Release, so it can only build a version that
+already has one. The first time the pipeline runs — the very first alpha, or after resetting
+`.release-please-manifest.json` to start a new series — there is no prior tag for it to build
+from, so the version currently recorded in `gradle.properties` has to be published manually once
+(after the secrets above are configured):
 
-- **Actions → Publish → Run workflow**, on `main` (where `gradle.properties` reads
-  `version=0.1.0-alpha.1`). Leave the `ref` input blank to publish the branch as-is.
+- **Actions → Publish → Run workflow**, on `main`. Leave the `ref` input blank to publish the
+  branch as-is, using whatever version `gradle.properties` currently declares.
 
-This manual `workflow_dispatch` run automatically creates the `v0.1.0-alpha.1` git tag and GitHub
-Release — you no longer have to tag it by hand — and the same run attaches the artifacts zip to that
-Release.
+This manual `workflow_dispatch` run automatically creates the matching `v<version>` git tag and
+GitHub Release — you don't have to tag it by hand — and the same run attaches the artifacts zip to
+that Release.
 
-From then on, merging release-please's release PRs publishes automatically.
+From then on, merging release-please's release PRs publishes automatically; this manual step is
+only needed again if a future series starts from a version with no existing tag.
 
 ## Manual / re-publish
 
