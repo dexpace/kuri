@@ -89,6 +89,14 @@ internal class QueryListDecoder(
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int =
         if (cursor < values.size) cursor else CompositeDecoder.DECODE_DONE
 
+    /**
+     * A list element is always a scalar/enum in this format's scope, so any call here — a nested
+     * `@Serializable` object or a nested list — is out of scope and rejected, mirroring
+     * [QueryDecoder.beginStructure]'s top-level guard.
+     */
+    override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder =
+        throw SerializationException("nested objects are not supported by the query format")
+
     private fun next(): String = values[cursor++] ?: throw SerializationException("null list element")
 
     override fun decodeString(): String = next()

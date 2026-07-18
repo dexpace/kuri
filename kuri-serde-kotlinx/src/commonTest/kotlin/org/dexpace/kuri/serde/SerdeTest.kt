@@ -74,6 +74,22 @@ private data class Nested(
     val inner: Search,
 )
 
+@Serializable
+private data class Holder(
+    val friends: List<Contact>,
+)
+
+@Serializable
+private data class Matrix(
+    val rows: List<List<Int>>,
+)
+
+@Serializable
+private data class Profile(
+    val handle: String,
+    val bio: String?,
+)
+
 class SerdeTest {
     @Test
     fun `url serializes as its canonical string in json`() {
@@ -211,6 +227,28 @@ class SerdeTest {
         assertEquals(withNickname, QueryParametersFormat.decodeFromQueryString<Contact>(query))
     }
 
+    // Profile.bio has no default, unlike Contact.nickname: decodeElementIndex's isElementOptional
+    // short-circuit only applies to a defaulted element, so these cases force an actual
+    // decodeNotNullMark()/encodeNull() call instead of the property being skipped upstream.
+
+    @Test
+    fun `encoding a required nullable property that is null omits its key`() {
+        val query = QueryParametersFormat.encodeToQueryString(Profile(handle = "ada", bio = null))
+        assertEquals("handle=ada", query)
+    }
+
+    @Test
+    fun `decoding a required nullable property absent from the query yields null`() {
+        val profile = QueryParametersFormat.decodeFromQueryString<Profile>("handle=ada")
+        assertEquals(Profile(handle = "ada", bio = null), profile)
+    }
+
+    @Test
+    fun `decoding a required nullable property present with no value yields an empty string`() {
+        val profile = QueryParametersFormat.decodeFromQueryString<Profile>("handle=ada&bio=")
+        assertEquals(Profile(handle = "ada", bio = ""), profile)
+    }
+
     @Test
     fun `decoding an unrecognized enum value throws`() {
         assertFailsWith<SerializationException> {
@@ -243,6 +281,34 @@ class SerdeTest {
     fun `encoding a nested serializable object is rejected`() {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.encodeToQueryParameters(Nested(Search(q = "x")))
+        }
+    }
+
+    @Test
+    fun `encoding a serializable object nested inside a list is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.encodeToQueryParameters(Holder(listOf(Contact(name = "ada", nickname = "countess"))))
+        }
+    }
+
+    @Test
+    fun `decoding a serializable object nested inside a list is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Holder>("friends=ada")
+        }
+    }
+
+    @Test
+    fun `encoding a list nested inside a list is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.encodeToQueryParameters(Matrix(listOf(listOf(1, 2))))
+        }
+    }
+
+    @Test
+    fun `decoding a list nested inside a list is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Matrix>("rows=1")
         }
     }
 }

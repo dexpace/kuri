@@ -84,6 +84,14 @@ internal class QueryListEncoder(
 ) : AbstractEncoder() {
     override val serializersModule: SerializersModule = EmptySerializersModule()
 
+    /**
+     * A list element is always a scalar/enum in this format's scope, so any call here — a nested
+     * `@Serializable` object or a nested list — is out of scope and rejected, mirroring
+     * [QueryEncoder.beginStructure]'s top-level guard.
+     */
+    override fun beginStructure(descriptor: SerialDescriptor): CompositeEncoder =
+        throw SerializationException("nested objects are not supported by the query format")
+
     override fun encodeValue(value: Any) {
         builder.add(name, value.toString())
     }
