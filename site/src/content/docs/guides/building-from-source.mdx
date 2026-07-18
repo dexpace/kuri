@@ -18,7 +18,8 @@ build:
 - Kotlin `allWarningsAsErrors`
 - explicit-API strict mode
 - the binary-compatibility validator (`apiCheck`)
-- an 80% Kover line-coverage floor
+- per-module Kover line/branch floors: `kuri` and `kuri-bind` at 99% line / 85% and 88% branch
+  respectively, `kuri-serde-kotlinx` at 90% line / 80% branch
 
 After an intentional public-API change, regenerate and commit the API snapshot in the
 same change:
