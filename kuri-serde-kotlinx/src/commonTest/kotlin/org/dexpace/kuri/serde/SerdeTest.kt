@@ -74,6 +74,11 @@ private data class Nested(
     val inner: Search,
 )
 
+@Serializable
+private data class Foo(
+    val tags: List<String> = listOf("x"),
+)
+
 class SerdeTest {
     @Test
     fun `url serializes as its canonical string in json`() {
@@ -194,6 +199,36 @@ class SerdeTest {
             )
         val query = QueryParametersFormat.encodeToQueryString(original)
         assertEquals(original, QueryParametersFormat.decodeFromQueryString<AllLists>(query))
+    }
+
+    @Test
+    fun `an explicitly-empty list round-trips to an empty list, not the declared default`() {
+        // Regression test for #86: encoding Foo(tags = emptyList()) against a non-empty default
+        // (listOf("x")) must not be indistinguishable from tags being absent altogether.
+        val encoded = QueryParametersFormat.encodeToQueryString(Foo(tags = emptyList()))
+        assertEquals("tags[]", encoded)
+        assertEquals(Foo(tags = emptyList()), QueryParametersFormat.decodeFromQueryString<Foo>(encoded))
+    }
+
+    @Test
+    fun `a field genuinely absent from the query still falls back to its declared default`() {
+        assertEquals(Foo(tags = listOf("x")), QueryParametersFormat.decodeFromQueryString<Foo>(""))
+    }
+
+    @Test
+    fun `a list left at its declared empty default is still omitted from the encoded output`() {
+        // Search.tags defaults to emptyList(), so Search(q = "only") leaves it unchanged: no marker,
+        // no repeated pairs, matching the existing default-omission contract.
+        assertEquals("q=only", QueryParametersFormat.encodeToQueryString(Search(q = "only")))
+        assertEquals(emptyList(), QueryParametersFormat.decodeFromQueryString<Search>("q=only").tags)
+    }
+
+    @Test
+    fun `a non-empty list still round-trips without an empty-list marker`() {
+        val original = Foo(tags = listOf("a", "b", "c"))
+        val encoded = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("tags=a&tags=b&tags=c", encoded)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<Foo>(encoded))
     }
 
     @Test

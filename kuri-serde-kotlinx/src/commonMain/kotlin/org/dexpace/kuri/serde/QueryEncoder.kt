@@ -54,10 +54,21 @@ internal class QueryEncoder : AbstractEncoder() {
         return true
     }
 
+    /**
+     * Starts a list property. A non-empty list is carried entirely by its repeated `name=value`
+     * pairs, so no marker is needed. An empty list has no elements to repeat, which would otherwise
+     * make it indistinguishable on the wire from the property being absent altogether (see
+     * [emptyListMarkerName]) — so this adds that marker up front, before [QueryListEncoder] contributes
+     * zero further pairs.
+     */
     override fun beginCollection(
         descriptor: SerialDescriptor,
         collectionSize: Int,
-    ): CompositeEncoder = QueryListEncoder(requireName(), builder)
+    ): CompositeEncoder {
+        val name = requireName()
+        if (collectionSize == 0) builder.add(emptyListMarkerName(name), null)
+        return QueryListEncoder(name, builder)
+    }
 
     override fun encodeValue(value: Any) {
         builder.add(requireName(), value.toString())
@@ -95,3 +106,25 @@ internal class QueryListEncoder(
         builder.add(name, enumDescriptor.getElementName(index))
     }
 }
+
+/**
+ * Suffix marking the wire-level "present but empty" sentinel for a list property, appended to its
+ * declared name (e.g. `tags` -> `tags[]`). `[`/`]` are never percent-encoded by the query name encode
+ * set, so the marker stays literal in the encoded string. A Kotlin property name cannot itself contain
+ * `[`/`]`, so the marker can never collide with a real element name.
+ */
+private const val EMPTY_LIST_MARKER_SUFFIX: String = "[]"
+
+/**
+ * The wire name of the empty-collection marker for a list property declared as [name].
+ *
+ * A list property's non-empty state is fully carried by its repeated `name=value` pairs; an empty list
+ * has none, which is indistinguishable from the property being entirely absent (and would therefore
+ * fall back to its declared default on decode instead of decoding to an empty list). [QueryEncoder]
+ * emits this marker as a bare (no `=`) pair when a list encodes to zero elements, and [QueryDecoder]
+ * treats its presence as "present, zero elements" without contributing any element itself.
+ *
+ * @param name the list property's declared (unsuffixed) name.
+ * @return [name] with [EMPTY_LIST_MARKER_SUFFIX] appended.
+ */
+internal fun emptyListMarkerName(name: String): String = name + EMPTY_LIST_MARKER_SUFFIX

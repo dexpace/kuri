@@ -19,7 +19,9 @@ import org.dexpace.kuri.query.QueryParameters
 /**
  * Decodes one flat `@Serializable` class from a [QueryParameters]. Absent optional elements are skipped
  * (so their declared default applies); an absent required element fails. A list element delegates to
- * [QueryListDecoder], reading every repeated value for the name via `getAll`.
+ * [QueryListDecoder], reading every repeated value for the name via `getAll`. A list property present
+ * but empty carries no repeated values of its own, so it is recognized instead via
+ * [emptyListMarkerName] — see [isPresentEmptyList].
  */
 @Suppress("TooManyFunctions") // One decode method per primitive kind, mandated by the AbstractDecoder contract.
 internal class QueryDecoder(
@@ -34,12 +36,28 @@ internal class QueryDecoder(
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         while (++index < descriptor.elementsCount) {
             val name = descriptor.getElementName(index)
-            if (params.has(name) || !descriptor.isElementOptional(index)) {
+            val present = params.has(name) || isPresentEmptyList(descriptor, index, name)
+            if (present || !descriptor.isElementOptional(index)) {
                 currentName = name
                 return index
             }
         }
         return CompositeDecoder.DECODE_DONE
+    }
+
+    /**
+     * True when the element at [index] is a list property and its [emptyListMarkerName] marker is
+     * present, i.e. it was explicitly encoded as present-but-empty rather than omitted. Scoped to list
+     * elements only, so a foreign query string that happens to contain a `<scalarField>[]` pair cannot
+     * spuriously mark a scalar property present.
+     */
+    private fun isPresentEmptyList(
+        descriptor: SerialDescriptor,
+        index: Int,
+        name: String,
+    ): Boolean {
+        val isList = descriptor.getElementDescriptor(index).kind == StructureKind.LIST
+        return isList && params.has(emptyListMarkerName(name))
     }
 
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder {
