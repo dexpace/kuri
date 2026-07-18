@@ -41,7 +41,7 @@ public fun Url.toJavaUriOrNull(): URI? =
  *
  * @return the [URL] equivalent of this URL.
  * @throws IllegalArgumentException if [href] is not a valid RFC 2396 URI (raised by [URI.create]).
- * @throws java.net.MalformedURLException if the URI is not absolute or names a protocol with no handler.
+ * @throws java.net.MalformedURLException if [href]'s scheme names a protocol with no registered handler.
  */
 public fun Url.toJavaUrl(): URL = toJavaUri().toURL()
 

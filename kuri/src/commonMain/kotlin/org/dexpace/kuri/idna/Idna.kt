@@ -145,7 +145,7 @@ internal object Idna {
     }
 
     /**
-     * Runs the inverse display transform (UTS-46 ToUnicode) over [domain]: map, (deferred) NFC,
+     * Runs the inverse display transform (UTS-46 ToUnicode) over [domain]: map, NFC-normalize,
      * then Punycode-decode every `xn--` label. Best-effort — validity failures are non-fatal, so a
      * disallowed code point or an undecodable label yields the original text rather than an error.
      */
