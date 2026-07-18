@@ -17,6 +17,7 @@ import org.dexpace.kuri.parser.UrlParser
 import org.dexpace.kuri.parser.decodedSegments
 import org.dexpace.kuri.parser.fileExtensionOf
 import org.dexpace.kuri.parser.fileNameOf
+import org.dexpace.kuri.parser.isDirectoryPath
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSet
 import org.dexpace.kuri.percent.PercentEncodeSets
@@ -516,6 +517,50 @@ public class Url internal constructor(
      * @return a new [Url] with no fragment.
      */
     public fun withoutFragment(): Url = withFragment(null)
+
+    /**
+     * Returns a copy of this URL with its userinfo (username and password), query, and fragment
+     * removed, leaving the [scheme], [host], [port], and [encodedPath] intact (SPEC [CONF-120]).
+     *
+     * A convenience for logging or telemetry: it strips exactly the components WHATWG/RFC 3986
+     * treat as sensitive or context-dependent (credentials, the query string, and the fragment)
+     * while every other component — including a credential-less authority — is preserved
+     * verbatim. For an opaque-path URL such as `mailto:user@example.com`, the `user@` text is part
+     * of the opaque path rather than real userinfo (there is no authority at all) and so is left
+     * untouched; only the actual query and fragment are stripped. A URL that already carries none
+     * of the three is returned equal in value (though [newBuilder] always rebuilds, so the result
+     * is not necessarily the same reference).
+     *
+     * @return a new `Url` with no username, password, query, or fragment.
+     */
+    public fun redact(): Url =
+        newBuilder()
+            .username("")
+            .password("")
+            .query(null)
+            .fragment(null)
+            .build()
+
+    /**
+     * Reports whether this URL's path denotes a directory — its [encodedPath] ends in `/` (SPEC
+     * [PATH-3], [CONF-85]).
+     *
+     * True for a trailing-slash path such as `/a/` and for the root path `/` (a single empty
+     * segment) — which every special-scheme URL with an otherwise-empty path canonicalizes to, so
+     * e.g. `https://h` and `https://h/` both report `true`. `false` for a path with content after
+     * its last segment (`/a`). [hasTrailingSlash] is an exact alias, for a call site that prefers
+     * the WHATWG "trailing slash" phrasing over the filesystem-style "directory" term.
+     *
+     * @return `true` iff [encodedPath] ends in `/`.
+     */
+    public fun isDirectory(): Boolean = components.path.isDirectoryPath()
+
+    /**
+     * Alias of [isDirectory] (SPEC [PATH-3], [CONF-85]); both accessors report the same condition.
+     *
+     * @return `true` iff [encodedPath] ends in `/`.
+     */
+    public fun hasTrailingSlash(): Boolean = isDirectory()
 
     /**
      * The WHATWG `protocol` setter (URL §5): returns a copy with [value]'s scheme, or this URL

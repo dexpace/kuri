@@ -147,6 +147,27 @@ public final class PublicApiDxJavaTest {
     }
 
     @Test
+    public void uriRedactStripsUserinfoQueryAndFragment() {
+        Uri redacted = Uri.parseOrThrow("http://user:pass@h:8080/p?q=1#frag").redact();
+
+        Assert.assertEquals("http://h:8080/p", redacted.uriString());
+        Assert.assertNull(redacted.userInfo());
+        Assert.assertNull(redacted.query());
+        Assert.assertNull(redacted.fragment());
+    }
+
+    @Test
+    public void uriIsDirectoryAndHasTrailingSlashAgree() {
+        Uri directory = Uri.parseOrThrow("http://h/a/");
+        Assert.assertTrue(directory.isDirectory());
+        Assert.assertTrue(directory.hasTrailingSlash());
+
+        Uri file = Uri.parseOrThrow("http://h/a");
+        Assert.assertFalse(file.isDirectory());
+        Assert.assertFalse(file.hasTrailingSlash());
+    }
+
+    @Test
     public void uriResolveAndConvertToUrl() {
         Assert.assertEquals("http://h/x", Uri.parseOrThrow("http://h/a/b").resolveOrThrow("../x").uriString());
 
@@ -228,6 +249,28 @@ public final class PublicApiDxJavaTest {
         Assert.assertEquals(Integer.valueOf(8443), ported.port());
 
         Assert.assertNull(Url.parseOrThrow("https://h/p#x").withoutFragment().fragment());
+    }
+
+    @Test
+    public void urlRedactStripsUserinfoQueryAndFragment() {
+        Url redacted = Url.parseOrThrow("https://user:pass@h:8443/p?q=1#frag").redact();
+
+        Assert.assertEquals("https://h:8443/p", redacted.href());
+        Assert.assertEquals("", redacted.username());
+        Assert.assertEquals("", redacted.password());
+        Assert.assertNull(redacted.query());
+        Assert.assertNull(redacted.fragment());
+    }
+
+    @Test
+    public void urlIsDirectoryAndHasTrailingSlashAgree() {
+        Url directory = Url.parseOrThrow("https://h/a/");
+        Assert.assertTrue(directory.isDirectory());
+        Assert.assertTrue(directory.hasTrailingSlash());
+
+        Url file = Url.parseOrThrow("https://h/a");
+        Assert.assertFalse(file.isDirectory());
+        Assert.assertFalse(file.hasTrailingSlash());
     }
 
     // --- Query + ParseResult + Host ---
