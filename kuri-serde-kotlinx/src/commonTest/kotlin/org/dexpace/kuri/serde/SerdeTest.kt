@@ -74,6 +74,16 @@ private data class Nested(
     val inner: Search,
 )
 
+@Serializable
+private data class Flag(
+    val flag: Boolean,
+)
+
+@Serializable
+private data class Flags(
+    val flags: List<Boolean>,
+)
+
 class SerdeTest {
     @Test
     fun `url serializes as its canonical string in json`() {
@@ -216,6 +226,46 @@ class SerdeTest {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.decodeFromQueryString<Search>("q=x&sort=SIDEWAYS")
         }
+    }
+
+    @Test
+    fun `decoding a numeric boolean value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=1")
+        }
+    }
+
+    @Test
+    fun `decoding a word other than true or false throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=yes")
+        }
+    }
+
+    @Test
+    fun `decoding a misspelled boolean value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=ture")
+        }
+    }
+
+    @Test
+    fun `decoding an invalid boolean list element throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flags>("flags=true&flags=nope")
+        }
+    }
+
+    @Test
+    fun `decoding true and false boolean values still succeeds`() {
+        assertEquals(Flag(flag = true), QueryParametersFormat.decodeFromQueryString<Flag>("flag=true"))
+        assertEquals(Flag(flag = false), QueryParametersFormat.decodeFromQueryString<Flag>("flag=false"))
+    }
+
+    @Test
+    fun `decoding a boolean value is case-insensitive`() {
+        assertEquals(Flag(flag = true), QueryParametersFormat.decodeFromQueryString<Flag>("flag=TRUE"))
+        assertEquals(Flag(flag = false), QueryParametersFormat.decodeFromQueryString<Flag>("flag=FALSE"))
     }
 
     @Test
