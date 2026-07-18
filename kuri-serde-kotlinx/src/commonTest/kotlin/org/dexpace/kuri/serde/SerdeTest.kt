@@ -233,6 +233,99 @@ class SerdeTest {
     }
 
     @Test
+    fun `decoding a malformed Int value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Search>("q=x&page=abc")
+        }
+    }
+
+    @Test
+    fun `decoding an empty Int value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Search>("q=x&page=")
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Long value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=notanumber" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Short value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=notanumber&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Byte value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=notanumber&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Double value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=notanumber&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Float value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=notanumber&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding an empty Char value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a multi-character Char value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=ab&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed list element throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllLists>(
+                "bytes=abc&shorts=1&ints=1&longs=1&floats=1.0&doubles=1.0&chars=a&flags=true&sorts=ASC",
+            )
+        }
+    }
+
+    @Test
     fun `decoding a nested serializable object is rejected`() {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.decodeFromQueryString<Nested>("inner=x")
