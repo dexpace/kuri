@@ -82,8 +82,15 @@ private fun parsePlainOrPrefixedVarspec(
     }
     val name = spec.substring(0, colon)
     validateName(name, at)
-    val prefix = spec.substring(colon + 1).toIntOrNull()
-    if (prefix == null || prefix !in 1..MAX_PREFIX) throw UriTemplateException("invalid prefix in '$spec'", at)
+    val rawPrefix = spec.substring(colon + 1)
+    // RFC 6570 §2.4.1: max-length = %x31-39 0*3DIGIT — the first character must be a digit
+    // 1-9 and any remaining characters must be digits, which rules out a leading '+'/'-' sign
+    // and leading zeros that `String.toIntOrNull()` would otherwise accept silently.
+    val hasValidShape = rawPrefix.isNotEmpty() && rawPrefix[0] in '1'..'9' && rawPrefix.drop(1).all { it in '0'..'9' }
+    val prefix = rawPrefix.toIntOrNull()
+    if (!hasValidShape || prefix == null || prefix !in 1..MAX_PREFIX) {
+        throw UriTemplateException("invalid prefix in '$spec'", at)
+    }
     return Varspec(name, explode = false, prefix = prefix)
 }
 
