@@ -283,9 +283,11 @@ public class Url internal constructor(
      *
      * WHATWG parsing is a lenient repair process: it accepts and silently corrects inputs a strict
      * reader would reject (a `\` read as `/`, a missing authority slash, an out-of-set code point),
-     * and records each correction as a [ValidationError] without failing the parse. The list is
-     * ordered by first occurrence and empty for a fully conformant input; it is useful for linting or
-     * telemetry, never for control flow (a validation error never downgrades a successful parse).
+     * and records each correction as a [ValidationError] without failing the parse. Each entry
+     * carries its [ValidationError.kind], the offset [ValidationError.at] it occurred at, and
+     * [ValidationError.isFailure]. The list is ordered by first occurrence and empty for a fully
+     * conformant input; it is useful for linting or telemetry, never for control flow (a validation
+     * error never downgrades a successful parse).
      *
      * @return a read-only, ordered copy of the validation warnings; empty for a clean parse.
      */

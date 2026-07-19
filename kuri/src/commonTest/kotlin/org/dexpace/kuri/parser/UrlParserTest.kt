@@ -5,7 +5,7 @@
 package org.dexpace.kuri.parser
 
 import org.dexpace.kuri.error.ParseResult
-import org.dexpace.kuri.error.ValidationError
+import org.dexpace.kuri.error.ValidationErrorKind
 import org.dexpace.kuri.host.Host
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,6 +35,12 @@ class UrlParserTest {
         assertIs<ComponentPath.Segments>(path, "expected a segment path, was $path")
         return path.segments
     }
+
+    /** True when [components] recorded at least one validation error of [kind]. */
+    private fun hasKind(
+        components: ParsedComponents,
+        kind: ValidationErrorKind,
+    ): Boolean = components.validationErrors.any { it.kind == kind }
 
     @Test
     fun `decomposes a full special URL`() {
@@ -69,15 +75,42 @@ class UrlParserTest {
         assertEquals("http", url.scheme)
         assertEquals(Host.RegName("h"), url.host)
         assertEquals(listOf("p"), segments(url))
-        assertTrue(ValidationError.BACKSLASH_AS_SOLIDUS in url.validationErrors)
+        assertTrue(hasKind(url, ValidationErrorKind.BACKSLASH_AS_SOLIDUS))
     }
 
     @Test
-    fun `strips embedded tab before parsing`() {
+    fun `strips embedded tab before parsing and records its original offset`() {
         val url = parsed("htt\tp://h")
         assertEquals("http", url.scheme)
         assertEquals(Host.RegName("h"), url.host)
-        assertTrue(ValidationError.TAB_OR_NEWLINE_REMOVED in url.validationErrors)
+        val tabErrors = url.validationErrors.filter { it.kind == ValidationErrorKind.TAB_OR_NEWLINE_REMOVED }
+        assertEquals(listOf(3), tabErrors.map { it.at })
+    }
+
+    @Test
+    fun `records a leading C0-or-space trim at offset 0`() {
+        val url = parsed("  http://h")
+        val trimErrors =
+            url.validationErrors.filter { it.kind == ValidationErrorKind.LEADING_OR_TRAILING_C0_CONTROL_OR_SPACE }
+        assertEquals(listOf(0), trimErrors.map { it.at })
+    }
+
+    @Test
+    fun `records a trailing-only C0-or-space trim at the first trimmed offset`() {
+        val url = parsed("http://h  ")
+        val trimErrors =
+            url.validationErrors.filter { it.kind == ValidationErrorKind.LEADING_OR_TRAILING_C0_CONTROL_OR_SPACE }
+        assertEquals(listOf(8), trimErrors.map { it.at })
+    }
+
+    @Test
+    fun `shifts a tab offset by a preceding leading trim`() {
+        // The leading space at 0 is trimmed first (shifting the tab-scan input by one code unit),
+        // so the embedded tab -- originally at index 4 -- must still be reported at its true offset
+        // in the untrimmed input, not at its post-trim local index of 3.
+        val url = parsed(" htt\tp://h")
+        val tabErrors = url.validationErrors.filter { it.kind == ValidationErrorKind.TAB_OR_NEWLINE_REMOVED }
+        assertEquals(listOf(4), tabErrors.map { it.at })
     }
 
     @Test
@@ -89,10 +122,22 @@ class UrlParserTest {
     }
 
     @Test
-    fun `records an invalid-credentials validation error for userinfo`() {
+    fun `records a single invalid-credentials validation error at the at-sign offset`() {
         val url = parsed("http://u:p@h/")
 
-        assertTrue(ValidationError.INVALID_CREDENTIALS in url.validationErrors)
+        val credentialErrors = url.validationErrors.filter { it.kind == ValidationErrorKind.INVALID_CREDENTIALS }
+        assertEquals(listOf(10), credentialErrors.map { it.at })
+    }
+
+    @Test
+    fun `records one invalid-credentials error per at-sign in the authority`() {
+        // SPEC [PARSE-56]: each `@` the AUTHORITY state encounters is recorded, not just the
+        // final delimiter -- so "a@b@c.example" (the last-`@` userinfo split) yields two entries.
+        val url = parsed("http://a@b@c.example/")
+
+        val credentialErrors = url.validationErrors.filter { it.kind == ValidationErrorKind.INVALID_CREDENTIALS }
+        assertEquals(listOf(8, 10), credentialErrors.map { it.at })
+        assertEquals("a%40b", url.username)
     }
 
     @Test
@@ -186,28 +231,28 @@ class UrlParserTest {
         val base = parsed("http://a/b/c")
         val url = parsed("/\\x", base)
         assertEquals(Host.RegName("x"), url.host)
-        assertTrue(ValidationError.BACKSLASH_AS_SOLIDUS in url.validationErrors)
+        assertTrue(hasKind(url, ValidationErrorKind.BACKSLASH_AS_SOLIDUS))
     }
 
     @Test
     fun `records missing authority slashes for a single-slash special scheme`() {
         val url = parsed("http:/x")
         assertEquals(Host.RegName("x"), url.host)
-        assertTrue(ValidationError.MISSING_AUTHORITY_SLASHES in url.validationErrors)
+        assertTrue(hasKind(url, ValidationErrorKind.MISSING_AUTHORITY_SLASHES))
     }
 
     @Test
     fun `records a backslash after a file scheme`() {
         val url = parsed("file:\\p")
         assertEquals("file", url.scheme)
-        assertTrue(ValidationError.BACKSLASH_AS_SOLIDUS in url.validationErrors)
+        assertTrue(hasKind(url, ValidationErrorKind.BACKSLASH_AS_SOLIDUS))
     }
 
     @Test
     fun `records a backslash in the file-slash state`() {
         val url = parsed("file:/\\p")
         assertEquals("file", url.scheme)
-        assertTrue(ValidationError.BACKSLASH_AS_SOLIDUS in url.validationErrors)
+        assertTrue(hasKind(url, ValidationErrorKind.BACKSLASH_AS_SOLIDUS))
     }
 
     @Test
@@ -261,5 +306,62 @@ class UrlParserTest {
     fun `rejects an out-of-range port`() {
         val result = UrlParser.parse("https://h:99999/")
         assertTrue(result is ParseResult.Err, "expected Err, was $result")
+    }
+
+    @Test
+    fun `records file-invalid-Windows-drive-letter for a drive-letter file-base reference`() {
+        // Issue reproduction: against base file:///a/b, "C|/x" hits the file-base branch that
+        // clears the copied path because the remaining input is itself a drive letter ([PARSE-57]).
+        val base = parsed("file:///a/b")
+        val url = parsed("C|/x", base)
+
+        assertEquals(listOf("C:", "x"), segments(url))
+        val driveErrors =
+            url.validationErrors.filter { it.kind == ValidationErrorKind.FILE_INVALID_WINDOWS_DRIVE_LETTER }
+        assertEquals(listOf(0), driveErrors.map { it.at })
+    }
+
+    @Test
+    fun `records file-invalid-Windows-drive-letter-host for a drive-letter file host`() {
+        // Issue reproduction: "file://C:/foo" scans "C:" as the file host, which is a drive
+        // letter reinterpreted as a path instead ([PARSE-58]).
+        val url = parsed("file://C:/foo")
+
+        assertEquals(Host.Empty, url.host)
+        assertEquals(listOf("C:", "foo"), segments(url))
+        val driveErrors =
+            url.validationErrors.filter { it.kind == ValidationErrorKind.FILE_INVALID_WINDOWS_DRIVE_LETTER_HOST }
+        assertEquals(listOf(7), driveErrors.map { it.at })
+    }
+
+    @Test
+    fun `records an invalid-URL-unit error for a raw space in the path`() {
+        val url = parsed("http://h/a b")
+
+        val unitErrors = url.validationErrors.filter { it.kind == ValidationErrorKind.INVALID_URL_UNIT }
+        assertEquals(listOf(10), unitErrors.map { it.at })
+    }
+
+    @Test
+    fun `records an invalid-URL-unit error for a raw space in the query`() {
+        val url = parsed("http://h/?a b")
+
+        val unitErrors = url.validationErrors.filter { it.kind == ValidationErrorKind.INVALID_URL_UNIT }
+        assertEquals(listOf(11), unitErrors.map { it.at })
+    }
+
+    @Test
+    fun `records an invalid-URL-unit error for a raw space in the opaque path`() {
+        val url = parsed("mailto:a b")
+
+        val unitErrors = url.validationErrors.filter { it.kind == ValidationErrorKind.INVALID_URL_UNIT }
+        assertEquals(listOf(8), unitErrors.map { it.at })
+    }
+
+    @Test
+    fun `does not record an invalid-URL-unit error for a valid percent escape`() {
+        val url = parsed("http://h/a%20b")
+
+        assertTrue(url.validationErrors.none { it.kind == ValidationErrorKind.INVALID_URL_UNIT })
     }
 }

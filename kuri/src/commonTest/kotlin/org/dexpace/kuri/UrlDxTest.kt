@@ -4,10 +4,9 @@
  */
 package org.dexpace.kuri
 
-import org.dexpace.kuri.error.ValidationError
+import org.dexpace.kuri.error.ValidationErrorKind
 import org.dexpace.kuri.host.Host
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -57,7 +56,49 @@ class UrlDxTest {
         val url = parseOk("https://example.com/a\\b")
 
         assertEquals("https://example.com/a/b", url.href)
-        assertContains(url.validationErrors(), ValidationError.BACKSLASH_AS_SOLIDUS)
+        assertTrue(url.validationErrors().any { it.kind == ValidationErrorKind.BACKSLASH_AS_SOLIDUS })
+    }
+
+    @Test
+    fun `validationErrors records one invalid-credentials entry per at-sign`() {
+        // Issue #113 reproduction: two at-signs in the authority must yield two entries, not one.
+        val url = parseOk("http://a@b@c.example/")
+
+        val credentialErrors = url.validationErrors().filter { it.kind == ValidationErrorKind.INVALID_CREDENTIALS }
+        assertEquals(2, credentialErrors.size)
+    }
+
+    @Test
+    fun `validationErrors records file-invalid-Windows-drive-letter for a drive-letter reference`() {
+        // Issue #112 reproduction: against base file:///a/b, "C|/x" is a drive-letter reference.
+        val base = parseOk("file:///a/b")
+
+        val url = Url.parse("C|/x", base).getOrNull() ?: fail("expected C|/x to resolve against $base")
+
+        assertEquals("file:///C:/x", url.href)
+        assertTrue(
+            url.validationErrors().any { it.kind == ValidationErrorKind.FILE_INVALID_WINDOWS_DRIVE_LETTER },
+        )
+    }
+
+    @Test
+    fun `validationErrors records file-invalid-Windows-drive-letter-host for a drive-letter host`() {
+        // Issue #112 reproduction: "file://C:/foo" scans "C:" as a would-be host.
+        val url = parseOk("file://C:/foo")
+
+        assertEquals("file:///C:/foo", url.href)
+        assertTrue(
+            url.validationErrors().any { it.kind == ValidationErrorKind.FILE_INVALID_WINDOWS_DRIVE_LETTER_HOST },
+        )
+    }
+
+    @Test
+    fun `validationErrors records invalid-URL-unit for an out-of-repertoire code point`() {
+        // Issue #97: a raw space in the path is silently percent-encoded but was never recorded.
+        val url = parseOk("http://h/a b")
+
+        assertEquals("http://h/a%20b", url.href)
+        assertTrue(url.validationErrors().any { it.kind == ValidationErrorKind.INVALID_URL_UNIT })
     }
 
     @Test

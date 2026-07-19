@@ -9,6 +9,7 @@ import java.util.List;
 import org.dexpace.kuri.error.ParseResult;
 import org.dexpace.kuri.error.UriParseError;
 import org.dexpace.kuri.error.ValidationError;
+import org.dexpace.kuri.error.ValidationErrorKind;
 import org.dexpace.kuri.host.Host;
 import org.dexpace.kuri.idna.Idn;
 import org.dexpace.kuri.percent.Percent;
@@ -172,11 +173,20 @@ public final class PublicApiDxJavaTest {
     public void urlValidationErrorsListReflectsRepairs() {
         Assert.assertTrue(Url.parseOrThrow("https://example.com/a/b").validationErrors().isEmpty());
 
-        // A backslash under a special scheme is repaired to '/', recorded, and the parse still succeeds.
+        // A backslash under a special scheme is repaired to '/', recorded (with its offset), and
+        // the parse still succeeds.
         Url repaired = Url.parseOrThrow("https://example.com/a\\b");
         List<ValidationError> errors = repaired.validationErrors();
         Assert.assertFalse(errors.isEmpty());
-        Assert.assertTrue(errors.contains(ValidationError.BACKSLASH_AS_SOLIDUS));
+        boolean hasBackslashError = false;
+        for (ValidationError error : errors) {
+            if (error.getKind() == ValidationErrorKind.BACKSLASH_AS_SOLIDUS) {
+                hasBackslashError = true;
+                Assert.assertEquals(21, error.getAt());
+                Assert.assertFalse(error.isFailure());
+            }
+        }
+        Assert.assertTrue(hasBackslashError);
         Assert.assertEquals("https://example.com/a/b", repaired.href());
     }
 

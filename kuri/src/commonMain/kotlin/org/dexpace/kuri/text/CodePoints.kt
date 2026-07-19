@@ -23,11 +23,30 @@ internal const val HIGH_SURROGATE_START: Int = 0xD800
 /** First UTF-16 low-surrogate code unit (`U+DC00`). */
 private const val LOW_SURROGATE_START: Int = 0xDC00
 
+/** Last UTF-16 low-surrogate code unit (`U+DFFF`), the end of the whole surrogate range. */
+private const val SURROGATE_MAX: Int = 0xDFFF
+
 /** Bit shift separating the high- and low-surrogate halves of a code point. */
 private const val SURROGATE_SHIFT: Int = 10
 
 /** Mask isolating the low-surrogate payload bits of a supplementary code point. */
 private const val LOW_SURROGATE_MASK: Int = 0x3FF
+
+/** ASCII URL code points beyond alphanumerics (SPEC Table 4.2.5-a, [GRAM-14]). */
+private const val URL_CODE_POINT_ASCII_EXTRAS: String = "!$&'()*+,-./:;=?@_~"
+
+/** Inclusive lower bound of the non-ASCII URL code point range, `U+00A0` ([GRAM-14]). */
+private const val URL_CODE_POINT_NON_ASCII_MIN: Int = 0xA0
+
+/** Inclusive upper bound of the URL code point range, `U+10FFFD` ([GRAM-14]). */
+private const val URL_CODE_POINT_MAX: Int = 0x10FFFD
+
+/** Inclusive bounds of the sole BMP noncharacter block, `U+FDD0`-`U+FDEF` ([GRAM-15]). */
+private const val NONCHARACTER_BLOCK_MIN: Int = 0xFDD0
+private const val NONCHARACTER_BLOCK_MAX: Int = 0xFDEF
+
+/** Mask isolating a code point's low 16 bits; `0xFFFE`/`0xFFFF` there marks a noncharacter ([GRAM-15]). */
+private const val NONCHARACTER_LOW_MASK: Int = 0xFFFE
 
 /** Combines a UTF-16 surrogate pair into a single supplementary-plane code point. */
 internal fun toCodePoint(
@@ -95,3 +114,36 @@ internal fun appendCodePoint(
         out.append((LOW_SURROGATE_START + (offset and LOW_SURROGATE_MASK)).toChar())
     }
 }
+
+/**
+ * True when [codePoint] is a WHATWG **noncharacter** (SPEC [GRAM-15]): `U+FDD0`-`U+FDEF`, or any
+ * code point whose low 16 bits are `0xFFFE` or `0xFFFF`.
+ */
+internal fun isNoncharacter(codePoint: Int): Boolean {
+    require(codePoint in 0..MAX_CODE_POINT) { "code point out of range: $codePoint" }
+    return codePoint in NONCHARACTER_BLOCK_MIN..NONCHARACTER_BLOCK_MAX ||
+        (codePoint and NONCHARACTER_LOW_MASK) == NONCHARACTER_LOW_MASK
+}
+
+/**
+ * True when [codePoint] is a **URL code point** (SPEC §4.2.5, [GRAM-14]): an ASCII alphanumeric,
+ * one of the Table 4.2.5-a punctuation code points, or any non-surrogate, non-noncharacter code
+ * point in `U+00A0..U+10FFFD`.
+ *
+ * This class is advisory, not a parse gate ([GRAM-16]): a component code point outside it (and
+ * not a `%` introducing a percent-escape) is a non-fatal *invalid-URL-unit* validation error, not
+ * a rejection — see [org.dexpace.kuri.error.ValidationErrorKind.INVALID_URL_UNIT].
+ */
+internal fun isUrlCodePoint(codePoint: Int): Boolean {
+    require(codePoint in 0..MAX_CODE_POINT) { "code point out of range: $codePoint" }
+    return when {
+        codePoint < NON_ASCII_MIN -> isAsciiUrlCodePoint(codePoint.toChar())
+        codePoint < URL_CODE_POINT_NON_ASCII_MIN -> false // C1 controls, U+0080..U+009F
+        codePoint in HIGH_SURROGATE_START..SURROGATE_MAX -> false
+        codePoint > URL_CODE_POINT_MAX -> false
+        else -> !isNoncharacter(codePoint)
+    }
+}
+
+/** True when [c] is one of the ASCII URL code points (SPEC Table 4.2.5-a, [GRAM-14]). */
+private fun isAsciiUrlCodePoint(c: Char): Boolean = c.isAsciiAlphanumeric() || c in URL_CODE_POINT_ASCII_EXTRAS

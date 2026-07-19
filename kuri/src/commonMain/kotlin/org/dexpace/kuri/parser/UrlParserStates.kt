@@ -6,6 +6,7 @@ package org.dexpace.kuri.parser
 
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.error.ValidationError
+import org.dexpace.kuri.error.ValidationErrorKind
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSets
@@ -137,7 +138,7 @@ internal object UrlParserStates {
     /** Records [PARSE-55] when a `file:` scheme is not followed by `//`, then enters FILE. */
     private fun enterFile(state: UrlParserState): UrlTransition {
         if (!state.remaining().startsWith("//")) {
-            state.errors.add(ValidationError.MISSING_AUTHORITY_SLASHES)
+            state.errors.add(ValidationError(ValidationErrorKind.MISSING_AUTHORITY_SLASHES, at = state.pos))
         }
         return UrlTransition.Advance(UrlState.FILE)
     }
@@ -209,7 +210,7 @@ internal object UrlParserStates {
             state.pos += 1
             return UrlTransition.Advance(UrlState.SPECIAL_AUTHORITY_IGNORE_SLASHES)
         }
-        state.errors.add(ValidationError.MISSING_AUTHORITY_SLASHES)
+        state.errors.add(ValidationError(ValidationErrorKind.MISSING_AUTHORITY_SLASHES, at = state.pos))
         return UrlTransition.Reconsume(UrlState.RELATIVE)
     }
 
@@ -252,7 +253,7 @@ internal object UrlParserStates {
 
     /** Records [PARSE-22]'s invalid-reverse-solidus and routes a special `\` into RELATIVE_SLASH. */
     private fun relativeBackslash(state: UrlParserState): UrlTransition {
-        state.errors.add(ValidationError.BACKSLASH_AS_SOLIDUS)
+        state.errors.add(ValidationError(ValidationErrorKind.BACKSLASH_AS_SOLIDUS, at = state.pos))
         return UrlTransition.Advance(UrlState.RELATIVE_SLASH)
     }
 
@@ -309,7 +310,7 @@ internal object UrlParserStates {
         c: Char?,
     ): UrlTransition {
         if (c == '\\') {
-            state.errors.add(ValidationError.BACKSLASH_AS_SOLIDUS)
+            state.errors.add(ValidationError(ValidationErrorKind.BACKSLASH_AS_SOLIDUS, at = state.pos))
         }
         return UrlTransition.Advance(UrlState.SPECIAL_AUTHORITY_IGNORE_SLASHES)
     }
@@ -343,7 +344,7 @@ internal object UrlParserStates {
             state.pos += 1
             return UrlTransition.Advance(UrlState.SPECIAL_AUTHORITY_IGNORE_SLASHES)
         }
-        state.errors.add(ValidationError.MISSING_AUTHORITY_SLASHES)
+        state.errors.add(ValidationError(ValidationErrorKind.MISSING_AUTHORITY_SLASHES, at = state.pos))
         return UrlTransition.Reconsume(UrlState.SPECIAL_AUTHORITY_IGNORE_SLASHES)
     }
 
@@ -357,7 +358,7 @@ internal object UrlParserStates {
     internal fun specialAuthorityIgnoreSlashesState(state: UrlParserState): UrlTransition {
         val c = state.currentChar()
         if (c != null && (c == '/' || c == '\\')) {
-            state.errors.add(ValidationError.MISSING_AUTHORITY_SLASHES)
+            state.errors.add(ValidationError(ValidationErrorKind.MISSING_AUTHORITY_SLASHES, at = state.pos))
             return UrlTransition.Advance(UrlState.SPECIAL_AUTHORITY_IGNORE_SLASHES)
         }
         return UrlTransition.Reconsume(UrlState.AUTHORITY)
@@ -377,7 +378,7 @@ internal object UrlParserStates {
         c: Char?,
     ): UrlTransition {
         if (c == '\\') {
-            state.errors.add(ValidationError.BACKSLASH_AS_SOLIDUS)
+            state.errors.add(ValidationError(ValidationErrorKind.BACKSLASH_AS_SOLIDUS, at = state.pos))
         }
         val isSlash = c == '/' || c == '\\'
         return if (isSlash) UrlTransition.Advance(UrlState.PATH) else UrlTransition.Reconsume(UrlState.PATH)
@@ -438,10 +439,11 @@ internal object UrlParserStates {
         c: Char?,
     ): UrlTransition {
         if (state.special && c == '\\') {
-            state.errors.add(ValidationError.BACKSLASH_AS_SOLIDUS)
+            state.errors.add(ValidationError(ValidationErrorKind.BACKSLASH_AS_SOLIDUS, at = state.pos))
         }
         val seg = state.buffer.toString()
         state.buffer.setLength(0)
+        recordInvalidUrlCodePoints(state, seg, textOffset = state.pos - seg.length)
         val cIsSeparator = c == '/' || (state.special && c == '\\')
         processPathSegment(state, seg, cIsSeparator)
         return pathBoundaryTransition(state, c)
@@ -487,6 +489,7 @@ internal object UrlParserStates {
         val queryAt = state.input.indexOf('?', state.pos)
         val end = if (queryAt < 0) state.input.length else queryAt
         val raw = state.input.substring(state.pos, end)
+        recordInvalidUrlCodePoints(state, raw, textOffset = state.pos)
         val hasTrailingDelimiter = end < state.input.length || state.fragmentRaw != null
         state.opaque = encodeOpaque(raw, hasTrailingDelimiter)
         state.isOpaque = true
@@ -520,6 +523,7 @@ internal object UrlParserStates {
     internal fun queryState(state: UrlParserState): UrlTransition {
         require(state.query != null) { "query state entered without an opening '?'" }
         val raw = state.input.substring(state.pos)
+        recordInvalidUrlCodePoints(state, raw, textOffset = state.pos)
         val set = if (state.special) PercentEncodeSets.SPECIAL_QUERY else PercentEncodeSets.QUERY
         state.query = (state.query ?: "") + PercentCodec.encode(raw, set)
         state.pos = state.input.length

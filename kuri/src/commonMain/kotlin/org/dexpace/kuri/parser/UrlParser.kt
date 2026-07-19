@@ -7,6 +7,7 @@ package org.dexpace.kuri.parser
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.error.ValidationError
+import org.dexpace.kuri.error.ValidationErrorKind
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSets
 import org.dexpace.kuri.text.isC0ControlOrSpace
@@ -47,8 +48,8 @@ internal object UrlParser {
         base: ParsedComponents? = null,
     ): ParseResult<ParsedComponents> {
         val errors = mutableListOf<ValidationError>()
-        val trimmed = trimC0OrSpace(input, errors)
-        val stripped = stripTabAndNewline(trimmed, errors)
+        val (trimmed, trimStart) = trimC0OrSpace(input, errors)
+        val stripped = stripTabAndNewline(trimmed, trimStart, errors)
         val (body, fragmentRaw) = pruneFragment(stripped)
         val state = UrlParserState(body, base, fragmentRaw, errors)
         val failure = runStateMachine(state)
@@ -68,7 +69,7 @@ internal object UrlParser {
         override: StateOverride,
     ): ParseResult<ParsedComponents> {
         val errors = mutableListOf<ValidationError>()
-        val stripped = stripTabAndNewline(value, errors)
+        val stripped = stripTabAndNewline(value, originalOffset = 0, errors)
         val state = UrlParserState(stripped, seed, override, errors)
         // WHATWG pathname setter step "empty this's URL's path" before re-entering path-start
         // (WHATWG URL §5); the seeded segments must not survive into the re-parse.
@@ -216,7 +217,7 @@ internal object UrlParser {
     private fun finalize(state: UrlParserState): ParsedComponents {
         val path =
             if (state.isOpaque) ComponentPath.Opaque(state.opaque) else ComponentPath.Segments(state.path.toList())
-        val fragment = state.fragmentRaw?.let { PercentCodec.encode(it, PercentEncodeSets.FRAGMENT) }
+        val fragment = state.fragmentRaw?.let { raw -> finalizeFragment(state, raw) }
         return ParsedComponents(
             scheme = state.scheme,
             username = state.username,
@@ -230,11 +231,32 @@ internal object UrlParser {
         )
     }
 
-    /** Trims leading/trailing C0-control-or-space, recording one validation error if any (§8.1 [PARSE-5]). */
+    /**
+     * Percent-encodes [raw] under the fragment set and records [ValidationErrorKind.INVALID_URL_UNIT]
+     * for any out-of-repertoire code point it contains ([PARSE-59]). The fragment sits just past the
+     * pruned `#` in [state]'s pre-processed input, so its offsets continue that coordinate space:
+     * `state.input.length` is the `#` itself, `+ 1` is the fragment's first code unit.
+     */
+    private fun finalizeFragment(
+        state: UrlParserState,
+        raw: String,
+    ): String {
+        recordInvalidUrlCodePoints(state, raw, textOffset = state.input.length + 1)
+        return PercentCodec.encode(raw, PercentEncodeSets.FRAGMENT)
+    }
+
+    /**
+     * Trims leading/trailing C0-control-or-space, recording one validation error if any (§8.1
+     * [PARSE-5]) at the offset of the first trimmed code point in [input] (leading trim always
+     * starts at `0`; a trailing-only trim is recorded at the first trailing code point removed).
+     *
+     * @return the trimmed text paired with how many leading code units were removed, so callers
+     *   downstream of the trim can translate their own local offsets back into [input]'s coordinates.
+     */
     private fun trimC0OrSpace(
         input: String,
         errors: MutableList<ValidationError>,
-    ): String {
+    ): Pair<String, Int> {
         var start = 0
         var end = input.length
         while (start < end && input[start].isC0ControlOrSpace()) {
@@ -245,22 +267,36 @@ internal object UrlParser {
         }
         val trimmed = input.substring(start, end)
         if (trimmed.length != input.length) {
-            errors.add(ValidationError.LEADING_OR_TRAILING_C0_CONTROL_OR_SPACE)
+            val at = if (start > 0) 0 else end
+            errors.add(ValidationError(ValidationErrorKind.LEADING_OR_TRAILING_C0_CONTROL_OR_SPACE, at))
         }
-        return trimmed
+        return trimmed to start
     }
 
-    /** Removes every tab/LF/CR, recording one validation error if any was present (§8.1 [PARSE-3]). */
+    /**
+     * Removes every tab/LF/CR, recording one validation error if any was present (§8.1 [PARSE-3])
+     * at the offset of the first one removed. [originalOffset] is how many code units [input]
+     * itself is already shifted from the *original* input (the coordinate space [ValidationError.at]
+     * uses for this pre-processing-stage kind, per [trimC0OrSpace]); `0` when no trim preceded this.
+     */
     private fun stripTabAndNewline(
         input: String,
+        originalOffset: Int,
         errors: MutableList<ValidationError>,
     ): String {
+        require(originalOffset >= 0) { "original offset must be non-negative: $originalOffset" }
         val out = StringBuilder(input.length)
-        for (ch in input) {
-            if (ch != '\t' && ch != '\n' && ch != '\r') out.append(ch)
+        var firstRemovedAt = -1
+        for (i in input.indices) {
+            val ch = input[i]
+            if (ch == '\t' || ch == '\n' || ch == '\r') {
+                if (firstRemovedAt < 0) firstRemovedAt = originalOffset + i
+            } else {
+                out.append(ch)
+            }
         }
-        if (out.length != input.length) {
-            errors.add(ValidationError.TAB_OR_NEWLINE_REMOVED)
+        if (firstRemovedAt >= 0) {
+            errors.add(ValidationError(ValidationErrorKind.TAB_OR_NEWLINE_REMOVED, at = firstRemovedAt))
         }
         return out.toString()
     }
