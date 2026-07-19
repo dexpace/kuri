@@ -78,7 +78,7 @@ internal data class ParsedComponents(
 ) {
     init {
         check(username != null || password == null) {
-            "a non-null password requires a non-null username (MODEL-13): password=$password"
+            "a non-null password requires a non-null username (MODEL-13)"
         }
     }
 }
