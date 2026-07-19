@@ -102,6 +102,16 @@ private data class NestedMapValue(
     val entries: Map<String, Search>,
 )
 
+@Serializable
+private data class OptionalMetadata(
+    val meta: Map<String, String> = emptyMap(),
+)
+
+@Serializable
+private data class NullableMetadata(
+    val meta: Map<String, String>? = null,
+)
+
 class SerdeTest {
     @Test
     fun `url serializes as its canonical string in json`() {
@@ -343,5 +353,31 @@ class SerdeTest {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.encodeToQueryParameters(NestedMapValue(mapOf("x" to Search(q = "y"))))
         }
+    }
+
+    @Test
+    fun `an optional map property with data present round-trips instead of falling back to its default`() {
+        val original = OptionalMetadata(meta = mapOf("a" to "1", "b" to "2"))
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("meta.key=a&meta.value=1&meta.key=b&meta.value=2", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<OptionalMetadata>(query))
+    }
+
+    @Test
+    fun `an absent optional map property decodes to its declared default`() {
+        assertEquals(OptionalMetadata(), QueryParametersFormat.decodeFromQueryString<OptionalMetadata>(""))
+    }
+
+    @Test
+    fun `a nullable map property with data present round-trips instead of decoding to null`() {
+        val original = NullableMetadata(meta = mapOf("a" to "1", "b" to "2"))
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("meta.key=a&meta.value=1&meta.key=b&meta.value=2", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<NullableMetadata>(query))
+    }
+
+    @Test
+    fun `an absent nullable map property decodes to null`() {
+        assertEquals(NullableMetadata(meta = null), QueryParametersFormat.decodeFromQueryString<NullableMetadata>(""))
     }
 }

@@ -31,18 +31,37 @@ internal class QueryDecoder(
 
     private var index = -1
     private var currentName: String = ""
+    private var currentIsMap = false
     private var entered = false
 
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         while (++index < descriptor.elementsCount) {
             val name = descriptor.getElementName(index)
-            if (params.has(name) || !descriptor.isElementOptional(index)) {
+            val isMap = descriptor.getElementDescriptor(index).kind == StructureKind.MAP
+            if (hasValueFor(name, isMap) || !descriptor.isElementOptional(index)) {
                 currentName = name
+                currentIsMap = isMap
                 return index
             }
         }
         return CompositeDecoder.DECODE_DONE
     }
+
+    /**
+     * Whether the query carries a value for an element. A map element is stored under its derived
+     * `<name>.key` / `<name>.value` parameters, never under the bare property name, so its presence
+     * has to be probed there — otherwise an *optional* or *nullable* map whose data is actually
+     * present would be wrongly treated as absent and fall back to its default (or to `null`).
+     */
+    private fun hasValueFor(
+        name: String,
+        isMap: Boolean,
+    ): Boolean =
+        if (isMap) {
+            params.has("$name.$MAP_KEY_SUFFIX") || params.has("$name.$MAP_VALUE_SUFFIX")
+        } else {
+            params.has(name)
+        }
 
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder =
         when (descriptor.kind) {
@@ -77,7 +96,7 @@ internal class QueryDecoder(
         return QueryMapDecoder(keys, values)
     }
 
-    override fun decodeNotNullMark(): Boolean = params.has(currentName)
+    override fun decodeNotNullMark(): Boolean = hasValueFor(currentName, currentIsMap)
 
     override fun decodeString(): String =
         params[currentName] ?: throw SerializationException("missing query parameter '$currentName'")
