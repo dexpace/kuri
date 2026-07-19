@@ -38,7 +38,7 @@ class IdnaTest {
     @Test
     fun `drops an ignored code point during mapping`() {
         // U+00AD SOFT HYPHEN is an ignored code point and is removed from the label.
-        assertEquals("example.com", ascii("exa­mple.com"))
+        assertEquals("example.com", ascii("exa" + Char(0x00AD) + "mple.com"))
     }
 
     @Test
@@ -65,7 +65,7 @@ class IdnaTest {
     @Test
     fun `fails with IdnaFailed on a disallowed code point`() {
         // U+0080 is a plain disallowed code point (not affected by UseSTD3ASCIIRules).
-        val input = "example.com"
+        val input = "ex" + Char(0x0080) + "ample.com"
         val expected = ParseResult.Err(UriParseError.InvalidHost(input, HostError.IdnaFailed))
         assertEquals(expected, Idna.domainToAscii(input))
     }
