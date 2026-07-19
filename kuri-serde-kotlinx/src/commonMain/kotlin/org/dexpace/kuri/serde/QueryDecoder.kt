@@ -56,26 +56,25 @@ internal class QueryDecoder(
 
     override fun decodeBoolean(): Boolean = decodeString().toBoolean()
 
-    override fun decodeInt(): Int = scalarOrFail("Int", decodeString(), String::toIntOrNull)
+    override fun decodeInt(): Int = scalarOrFail("Int", decodeString(), "value for '$currentName'", String::toIntOrNull)
 
-    override fun decodeLong(): Long = scalarOrFail("Long", decodeString(), String::toLongOrNull)
+    override fun decodeLong(): Long =
+        scalarOrFail("Long", decodeString(), "value for '$currentName'", String::toLongOrNull)
 
-    override fun decodeShort(): Short = scalarOrFail("Short", decodeString(), String::toShortOrNull)
+    override fun decodeShort(): Short =
+        scalarOrFail("Short", decodeString(), "value for '$currentName'", String::toShortOrNull)
 
-    override fun decodeByte(): Byte = scalarOrFail("Byte", decodeString(), String::toByteOrNull)
+    override fun decodeByte(): Byte =
+        scalarOrFail("Byte", decodeString(), "value for '$currentName'", String::toByteOrNull)
 
-    override fun decodeDouble(): Double = scalarOrFail("Double", decodeString(), String::toDoubleOrNull)
+    override fun decodeDouble(): Double =
+        scalarOrFail("Double", decodeString(), "value for '$currentName'", String::toDoubleOrNull)
 
-    override fun decodeFloat(): Float = scalarOrFail("Float", decodeString(), String::toFloatOrNull)
+    override fun decodeFloat(): Float =
+        scalarOrFail("Float", decodeString(), "value for '$currentName'", String::toFloatOrNull)
 
-    override fun decodeChar(): Char = scalarOrFail("Char", decodeString()) { it.singleOrNull() }
-
-    /** Converts [raw] with [convert], failing with a [SerializationException] naming [currentName] on error. */
-    private fun <T : Any> scalarOrFail(
-        kind: String,
-        raw: String,
-        convert: (String) -> T?,
-    ): T = convert(raw) ?: throw SerializationException("invalid $kind value for '$currentName': '$raw'")
+    override fun decodeChar(): Char =
+        scalarOrFail("Char", decodeString(), "value for '$currentName'") { it.singleOrNull() }
 
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = enumIndex(enumDescriptor, decodeString())
 }
@@ -102,29 +101,30 @@ internal class QueryListDecoder(
 
     override fun decodeBoolean(): Boolean = next().toBoolean()
 
-    override fun decodeInt(): Int = scalarOrFail("Int", next(), String::toIntOrNull)
+    override fun decodeInt(): Int = scalarOrFail("Int", next(), "list element", String::toIntOrNull)
 
-    override fun decodeLong(): Long = scalarOrFail("Long", next(), String::toLongOrNull)
+    override fun decodeLong(): Long = scalarOrFail("Long", next(), "list element", String::toLongOrNull)
 
-    override fun decodeShort(): Short = scalarOrFail("Short", next(), String::toShortOrNull)
+    override fun decodeShort(): Short = scalarOrFail("Short", next(), "list element", String::toShortOrNull)
 
-    override fun decodeByte(): Byte = scalarOrFail("Byte", next(), String::toByteOrNull)
+    override fun decodeByte(): Byte = scalarOrFail("Byte", next(), "list element", String::toByteOrNull)
 
-    override fun decodeDouble(): Double = scalarOrFail("Double", next(), String::toDoubleOrNull)
+    override fun decodeDouble(): Double = scalarOrFail("Double", next(), "list element", String::toDoubleOrNull)
 
-    override fun decodeFloat(): Float = scalarOrFail("Float", next(), String::toFloatOrNull)
+    override fun decodeFloat(): Float = scalarOrFail("Float", next(), "list element", String::toFloatOrNull)
 
-    override fun decodeChar(): Char = scalarOrFail("Char", next()) { it.singleOrNull() }
-
-    /** Converts [raw] with [convert], failing with a [SerializationException] naming the list element on error. */
-    private fun <T : Any> scalarOrFail(
-        kind: String,
-        raw: String,
-        convert: (String) -> T?,
-    ): T = convert(raw) ?: throw SerializationException("invalid $kind list element: '$raw'")
+    override fun decodeChar(): Char = scalarOrFail("Char", next(), "list element") { it.singleOrNull() }
 
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = enumIndex(enumDescriptor, next())
 }
+
+/** Converts [raw] with [convert], failing with a [SerializationException] describing [kind] and [context] on error. */
+private fun <T : Any> scalarOrFail(
+    kind: String,
+    raw: String,
+    context: String,
+    convert: (String) -> T?,
+): T = convert(raw) ?: throw SerializationException("invalid $kind $context: '$raw'")
 
 /** Resolves an enum constant name to its index, failing on an unknown value. */
 private fun enumIndex(
