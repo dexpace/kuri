@@ -74,4 +74,37 @@ class UriUrlBridgeTest {
 
         assertEquals("http://h/a%25", bridged.uriString)
     }
+
+    @Test
+    fun `toUri repairs a malformed percent triplet in the query instead of throwing`() {
+        // WHATWG's query percent-encode set does not reserve `%`, so "a%zzb=1" is a valid query
+        // for a Url even though "%zz" is not a valid RFC 3986 pct-encoded triplet.
+        val source = url("http://h/p?a%zzb=1")
+
+        val bridged = source.toUri()
+
+        assertEquals("http://h/p?a%25zzb=1", bridged.uriString)
+    }
+
+    @Test
+    fun `toUri repairs a malformed percent triplet in the fragment instead of throwing`() {
+        // WHATWG's fragment percent-encode set does not reserve `%`, so "a%zzb" is a valid fragment
+        // for a Url even though "%zz" is not a valid RFC 3986 pct-encoded triplet.
+        val source = url("http://h/p#a%zzb")
+
+        val bridged = source.toUri()
+
+        assertEquals("http://h/p#a%25zzb", bridged.uriString)
+    }
+
+    @Test
+    fun `toUri leaves an already-valid percent triplet untouched when adjacent to a malformed one`() {
+        // "%41" is already a valid triplet and must survive verbatim; only the adjacent malformed
+        // "%zz" should be escaped.
+        val source = url("http://h/a%41%zzb")
+
+        val bridged = source.toUri()
+
+        assertEquals("http://h/a%41%25zzb", bridged.uriString)
+    }
 }

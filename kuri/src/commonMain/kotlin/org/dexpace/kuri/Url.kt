@@ -65,6 +65,9 @@ private val BLOB_INNER_ORIGIN_SCHEMES: Set<String> = setOf("http", "https", FILE
 /** The canonical escape for a literal `%`, substituted for a `%` that fails to introduce a triplet. */
 private const val ESCAPED_PERCENT: String = "%25"
 
+/** The net length growth from replacing one malformed `%` with the 3-character [ESCAPED_PERCENT]. */
+private const val PERCENT_ESCAPE_GROWTH: Int = 2
+
 /**
  * Rewrites every `%` in [input] that fails to introduce a valid `%XX` triplet to the literal
  * escape [ESCAPED_PERCENT], leaving every already-valid triplet untouched (RFC 3986 §2.1).
@@ -81,11 +84,19 @@ private const val ESCAPED_PERCENT: String = "%25"
 private fun escapeMalformedPercent(input: String): String {
     if (input.indexOf('%') < 0) return input
     val repaired = StringBuilder(input.length)
+    var malformedCount = 0
     for (index in input.indices) {
         val c = input[index]
-        if (c == '%' && !hasPercentHexPairAt(input, index)) repaired.append(ESCAPED_PERCENT) else repaired.append(c)
+        if (c == '%' && !hasPercentHexPairAt(input, index)) {
+            repaired.append(ESCAPED_PERCENT)
+            malformedCount++
+        } else {
+            repaired.append(c)
+        }
     }
-    check(repaired.length >= input.length) { "repair must never shrink the input" }
+    check(repaired.length == input.length + malformedCount * PERCENT_ESCAPE_GROWTH) {
+        "repair must grow the input by exactly $PERCENT_ESCAPE_GROWTH characters per malformed percent"
+    }
     return repaired.toString()
 }
 
