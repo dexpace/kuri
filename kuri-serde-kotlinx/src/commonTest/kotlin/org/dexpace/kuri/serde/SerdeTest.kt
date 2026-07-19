@@ -75,6 +75,11 @@ private data class Nested(
 )
 
 @Serializable
+private data class Foo(
+    val tags: List<String> = listOf("x"),
+)
+
+@Serializable
 private data class Flag(
     val flag: Boolean,
 )
@@ -82,6 +87,11 @@ private data class Flag(
 @Serializable
 private data class Flags(
     val flags: List<Boolean>,
+)
+
+@Serializable
+private data class NullableTags(
+    val tags: List<String>? = null,
 )
 
 class SerdeTest {
@@ -204,6 +214,48 @@ class SerdeTest {
             )
         val query = QueryParametersFormat.encodeToQueryString(original)
         assertEquals(original, QueryParametersFormat.decodeFromQueryString<AllLists>(query))
+    }
+
+    @Test
+    fun `an explicitly-empty list round-trips to an empty list rather than the declared default`() {
+        // Regression test for #86: encoding Foo(tags = emptyList()) against a non-empty default
+        // (listOf("x")) must not be indistinguishable from tags being absent altogether.
+        val encoded = QueryParametersFormat.encodeToQueryString(Foo(tags = emptyList()))
+        assertEquals("tags[]", encoded)
+        assertEquals(Foo(tags = emptyList()), QueryParametersFormat.decodeFromQueryString<Foo>(encoded))
+    }
+
+    @Test
+    fun `a field genuinely absent from the query still falls back to its declared default`() {
+        assertEquals(Foo(tags = listOf("x")), QueryParametersFormat.decodeFromQueryString<Foo>(""))
+    }
+
+    @Test
+    fun `a list left at its declared empty default is still omitted from the encoded output`() {
+        // Search.tags defaults to emptyList(), so Search(q = "only") leaves it unchanged: no marker,
+        // no repeated pairs, matching the existing default-omission contract.
+        assertEquals("q=only", QueryParametersFormat.encodeToQueryString(Search(q = "only")))
+        assertEquals(emptyList(), QueryParametersFormat.decodeFromQueryString<Search>("q=only").tags)
+    }
+
+    @Test
+    fun `a non-empty list still round-trips without an empty-list marker`() {
+        val original = Foo(tags = listOf("a", "b", "c"))
+        val encoded = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("tags=a&tags=b&tags=c", encoded)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<Foo>(encoded))
+    }
+
+    @Test
+    fun `an explicitly-empty nullable list round-trips to an empty list rather than null`() {
+        // Regression for #86: NullableSerializer calls decodeNotNullMark() before ever reaching
+        // QueryListDecoder. With only the empty-list marker on the wire (no tags=... pairs),
+        // params.has("tags") is false, so a marker-blind decodeNotNullMark() would short-circuit
+        // straight to null instead of decoding an empty list.
+        val encoded = QueryParametersFormat.encodeToQueryString(NullableTags(tags = emptyList()))
+        assertEquals("tags[]", encoded)
+        val decoded = QueryParametersFormat.decodeFromQueryString<NullableTags>(encoded)
+        assertEquals(NullableTags(tags = emptyList()), decoded)
     }
 
     @Test

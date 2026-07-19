@@ -19,7 +19,9 @@ import org.dexpace.kuri.query.QueryParameters
 /**
  * Decodes one flat `@Serializable` class from a [QueryParameters]. Absent optional elements are skipped
  * (so their declared default applies); an absent required element fails. A list element delegates to
- * [QueryListDecoder], reading every repeated value for the name via `getAll`.
+ * [QueryListDecoder], reading every repeated value for the name via `getAll`. A list property present
+ * but empty carries no repeated values of its own, so it is recognized instead via
+ * [emptyListMarkerName] — see [isPresentEmptyList].
  */
 @Suppress("TooManyFunctions") // One decode method per primitive kind, mandated by the AbstractDecoder contract.
 internal class QueryDecoder(
@@ -29,17 +31,39 @@ internal class QueryDecoder(
 
     private var index = -1
     private var currentName: String = ""
+    private var currentIsEmptyListMarker: Boolean = false
     private var entered = false
 
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         while (++index < descriptor.elementsCount) {
             val name = descriptor.getElementName(index)
-            if (params.has(name) || !descriptor.isElementOptional(index)) {
+            val emptyListMarker = isPresentEmptyList(descriptor, index, name)
+            val present = params.has(name) || emptyListMarker
+            if (present || !descriptor.isElementOptional(index)) {
                 currentName = name
+                currentIsEmptyListMarker = emptyListMarker && !params.has(name)
                 return index
             }
         }
         return CompositeDecoder.DECODE_DONE
+    }
+
+    /**
+     * True when the element at [index] is a list property and its [emptyListMarkerName] marker is
+     * present, i.e. it was explicitly encoded as present-but-empty rather than omitted. Scoped to list
+     * elements only, so a foreign query string that happens to contain a `<scalarField>[]` pair cannot
+     * spuriously mark a scalar property present. [decodeElementIndex] also uses this (via
+     * [currentIsEmptyListMarker]) to make [decodeNotNullMark] report a marker-only match as not-null, so
+     * a nullable list property reaches [beginStructure] instead of `NullableSerializer` short-circuiting
+     * it to `null`.
+     */
+    private fun isPresentEmptyList(
+        descriptor: SerialDescriptor,
+        index: Int,
+        name: String,
+    ): Boolean {
+        val isList = descriptor.getElementDescriptor(index).kind == StructureKind.LIST
+        return isList && params.has(emptyListMarkerName(name))
     }
 
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder {
@@ -49,7 +73,14 @@ internal class QueryDecoder(
         return this
     }
 
-    override fun decodeNotNullMark(): Boolean = params.has(currentName)
+    /**
+     * `false` only when the current element is genuinely absent. A list property present solely via its
+     * [emptyListMarkerName] marker (no `name=value` pairs of its own) still counts as not-null: without
+     * this, `kotlinx.serialization`'s `NullableSerializer` would short-circuit a nullable list straight
+     * to `null` on seeing `params.has(currentName)` fail, never reaching [beginStructure] to decode the
+     * empty [QueryListDecoder] the marker represents.
+     */
+    override fun decodeNotNullMark(): Boolean = params.has(currentName) || currentIsEmptyListMarker
 
     override fun decodeString(): String =
         params[currentName] ?: throw SerializationException("missing query parameter '$currentName'")
