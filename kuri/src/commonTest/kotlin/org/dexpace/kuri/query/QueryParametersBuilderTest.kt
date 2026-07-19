@@ -119,8 +119,8 @@ class QueryParametersBuilderTest {
 
     @Test
     fun `sort orders a name before the longer name that extends it per QUERY-18`() {
-        // A prefix compares as less than its extension: the code-point scan runs out of the
-        // shorter name with every compared point equal, so length alone breaks the tie.
+        // A prefix compares as less than its extension: `String.compareTo` runs out of the
+        // shorter name with every compared unit equal, so length alone breaks the tie.
         val params =
             QueryParametersBuilder()
                 .add("ab", "1")
@@ -132,8 +132,8 @@ class QueryParametersBuilderTest {
 
     @Test
     fun `sort compares names that differ before their final character per QUERY-18`() {
-        // "aac" and "abc" first diverge at the middle point while characters still remain, so the
-        // scan stops on the unequal point rather than running off either name's end.
+        // "aac" and "abc" first diverge at the middle character while characters still remain, so
+        // `compareTo` stops on the unequal unit rather than running off either name's end.
         val params =
             QueryParametersBuilder()
                 .add("abc", "1")
@@ -145,8 +145,8 @@ class QueryParametersBuilderTest {
 
     @Test
     fun `sort runs the shorter name off each comparison side per QUERY-18`() {
-        // Repeated "m"/"ma" comparisons drive the code-point scan off the end of the shorter name
-        // from both comparison sides, exercising each length-exit arm of the surrogate-aware scan.
+        // Repeated "m"/"ma" comparisons drive `compareTo` off the end of the shorter name from
+        // both comparison sides, exercising each length-exit arm of the code-unit comparison.
         val params =
             QueryParametersBuilder()
                 .add("ma", "1")
