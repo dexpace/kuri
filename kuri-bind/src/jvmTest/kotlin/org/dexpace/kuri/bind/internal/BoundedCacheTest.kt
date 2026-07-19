@@ -4,7 +4,11 @@
  */
 package org.dexpace.kuri.bind.internal
 
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -95,23 +99,103 @@ class BoundedCacheTest {
     }
 
     @Test
-    fun `a concurrent miss on the same key may recompute but only one result is retained`() {
+    fun `a concurrent miss on the same key computes for every racer but retains only one result`() {
         val cache = BoundedCache<Int, String>(maxSize = 4)
         val threads = 16
         val results = arrayOfNulls<String>(threads)
-        val barrier = CyclicBarrier(threads)
+        val computeCount = AtomicInteger(0)
+        val startBarrier = CyclicBarrier(threads)
+        // Gates every compute call until all `threads` racers have missed the cache and entered compute,
+        // so none can finish and insert before the rest have raced past the first check — otherwise a
+        // scheduling fluke could serialize the callers and the double-checked-locking discard path
+        // (BoundedCache.getOrPut's second `lock.withLock` re-check) would never actually be exercised.
+        val allComputingBarrier = CyclicBarrier(threads)
         val workers =
             (0 until threads).map { index ->
                 Thread {
-                    barrier.await()
-                    results[index] = cache.getOrPut(42) { "value-$index-${System.nanoTime()}" }
+                    startBarrier.await()
+                    results[index] =
+                        cache.getOrPut(42) {
+                            computeCount.incrementAndGet()
+                            allComputingBarrier.await()
+                            "value-$index-${System.nanoTime()}"
+                        }
                 }
             }
         workers.forEach { it.start() }
         workers.forEach { it.join() }
 
+        assertEquals(threads, computeCount.get(), "every racing caller must have missed the cache and computed")
         val distinctResults = results.toSet()
         assertEquals(1, distinctResults.size, "all racing callers must observe the same winning value")
         assertSame(results[0], cache.getOrPut(42) { "should not run" })
+    }
+
+    @Test
+    fun `concurrent inserts of distinct keys past the cap evict safely without exceeding the max size`() {
+        val maxSize = 4
+        val cache = BoundedCache<Int, String>(maxSize)
+        val threads = 16
+        val keysPerThread = 64
+        val startBarrier = CyclicBarrier(threads)
+        // A worker thread's own AssertionError/exception is never seen by the JUnit-driving main thread
+        // unless caught and relayed explicitly, so every failure is queued here and asserted after all
+        // workers join rather than asserted from inside the worker.
+        val failures = ConcurrentLinkedQueue<Throwable>()
+        val workers =
+            (0 until threads).map { threadIndex ->
+                Thread {
+                    try {
+                        startBarrier.await()
+                        for (key in threadIndex until threads * keysPerThread step threads) {
+                            cache.getOrPut(key) { "value-$it" }
+                            check(cache.size <= maxSize) { "cache size ${cache.size} exceeded max $maxSize" }
+                        }
+                    } catch (t: Throwable) {
+                        failures.add(t)
+                    }
+                }
+            }
+        workers.forEach { it.start() }
+        workers.forEach { it.join() }
+
+        assertTrue(failures.isEmpty(), "worker threads recorded failures: $failures")
+        assertEquals(maxSize, cache.size)
+    }
+
+    @Test
+    fun `compute for one key does not block a concurrent getOrPut for a different key`() {
+        val cache = BoundedCache<Int, String>(maxSize = 4)
+        val enteredCompute = CountDownLatch(1)
+        val releaseCompute = CountDownLatch(1)
+        var firstResult: String? = null
+
+        val blockedComputation =
+            Thread {
+                firstResult =
+                    cache.getOrPut(1) {
+                        enteredCompute.countDown()
+                        releaseCompute.await(AWAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                        "one"
+                    }
+            }
+        blockedComputation.start()
+        assertTrue(
+            enteredCompute.await(AWAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS),
+            "the blocked thread must have entered compute for key 1",
+        )
+
+        // Key 1's compute is still parked; a different key must not be blocked by its held reference to
+        // the released lock, proving getOrPut's lock is not held across a caller's compute call.
+        val second = cache.getOrPut(2) { "two" }
+        assertEquals("two", second)
+
+        releaseCompute.countDown()
+        blockedComputation.join(TimeUnit.SECONDS.toMillis(AWAIT_TIMEOUT_SECONDS))
+        assertEquals("one", firstResult)
+    }
+
+    private companion object {
+        const val AWAIT_TIMEOUT_SECONDS = 5L
     }
 }

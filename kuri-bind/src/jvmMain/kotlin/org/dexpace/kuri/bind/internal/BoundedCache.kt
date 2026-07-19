@@ -49,9 +49,12 @@ internal class BoundedCache<K : Any, V : Any>(
      * harmless — see [PlanCompiler.planFor] and [KotlinReflectMemberScanner.scan].
      *
      * @param key the cache key.
-     * @param compute produces the value for [key] on a cache miss; must not call back into this same
-     *   cache instance or block on another thread that does, either of which would deadlock while a
-     *   result is stored under the lock.
+     * @param compute produces the value for [key] on a cache miss; runs with the lock released (see
+     *   above), so a reentrant call back into this cache for a different key — or a concurrent call on
+     *   another thread — is safe and cannot deadlock. Recursing back into [getOrPut] for the SAME [key]
+     *   from within [compute] is still unsafe, though not by deadlocking: [key] is only inserted after
+     *   [compute] returns, so the recursive call also misses and invokes [compute] again, causing
+     *   unbounded recursion rather than reusing an in-flight result.
      * @return the cached or freshly computed value for [key].
      */
     fun getOrPut(
