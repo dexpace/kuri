@@ -44,7 +44,7 @@ module metadata selects the right per-platform variant automatically.
 |------------|-----------------|
 | Group      | `org.dexpace`   |
 | Artifact   | `kuri`          |
-| Version    | `0.1.0-alpha.1` |
+| Version    | `0.1.0-alpha.4` |
 
 > [!NOTE]
 > kuri is in an early **alpha** series: the public API is not yet frozen and may change between releases, so pin to an
@@ -58,7 +58,7 @@ repositories {
 }
 
 dependencies {
-    implementation("org.dexpace:kuri:0.1.0-alpha.1")
+    implementation("org.dexpace:kuri:0.1.0-alpha.4")
 }
 ```
 
@@ -70,7 +70,7 @@ Gradle module metadata resolves the correct per-platform variant automatically.
 <dependency>
   <groupId>org.dexpace</groupId>
   <artifactId>kuri-jvm</artifactId>
-  <version>0.1.0-alpha.1</version>
+  <version>0.1.0-alpha.4</version>
 </dependency>
 ```
 
@@ -315,7 +315,7 @@ has no facade type — start from `Url` or `Uri`):
 Percent.encode("a b/c", Percent.Component.COMPONENT);  // "a%20b%2Fc"
 Idn.toAscii("bücher.example").getOrNull();             // "xn--bcher-kva.example"
 Schemes.defaultPort("https");                          // 443 (Integer)
-String version = Kuri.VERSION;                          // e.g. "0.1.0-alpha.1"
+String version = Kuri.VERSION;                          // e.g. "0.1.0-alpha.4"
 ```
 
 ## Recipes
@@ -573,7 +573,7 @@ the native test suites requires a matching operating system or simulator.
 
 ## Versioning and stability
 
-kuri follows [Semantic Versioning 2.0.0](https://semver.org/). At `0.1.0-alpha.1` the public API is not yet frozen and
+kuri follows [Semantic Versioning 2.0.0](https://semver.org/). At `0.1.0-alpha.4` the public API is not yet frozen and
 may change before `1.0.0`, and minor releases in the `0.x` series may carry breaking changes, so pin to an exact
 version. Every public signature is tracked in a checked-in binary-compatibility snapshot under `api/`, so an unintended
 API change fails the build (see [Building from source](#building-from-source)).
