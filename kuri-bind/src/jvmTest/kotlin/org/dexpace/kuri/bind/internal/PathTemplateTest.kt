@@ -112,4 +112,17 @@ class PathTemplateTest {
             t.tokens,
         )
     }
+
+    @Test
+    fun `parses a hole at the very start of the template with no leading literal`() {
+        val t = PathTemplate.parse("{id}/detail")
+        // Mirrors the template-end boundary (already covered by the catch-all test) but for the start.
+        assertEquals(
+            listOf(
+                PathToken.Hole("id", catchAll = false),
+                PathToken.Literal("/detail"),
+            ),
+            t.tokens,
+        )
+    }
 }
