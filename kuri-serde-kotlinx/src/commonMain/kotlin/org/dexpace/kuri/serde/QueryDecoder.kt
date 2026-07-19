@@ -19,7 +19,9 @@ import org.dexpace.kuri.query.QueryParameters
 /**
  * Decodes one flat `@Serializable` class from a [QueryParameters]. Absent optional elements are skipped
  * (so their declared default applies); an absent required element fails. A list element delegates to
- * [QueryListDecoder], reading every repeated value for the name via `getAll`.
+ * [QueryListDecoder], reading every repeated value for the name via `getAll`. A map element delegates
+ * to [QueryMapDecoder], reading its `<name>.key` / `<name>.value` repeated parameters and zipping them
+ * back into entries positionally — the mirror of how [QueryMapEncoder] emits them.
  */
 @Suppress("TooManyFunctions") // One decode method per primitive kind, mandated by the AbstractDecoder contract.
 internal class QueryDecoder(
@@ -42,11 +44,37 @@ internal class QueryDecoder(
         return CompositeDecoder.DECODE_DONE
     }
 
-    override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder {
-        if (descriptor.kind == StructureKind.LIST) return QueryListDecoder(params.getAll(currentName))
+    override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder =
+        when (descriptor.kind) {
+            StructureKind.LIST -> QueryListDecoder(params.getAll(currentName))
+            StructureKind.MAP -> mapDecoderFor(currentName)
+            else -> enterTopLevelStructure()
+        }
+
+    /** Enters the (single, top-level) flat class structure, rejecting a second nested attempt. */
+    private fun enterTopLevelStructure(): CompositeDecoder {
         if (entered) throw SerializationException("nested objects are not supported by the query format")
         entered = true
         return this
+    }
+
+    /**
+     * Reads the `<name>.key` / `<name>.value` repeated parameters captured for a map element and
+     * pairs them positionally into a [QueryMapDecoder].
+     *
+     * @throws SerializationException when the two repeated sequences differ in length, which can
+     *   only happen from a hand-edited or otherwise malformed query string — [QueryMapEncoder]
+     *   always emits one key and one value per entry.
+     */
+    private fun mapDecoderFor(name: String): QueryMapDecoder {
+        val keys = params.getAll("$name.$MAP_KEY_SUFFIX")
+        val values = params.getAll("$name.$MAP_VALUE_SUFFIX")
+        if (keys.size != values.size) {
+            throw SerializationException(
+                "map '$name' has ${keys.size} key(s) but ${values.size} value(s)",
+            )
+        }
+        return QueryMapDecoder(keys, values)
     }
 
     override fun decodeNotNullMark(): Boolean = params.has(currentName)
@@ -90,6 +118,67 @@ internal class QueryListDecoder(
         if (cursor < values.size) cursor else CompositeDecoder.DECODE_DONE
 
     private fun next(): String = values[cursor++] ?: throw SerializationException("null list element")
+
+    override fun decodeString(): String = next()
+
+    override fun decodeBoolean(): Boolean = next().toBoolean()
+
+    override fun decodeInt(): Int = next().toInt()
+
+    override fun decodeLong(): Long = next().toLong()
+
+    override fun decodeShort(): Short = next().toShort()
+
+    override fun decodeByte(): Byte = next().toByte()
+
+    override fun decodeDouble(): Double = next().toDouble()
+
+    override fun decodeFloat(): Float = next().toFloat()
+
+    override fun decodeChar(): Char = next().single()
+
+    override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = enumIndex(enumDescriptor, next())
+}
+
+/**
+ * Decodes a map property sequentially from the two same-length [keys]/[values] parameter lists
+ * captured for its `<name>.key` / `<name>.value` names, zipping them back into entries by
+ * position — the mirror of how [QueryMapEncoder] emits them. The caller ([QueryDecoder]) has
+ * already verified `keys.size == values.size`.
+ */
+@Suppress("TooManyFunctions") // One decode method per primitive kind, mandated by the AbstractDecoder contract.
+internal class QueryMapDecoder(
+    private val keys: List<String?>,
+    private val values: List<String?>,
+) : AbstractDecoder() {
+    override val serializersModule: SerializersModule = EmptySerializersModule()
+
+    /** Position in the virtual key/value/key/value/... sequence of length `2 * keys.size`. */
+    private var cursor = 0
+
+    override fun decodeSequentially(): Boolean = true
+
+    override fun decodeCollectionSize(descriptor: SerialDescriptor): Int = keys.size
+
+    override fun decodeElementIndex(descriptor: SerialDescriptor): Int =
+        if (cursor < keys.size + values.size) cursor else CompositeDecoder.DECODE_DONE
+
+    /**
+     * A map entry's key or value is always a scalar/enum in this format's scope, so any call
+     * here — a nested `@Serializable` object or a nested collection — is out of scope and
+     * rejected, mirroring [QueryDecoder.beginStructure]'s top-level guard.
+     */
+    override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder =
+        throw SerializationException("nested objects are not supported by the query format")
+
+    /** Reads the next key (even cursor position) or value (odd), advancing the cursor. */
+    private fun next(): String {
+        val fromKey = cursor % 2 == 0
+        val entryIndex = cursor / 2
+        cursor++
+        val raw = if (fromKey) keys[entryIndex] else values[entryIndex]
+        return raw ?: throw SerializationException("null map ${if (fromKey) "key" else "value"}")
+    }
 
     override fun decodeString(): String = next()
 

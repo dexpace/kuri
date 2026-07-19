@@ -74,6 +74,34 @@ private data class Nested(
     val inner: Search,
 )
 
+@Serializable
+private data class Metadata(
+    val meta: Map<String, String>,
+)
+
+@Serializable
+private data class Scores(
+    val scores: Map<String, Int>,
+)
+
+@Serializable
+private data class AllMapValues(
+    val bytes: Map<String, Byte>,
+    val shorts: Map<String, Short>,
+    val ints: Map<String, Int>,
+    val longs: Map<String, Long>,
+    val floats: Map<String, Float>,
+    val doubles: Map<String, Double>,
+    val chars: Map<String, Char>,
+    val flags: Map<String, Boolean>,
+    val sorts: Map<String, Sort>,
+)
+
+@Serializable
+private data class NestedMapValue(
+    val entries: Map<String, Search>,
+)
+
 class SerdeTest {
     @Test
     fun `url serializes as its canonical string in json`() {
@@ -243,6 +271,77 @@ class SerdeTest {
     fun `encoding a nested serializable object is rejected`() {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.encodeToQueryParameters(Nested(Search(q = "x")))
+        }
+    }
+
+    @Test
+    fun `a map property round-trips through the query format`() {
+        val original = Metadata(meta = mapOf("a" to "1", "b" to "2"))
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("meta.key=a&meta.value=1&meta.key=b&meta.value=2", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<Metadata>(query))
+    }
+
+    @Test
+    fun `an empty map property round-trips through the query format`() {
+        val original = Metadata(meta = emptyMap())
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<Metadata>(query))
+    }
+
+    @Test
+    fun `a map value needing percent-encoding round-trips through the query format`() {
+        val original = Metadata(meta = mapOf("a" to "b c&d=e"))
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("meta.key=a&meta.value=b%20c%26d=e", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<Metadata>(query))
+    }
+
+    @Test
+    fun `a map with non-string scalar values round-trips through the query format`() {
+        val original = Scores(scores = mapOf("alice" to 1, "bob" to 2))
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("scores.key=alice&scores.value=1&scores.key=bob&scores.value=2", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<Scores>(query))
+    }
+
+    @Test
+    fun `every scalar kind round-trips as a map value through the query format`() {
+        val original =
+            AllMapValues(
+                bytes = mapOf("a" to 1, "b" to 2),
+                shorts = mapOf("a" to 10, "b" to 20),
+                ints = mapOf("a" to 100, "b" to 200),
+                longs = mapOf("a" to 1_000L, "b" to 2_000L),
+                floats = mapOf("a" to 1.5f, "b" to 2.5f),
+                doubles = mapOf("a" to 1.1, "b" to 2.2),
+                chars = mapOf("a" to 'x', "b" to 'y'),
+                flags = mapOf("a" to true, "b" to false),
+                sorts = mapOf("a" to Sort.ASC, "b" to Sort.DESC),
+            )
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<AllMapValues>(query))
+    }
+
+    @Test
+    fun `a map with mismatched key and value counts fails to decode`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Metadata>("meta.key=a&meta.key=b&meta.value=1")
+        }
+    }
+
+    @Test
+    fun `decoding a nested serializable object as a map value is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<NestedMapValue>("entries.key=x&entries.value=y")
+        }
+    }
+
+    @Test
+    fun `encoding a nested serializable object as a map value is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.encodeToQueryParameters(NestedMapValue(mapOf("x" to Search(q = "y"))))
         }
     }
 }

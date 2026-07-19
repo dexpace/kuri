@@ -9,6 +9,7 @@ package org.dexpace.kuri.serde
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.StructureKind
 import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.encoding.CompositeEncoder
 import kotlinx.serialization.modules.EmptySerializersModule
@@ -16,10 +17,18 @@ import kotlinx.serialization.modules.SerializersModule
 import org.dexpace.kuri.query.QueryParameters
 import org.dexpace.kuri.query.QueryParametersBuilder
 
+/** Suffix appended to a map property's name for its per-entry key parameter (e.g. `meta.key`). */
+internal const val MAP_KEY_SUFFIX: String = "key"
+
+/** Suffix appended to a map property's name for its per-entry value parameter (e.g. `meta.value`). */
+internal const val MAP_VALUE_SUFFIX: String = "value"
+
 /**
  * Encodes one flat `@Serializable` class into a [QueryParameters]: each element name becomes a
  * parameter name, and its scalar/enum value the parameter value. A list element delegates to
- * [QueryListEncoder], which repeats the parameter. Nested objects are rejected.
+ * [QueryListEncoder], which repeats the parameter. A map element delegates to [QueryMapEncoder],
+ * which emits its keys and values as two same-length repeated parameters. Nested objects are
+ * rejected.
  */
 internal class QueryEncoder : AbstractEncoder() {
     override val serializersModule: SerializersModule = EmptySerializersModule()
@@ -57,7 +66,12 @@ internal class QueryEncoder : AbstractEncoder() {
     override fun beginCollection(
         descriptor: SerialDescriptor,
         collectionSize: Int,
-    ): CompositeEncoder = QueryListEncoder(requireName(), builder)
+    ): CompositeEncoder =
+        if (descriptor.kind == StructureKind.MAP) {
+            QueryMapEncoder(requireName(), builder)
+        } else {
+            QueryListEncoder(requireName(), builder)
+        }
 
     override fun encodeValue(value: Any) {
         builder.add(requireName(), value.toString())
@@ -94,4 +108,56 @@ internal class QueryListEncoder(
     ) {
         builder.add(name, enumDescriptor.getElementName(index))
     }
+}
+
+/**
+ * Encodes each entry of a map property as a `<name>.key` / `<name>.value` pair of repeated
+ * parameters — one occurrence of each per entry, emitted in iteration order — so [QueryMapDecoder]
+ * can zip the two same-length repeated sequences back into entries positionally. Flattening keys
+ * and values together under one repeated parameter, the way [QueryListEncoder] handles a list,
+ * would destroy the pairing between a key and its value; that is exactly the bug this delegate
+ * exists to avoid.
+ */
+internal class QueryMapEncoder(
+    private val name: String,
+    private val builder: QueryParametersBuilder,
+) : AbstractEncoder() {
+    override val serializersModule: SerializersModule = EmptySerializersModule()
+
+    /**
+     * `true` while the element currently being encoded is an entry's key, `false` while it is
+     * the entry's value. kotlinx.serialization visits a map's elements as key, value, key,
+     * value, ... at consecutive even/odd indices, so parity alone tells them apart.
+     */
+    private var encodingKey = true
+
+    override fun encodeElement(
+        descriptor: SerialDescriptor,
+        index: Int,
+    ): Boolean {
+        encodingKey = index % 2 == 0
+        return true
+    }
+
+    /**
+     * A map entry's key or value is always a scalar/enum in this format's scope, so any call
+     * here — a nested `@Serializable` object or a nested collection — is out of scope and
+     * rejected, mirroring [QueryEncoder.beginStructure]'s top-level guard.
+     */
+    override fun beginStructure(descriptor: SerialDescriptor): CompositeEncoder =
+        throw SerializationException("nested objects are not supported by the query format")
+
+    override fun encodeValue(value: Any) {
+        builder.add(paramName(), value.toString())
+    }
+
+    override fun encodeEnum(
+        enumDescriptor: SerialDescriptor,
+        index: Int,
+    ) {
+        builder.add(paramName(), enumDescriptor.getElementName(index))
+    }
+
+    /** The parameter name for the element currently being encoded: `<name>.key` or `<name>.value`. */
+    private fun paramName(): String = "$name.${if (encodingKey) MAP_KEY_SUFFIX else MAP_VALUE_SUFFIX}"
 }
