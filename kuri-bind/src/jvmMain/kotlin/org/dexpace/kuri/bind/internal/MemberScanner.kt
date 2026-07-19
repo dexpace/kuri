@@ -4,7 +4,6 @@
  */
 package org.dexpace.kuri.bind.internal
 
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 import kotlin.reflect.KFunction
 import kotlin.reflect.KProperty1
@@ -71,14 +70,20 @@ internal interface MemberScanner {
  *
  * Inherited members are automatically included because `memberProperties` and `memberFunctions`
  * already traverse the full class hierarchy.
+ *
+ * The scan cache is capped at [maxCacheSize] entries (default [DEFAULT_MAX_SCAN_CACHE_SIZE]): a `KClass`
+ * key strongly retains its `ClassLoader`, so an unbounded cache would pin every distinct type ever
+ * scanned for the life of the process (kuri-bind#89).
  */
-internal class KotlinReflectMemberScanner : MemberScanner {
+internal class KotlinReflectMemberScanner(
+    maxCacheSize: Int = DEFAULT_MAX_SCAN_CACHE_SIZE,
+) : MemberScanner {
     // kotlin-reflect member discovery is the heavy path (memberProperties + memberFunctions + per-
     // property annotation-site probing) and a single compile scans a type several times — the root,
     // each complex `@Query`/`@Path` member via `hasBindingMembers`, and each `@Url`/`@Uri` merge type.
     // Memoize per type so each is scanned once; readers are instance-parameterized and stateless, so a
     // cached member list is safe to reuse across instances.
-    private val scanCache = ConcurrentHashMap<KClass<*>, List<ScannedMember>>()
+    private val scanCache = BoundedCache<KClass<*>, List<ScannedMember>>(maxCacheSize)
 
     override fun scan(type: KClass<*>): List<ScannedMember> =
         scanCache.getOrPut(type) {
@@ -280,3 +285,8 @@ internal class KotlinReflectMemberScanner : MemberScanner {
         const val IS_PREFIX_LEN = 2
     }
 }
+
+// Bounds the scan cache well above the number of distinct types any realistic caller scans in one
+// process, while still capping the ClassLoader retention an unbounded cache would otherwise cause
+// (kuri-bind#89). A caller with a genuinely larger working set only pays for a cache miss, not a leak.
+private const val DEFAULT_MAX_SCAN_CACHE_SIZE = 2048

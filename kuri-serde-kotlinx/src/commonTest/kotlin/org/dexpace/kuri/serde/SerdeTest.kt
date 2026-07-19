@@ -90,6 +90,26 @@ private data class Profile(
     val bio: String?,
 )
 
+@Serializable
+private data class Foo(
+    val tags: List<String> = listOf("x"),
+)
+
+@Serializable
+private data class Flag(
+    val flag: Boolean,
+)
+
+@Serializable
+private data class Flags(
+    val flags: List<Boolean>,
+)
+
+@Serializable
+private data class NullableTags(
+    val tags: List<String>? = null,
+)
+
 class SerdeTest {
     @Test
     fun `url serializes as its canonical string in json`() {
@@ -213,6 +233,48 @@ class SerdeTest {
     }
 
     @Test
+    fun `an explicitly-empty list round-trips to an empty list rather than the declared default`() {
+        // Regression test for #86: encoding Foo(tags = emptyList()) against a non-empty default
+        // (listOf("x")) must not be indistinguishable from tags being absent altogether.
+        val encoded = QueryParametersFormat.encodeToQueryString(Foo(tags = emptyList()))
+        assertEquals("tags[]", encoded)
+        assertEquals(Foo(tags = emptyList()), QueryParametersFormat.decodeFromQueryString<Foo>(encoded))
+    }
+
+    @Test
+    fun `a field genuinely absent from the query still falls back to its declared default`() {
+        assertEquals(Foo(tags = listOf("x")), QueryParametersFormat.decodeFromQueryString<Foo>(""))
+    }
+
+    @Test
+    fun `a list left at its declared empty default is still omitted from the encoded output`() {
+        // Search.tags defaults to emptyList(), so Search(q = "only") leaves it unchanged: no marker,
+        // no repeated pairs, matching the existing default-omission contract.
+        assertEquals("q=only", QueryParametersFormat.encodeToQueryString(Search(q = "only")))
+        assertEquals(emptyList(), QueryParametersFormat.decodeFromQueryString<Search>("q=only").tags)
+    }
+
+    @Test
+    fun `a non-empty list still round-trips without an empty-list marker`() {
+        val original = Foo(tags = listOf("a", "b", "c"))
+        val encoded = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("tags=a&tags=b&tags=c", encoded)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<Foo>(encoded))
+    }
+
+    @Test
+    fun `an explicitly-empty nullable list round-trips to an empty list rather than null`() {
+        // Regression for #86: NullableSerializer calls decodeNotNullMark() before ever reaching
+        // QueryListDecoder. With only the empty-list marker on the wire (no tags=... pairs),
+        // params.has("tags") is false, so a marker-blind decodeNotNullMark() would short-circuit
+        // straight to null instead of decoding an empty list.
+        val encoded = QueryParametersFormat.encodeToQueryString(NullableTags(tags = emptyList()))
+        assertEquals("tags[]", encoded)
+        val decoded = QueryParametersFormat.decodeFromQueryString<NullableTags>(encoded)
+        assertEquals(NullableTags(tags = emptyList()), decoded)
+    }
+
+    @Test
     fun `a null optional value is omitted when encoding and decodes back to null`() {
         val withoutNickname = Contact(name = "ada", nickname = null)
         val query = QueryParametersFormat.encodeToQueryString(withoutNickname)
@@ -257,6 +319,60 @@ class SerdeTest {
     }
 
     @Test
+    fun `decoding a numeric boolean value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=1")
+        }
+    }
+
+    @Test
+    fun `decoding a word other than true or false throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=yes")
+        }
+    }
+
+    @Test
+    fun `decoding a misspelled boolean value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=ture")
+        }
+    }
+
+    @Test
+    fun `decoding an invalid boolean list element throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flags>("flags=true&flags=nope")
+        }
+    }
+
+    @Test
+    fun `decoding an empty boolean value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=")
+        }
+    }
+
+    @Test
+    fun `decoding a whitespace-padded boolean value throws instead of trimming`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=%20true")
+        }
+    }
+
+    @Test
+    fun `decoding true and false boolean values still succeeds`() {
+        assertEquals(Flag(flag = true), QueryParametersFormat.decodeFromQueryString<Flag>("flag=true"))
+        assertEquals(Flag(flag = false), QueryParametersFormat.decodeFromQueryString<Flag>("flag=false"))
+    }
+
+    @Test
+    fun `decoding a boolean value is case-insensitive`() {
+        assertEquals(Flag(flag = true), QueryParametersFormat.decodeFromQueryString<Flag>("flag=TRUE"))
+        assertEquals(Flag(flag = false), QueryParametersFormat.decodeFromQueryString<Flag>("flag=FALSE"))
+    }
+
+    @Test
     fun `a missing required parameter fails to decode`() {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.decodeFromQueryString<Search>("page=1")
@@ -267,6 +383,99 @@ class SerdeTest {
     fun `a null list element fails to decode`() {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.decodeFromQueryString<Search>("q=x&tags&tags=a")
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Int value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Search>("q=x&page=abc")
+        }
+    }
+
+    @Test
+    fun `decoding an empty Int value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Search>("q=x&page=")
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Long value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=notanumber" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Short value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=notanumber&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Byte value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=notanumber&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Double value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=notanumber&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Float value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=notanumber&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding an empty Char value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a multi-character Char value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=ab&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed list element throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllLists>(
+                "bytes=abc&shorts=1&ints=1&longs=1&floats=1.0&doubles=1.0&chars=a&flags=true&sorts=ASC",
+            )
         }
     }
 

@@ -9,7 +9,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 /**
  * Behavioural tests for the public [Idn] facade over the internal [Idna] engine (UTS-46, SPEC §7.4).
@@ -37,61 +36,50 @@ class IdnTest {
     }
 
     @Test
-    fun `toAscii keeps an invalid xn-- label as-is even beside a genuine unicode label`() {
-        // "xn--a" is not valid Punycode (it decodes to a disallowed control code point); the
-        // web-compat leniency for a malformed xn-- label must hold per label, not per whole
-        // domain, so a non-ASCII sibling ("bücher") must not turn this label's failure fatal.
+    fun `toAscii keeps an invalid xn-- label as-is when the whole domain is ascii`() {
+        // "xn--pokxncvks" decodes to a UTS-46-invalid label (its decoded code points are Mapped,
+        // not Valid) — but per [HOST-48] the all-ASCII leniency path never runs that decode and
+        // validate step at all for an all-ASCII domain, so the domain is kept lowercased verbatim
+        // regardless of the label's validity.
+        assertEquals("xn--pokxncvks.example", Idn.toAscii("xn--pokxncvks.example").getOrNull())
+    }
+
+    @Test
+    fun `toAscii fails on an invalid xn-- label beside a genuine unicode sibling`() {
+        // "xn--a" is not valid Punycode (it decodes to a disallowed control code point). Per
+        // [HOST-48], the web-compat ToASCII leniency applies only when the *whole* percent-decoded
+        // domain is ASCII; here a non-ASCII sibling label ("bücher") makes the domain non-ASCII, so
+        // the full UTS-46 pipeline runs over the whole domain and "xn--a"'s failure is fatal, not
+        // rescued by the leniency (regression test for #107).
         val input = "xn--a.b" + uUmlaut + "cher"
 
-        assertEquals("xn--a.xn--bcher-kva", Idn.toAscii(input).getOrNull())
+        assertFalse(Idn.toAscii(input).isOk())
     }
 
     @Test
-    fun `toAscii recognizes the ideographic full stop as a per-label leniency separator`() {
-        // U+3002 IDEOGRAPHIC FULL STOP is one of the three non-ASCII UTS-46 dot-separator
-        // variants mapped to U+002E; the per-label ASCII/non-ASCII gate must see the boundary it
-        // forms, not just a literal '.', so "xn--a" still gets the malformed-Punycode leniency.
-        val ideographicFullStop = Char(0x3002).toString()
-        val input = "xn--a" + ideographicFullStop + "b" + uUmlaut + "cher"
-        val expected = Idn.toAscii("xn--a.b" + uUmlaut + "cher")
-
-        assertTrue(expected.isOk())
-        assertEquals(expected.getOrNull(), Idn.toAscii(input).getOrNull())
-    }
-
-    @Test
-    fun `toAscii recognizes the fullwidth full stop as a per-label leniency separator`() {
-        // U+FF0E FULLWIDTH FULL STOP is another UTS-46 dot-separator variant mapped to U+002E.
-        val fullwidthFullStop = Char(0xFF0E).toString()
-        val input = "xn--a" + fullwidthFullStop + "b" + uUmlaut + "cher"
-        val expected = Idn.toAscii("xn--a.b" + uUmlaut + "cher")
-
-        assertTrue(expected.isOk())
-        assertEquals(expected.getOrNull(), Idn.toAscii(input).getOrNull())
-    }
-
-    @Test
-    fun `toAscii recognizes the halfwidth ideographic full stop as a per-label leniency separator`() {
-        // U+FF61 HALFWIDTH IDEOGRAPHIC FULL STOP is the third UTS-46 dot-separator variant mapped
-        // to U+002E.
-        val halfwidthIdeographicFullStop = Char(0xFF61).toString()
-        val input = "xn--a" + halfwidthIdeographicFullStop + "b" + uUmlaut + "cher"
-        val expected = Idn.toAscii("xn--a.b" + uUmlaut + "cher")
-
-        assertTrue(expected.isOk())
-        assertEquals(expected.getOrNull(), Idn.toAscii(input).getOrNull())
-    }
-
-    @Test
-    fun `toAscii rejects a fullwidth label that maps down to a literal xn-- ascii string`() {
+    fun `toAscii rejects a fullwidth domain that maps down to a literal xn-- ascii string`() {
         // U+FF58 U+FF4E U+FF0D U+FF0D 'a' (fullwidth x, n, hyphen-minus x2, then ascii 'a') maps
-        // down to the literal ASCII text "xn--a" under UTS-46 mapping. The per-label ASCII/
-        // non-ASCII routing decision must be made on this original non-ASCII label, not on its
-        // post-mapping text, or the label slips past the Punycode decode/validate step that
+        // down to the literal ASCII text "xn--a" under UTS-46 mapping. The ASCII/non-ASCII routing
+        // decision is made on this original, pre-mapping domain text — which is non-ASCII — so it
+        // runs the full UTS-46 pipeline rather than being kept verbatim, and fails the same way
         // Idna.domainToAscii("xn--a") itself fails.
         val fullwidthLabel = Char(0xFF58).toString() + Char(0xFF4E) + Char(0xFF0D) + Char(0xFF0D) + "a"
 
         assertFalse(Idn.toAscii(fullwidthLabel).isOk())
+    }
+
+    @Test
+    fun `toAscii fails on an invalid xn-- label separated only by a non-ascii dot variant`() {
+        // U+3002 IDEOGRAPHIC FULL STOP is itself a non-ASCII code point, so a domain using it as a
+        // separator is not an ASCII string even if every label is otherwise plain ASCII text; per
+        // [HOST-48] the whole-domain leniency gate does not apply, so "xn--pokxncvks" is fatal for
+        // the whole domain — its Punycode decodes successfully, but the decoded label fails UTS-46
+        // validity (its code points are Mapped, not Valid), and unlike the all-ASCII leniency path,
+        // this whole-domain pipeline does perform that validity check.
+        val ideographicFullStop = Char(0x3002).toString()
+        val input = "xn--pokxncvks" + ideographicFullStop + "example"
+
+        assertFalse(Idn.toAscii(input).isOk())
     }
 
     @Test

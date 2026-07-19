@@ -24,18 +24,6 @@ private const val ACE_PREFIX_LENGTH: Int = 4
 /** Label separator inside a domain (U+002E FULL STOP); also the join separator. */
 private const val LABEL_SEPARATOR: String = "."
 
-/** [LABEL_SEPARATOR] as a `Char`, for splitting a raw (pre-mapping) domain by code point. */
-private const val LABEL_SEPARATOR_CHAR: Char = '.'
-
-/** U+3002 IDEOGRAPHIC FULL STOP: a UTS-46 dot-separator variant [IdnaMapping.Mapped] to `.`. */
-private const val IDEOGRAPHIC_FULL_STOP: Char = '\u3002'
-
-/** U+FF0E FULLWIDTH FULL STOP: a UTS-46 dot-separator variant [IdnaMapping.Mapped] to `.`. */
-private const val FULLWIDTH_FULL_STOP: Char = '\uFF0E'
-
-/** U+FF61 HALFWIDTH IDEOGRAPHIC FULL STOP: a UTS-46 dot-separator variant [IdnaMapping.Mapped] to `.`. */
-private const val HALFWIDTH_IDEOGRAPHIC_FULL_STOP: Char = '\uFF61'
-
 /**
  * UTS-46 ToASCII / ToUnicode for IDNA domains (SPEC §7.4, [HOST-26]) under the `Url`-profile
  * parameter set ([HOST-28]): `CheckHyphens = false`, `CheckBidi = true`, `CheckJoiners = true`,
@@ -84,15 +72,19 @@ internal object Idna {
      * WHATWG "domain to ASCII" for the `Url` profile (`beStrict = false`): the URL-layer wrapper over
      * the pure UTS-46 [domainToAscii] (SPEC §7.4, [HOST-26]).
      *
-     * Decided **per label**, not per whole domain: an all-ASCII label is kept **lowercased
-     * verbatim**, since per the standard an ASCII label's Unicode ToASCII failure is only a
-     * validation error, never fatal, for web compatibility — so an invalid `xn--` label such as
-     * `xn--pokxncvks` is kept as-is rather than rejected, regardless of whether a sibling label
-     * elsewhere in the same domain happens to carry non-ASCII text. A label carrying any non-ASCII
-     * code point runs the full UTS-46 pipeline via [domainToAscii] and its failure is fatal. Either
-     * way, a result that collapses to the empty string (e.g. a lone soft hyphen, which maps to
-     * nothing) is a failure ("if result is the empty string, return failure"). The residual
-     * forbidden-code-point check is applied by the host classifier, not here.
+     * Decided on the **whole domain**, not per label ([HOST-48]): a [domain] that is all-ASCII
+     * *before any mapping runs* is returned **lowercased verbatim**, since per the standard an
+     * ASCII domain's Unicode ToASCII failure is only a validation error, never fatal, for web
+     * compatibility — so an invalid `xn--` label such as `xn--pokxncvks` is kept as-is rather than
+     * rejected. A [domain] carrying any non-ASCII code point — even a single non-ASCII sibling
+     * label beside an otherwise-plain-ASCII one — runs the full UTS-46 pipeline via [domainToAscii]
+     * over the *entire* domain, and that pipeline's failure is fatal for the whole domain: an
+     * invalid label such as `xn--a` in `xn--a.bücher` is **not** rescued by its non-ASCII sibling,
+     * matching the WHATWG "domain to ASCII" algorithm's `If domain is an ASCII string:` gate, which
+     * is a whole-domain condition, not a per-label one. Either way, a result that collapses to the
+     * empty string (e.g. a lone soft hyphen, which maps to nothing) is a failure ("if result is the
+     * empty string, return failure"). The residual forbidden-code-point check is applied by the host
+     * classifier, not here.
      *
      * @param domain the percent-decoded, assumed-NFC domain text.
      * @return [ParseResult.Ok] with the ASCII domain, or [ParseResult.Err] on a domain-to-ASCII failure.
@@ -103,46 +95,25 @@ internal object Idna {
     }
 
     /**
-     * Splits the raw (pre-mapping) [domain] on [LABEL_SEPARATOR] or any of the three non-ASCII
-     * UTS-46 dot-separator variants (see [splitRawLabels]) and resolves each raw label
-     * independently: a label that is already all-ASCII **before any mapping runs** is lowercased
-     * and kept unconditionally (never validated, matching the existing intentional leniency — see
-     * [domainToAsciiForUrl]); a label carrying any non-ASCII code point runs the full
-     * [domainToAscii] pipeline (which performs the mapping, NFC, and Punycode decode/validate steps
-     * itself), and that label's failure fails the whole domain.
+     * Resolves the whole, raw (pre-mapping) [domain] per [HOST-48]: a [domain] that is already
+     * all-ASCII is lowercased and kept unconditionally, without ever running it through
+     * [domainToAscii] — matching the existing intentional leniency, see [domainToAsciiForUrl]. A
+     * [domain] carrying any non-ASCII code point runs the full [domainToAscii] pipeline over the
+     * whole string (which performs the mapping, NFC, label split, and Punycode decode/validate
+     * steps itself), and that pipeline's failure fails the whole domain — including a plain-ASCII
+     * label that happens to sit beside the non-ASCII one that triggered the full pipeline.
      *
-     * The ASCII/non-ASCII decision is deliberately made on each **raw** label, not on a
-     * whole-domain-mapped one: mapping the domain before this decision would let a non-ASCII
-     * sequence that maps down to a literal ASCII string (e.g. a fullwidth rendering of `xn--a`)
-     * take the unconditional-keep branch and skip [domainToAscii]'s Punycode decode/validate step
-     * entirely — exactly the case this leniency must not cover, since HOST-48 scopes it to a
-     * domain that is already ASCII pre-mapping. Splitting on the raw dot-separator variants (rather
-     * than only [LABEL_SEPARATOR]) keeps the boundary that the mapping step would otherwise reveal
-     * visible here too, without needing to map first: those three code points are always mapped to
-     * exactly [LABEL_SEPARATOR] on their own (never merged into a longer replacement), so a literal
-     * split on them is equivalent to mapping-then-splitting for boundary purposes alone.
-     *
-     * @return the joined ASCII domain, or `null` on the first non-ASCII label's UTS-46 failure.
+     * @return the ASCII domain, or `null` on a non-ASCII domain's UTS-46 failure.
      */
-    private fun asciiLenientDomainToAscii(domain: String): String? {
-        val labels = splitRawLabels(domain)
-        val out = ArrayList<String>(labels.size)
-        var index = 0
-        var failed = false
-        while (index < labels.size && !failed) {
-            val label = labels[index]
-            if (label.isAllAscii()) {
-                out.add(asciiLowercase(label))
-            } else {
-                when (val result = domainToAscii(label)) {
-                    is ParseResult.Ok -> out.add(result.value)
-                    is ParseResult.Err -> failed = true
-                }
+    private fun asciiLenientDomainToAscii(domain: String): String? =
+        if (domain.isAllAscii()) {
+            asciiLowercase(domain)
+        } else {
+            when (val result = domainToAscii(domain)) {
+                is ParseResult.Ok -> result.value
+                is ParseResult.Err -> null
             }
-            index++
         }
-        return if (failed) null else out.joinToString(LABEL_SEPARATOR)
-    }
 
     /**
      * Runs the inverse display transform (UTS-46 ToUnicode) over [domain]: map, (deferred) NFC,
@@ -200,19 +171,6 @@ internal object Idna {
 
     /** Splits [domain] into labels on [LABEL_SEPARATOR]; an empty domain yields one empty label. */
     private fun splitLabels(domain: String): List<String> = domain.split(LABEL_SEPARATOR)
-
-    /**
-     * Splits the raw, pre-mapping [domain] into labels on [LABEL_SEPARATOR] or any of the three
-     * non-ASCII UTS-46 dot-separator variants that map to it, so a label boundary they form is
-     * visible before mapping runs (see [asciiLenientDomainToAscii]).
-     */
-    private fun splitRawLabels(domain: String): List<String> =
-        domain.split(
-            LABEL_SEPARATOR_CHAR,
-            IDEOGRAPHIC_FULL_STOP,
-            FULLWIDTH_FULL_STOP,
-            HALFWIDTH_IDEOGRAPHIC_FULL_STOP,
-        )
 
     /**
      * Processes every label in order, short-circuiting on the first failure so the resulting
