@@ -439,4 +439,27 @@ class UrlDxTest {
 
         assertEquals(target, base.resolveOrThrow(assertNotNull(base.relativize(target))))
     }
+
+    @Test
+    fun `relativize round-trips when the target path holds a mid-path malformed percent triplet`() {
+        // relativize builds its candidate over toUri(), which used to throw on a bare/malformed `%`
+        // that the WHATWG path percent-encode set (unlike RFC 3986) does not reserve.
+        val base = parseOk("http://h/a%zzb/")
+        val target = parseOk("http://h/a%zzb/c")
+
+        assertEquals(target, base.resolveOrThrow(assertNotNull(base.relativize(target))))
+    }
+
+    @Test
+    fun `relativize returns null rather than throwing when the differing suffix is a trailing bare percent`() {
+        // The candidate reference is built over the RFC 3986 profile (toUri), which requires the
+        // literal trailing `%` to be escaped to `%25` first (the fix for #103). Resolving that
+        // escaped reference back through WHATWG yields "a%25", not the original "a%", so relativize
+        // correctly reports no relative form exists here instead of fabricating one that would not
+        // reproduce target; the regression under test is that this returns null instead of throwing.
+        val base = parseOk("http://h/")
+        val target = parseOk("http://h/a%")
+
+        assertNull(base.relativize(target))
+    }
 }
