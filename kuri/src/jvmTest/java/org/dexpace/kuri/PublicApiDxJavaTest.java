@@ -25,10 +25,10 @@ import org.junit.Test;
  * no Kotlin-only constructs and no {@code internal} access, so the build fails the moment a Java
  * call site stops compiling or a documented behaviour drifts.
  *
- * <p>Note the two deliberate typing traps this pins down: {@link Uri#effectivePort()} returns a
- * boxed {@link Integer} (nullable) while {@link Url#effectivePort()} returns a primitive {@code int}
- * ({@code -1} sentinel), and {@link Url#origin()} for an opaque origin returns the four-character
- * String {@code "null"} rather than a {@code null} reference.
+ * <p>Note the deliberate typing trap this pins down: {@link Url#origin()} for an opaque origin
+ * returns the four-character String {@code "null"} rather than a {@code null} reference. Both
+ * {@link Uri#effectivePort()} and {@link Url#effectivePort()} return a boxed {@link Integer}
+ * (nullable), reporting "no default port" as {@code null} rather than a sentinel.
  */
 public final class PublicApiDxJavaTest {
 
@@ -212,13 +212,13 @@ public final class PublicApiDxJavaTest {
     }
 
     @Test
-    public void urlEffectivePortIsAPrimitiveInt() {
-        // Assigning to int proves the primitive return; -1 is the "no default" sentinel.
-        int httpsPort = Url.parseOrThrow("https://h/").effectivePort();
-        Assert.assertEquals(443, httpsPort);
+    public void urlEffectivePortIsABoxedInteger() {
+        // Assigning to Integer proves the boxed, nullable return: no -1 sentinel.
+        Integer httpsPort = Url.parseOrThrow("https://h/").effectivePort();
+        Assert.assertEquals(Integer.valueOf(443), httpsPort);
 
-        int noDefault = Url.parseOrThrow("mailto:a@b.example").effectivePort();
-        Assert.assertEquals(-1, noDefault);
+        Integer noDefault = Url.parseOrThrow("mailto:a@b.example").effectivePort();
+        Assert.assertNull(noDefault);
     }
 
     @Test

@@ -249,6 +249,18 @@ private class NestedNullHole(
     @BindUrl val middle: HoleIdCarrier?,
 )
 
+// Issue #82 repro: a hole followed by a literal suffix sharing the same segment (`{id}.json`).
+@PathTemplate("/reports/{id}.json")
+private class ReportRequest(
+    @Path("id") val id: Int,
+)
+
+// Issue #82 repro: a literal prefix followed by a hole sharing the same segment (`v{version}`).
+@PathTemplate("v{version}")
+private class VersionRequest(
+    @Path("version") val version: Int,
+)
+
 class BindingExecutorTest {
     private val executor = BindingExecutor(PlanCompiler(KotlinReflectMemberScanner()))
 
@@ -466,5 +478,17 @@ class BindingExecutorTest {
         // The inner hole accessor's upstream prefix returns null (the outer `middle` is null), so it
         // short-circuits before the inner read and the hole resolves to null — a fail-fast bind error.
         assertFailsWith<KuriBindException> { bind(NestedNullHole(null)) }
+    }
+
+    @Test
+    fun `fails to bind a template whose hole shares a segment with a literal suffix`() {
+        // Issue #82: "/reports/{id}.json" must not silently re-segment to ["reports", "5", ".json"].
+        assertFailsWith<KuriBindException> { bind(ReportRequest(5)) }
+    }
+
+    @Test
+    fun `fails to bind a template whose hole shares a segment with a literal prefix`() {
+        // Issue #82: "v{version}" must not silently re-segment to ["v", "2"].
+        assertFailsWith<KuriBindException> { bind(VersionRequest(2)) }
     }
 }

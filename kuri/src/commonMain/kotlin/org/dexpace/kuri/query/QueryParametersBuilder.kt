@@ -4,9 +4,6 @@
  */
 package org.dexpace.kuri.query
 
-import org.dexpace.kuri.text.charCount
-import org.dexpace.kuri.text.codePointAt
-
 /**
  * Mutable, ordered, duplicate-preserving accumulator that produces an immutable [QueryParameters]
  * via [build] (SPEC §10.3.2). Name matching is byte-exact and case-sensitive throughout;
@@ -117,15 +114,17 @@ public class QueryParametersBuilder internal constructor(
     }
 
     /**
-     * Stable sort by **name only**, comparing Unicode code points (SPEC §10.3.2).
+     * Stable sort by **name only**, comparing raw UTF-16 code units (SPEC §10.3.2).
      *
-     * The comparison is surrogate-aware: supplementary code points (`> U+FFFF`) sort after every
-     * BMP character rather than by raw UTF-16 unit. Equal names keep their pre-sort order, so the
-     * relative order of their values is preserved; values are never compared.
+     * This matches the WHATWG-mandated order, which is *not* code-point order: a supplementary
+     * name's leading surrogate (`U+D800`-`U+DBFF`) can sort below a BMP character at or above
+     * `U+D800`, so a supplementary name can sort before a BMP name that would precede it under
+     * code-point comparison. Equal names keep their pre-sort order, so the relative order of
+     * their values is preserved; values are never compared.
      */
     public fun sort(): QueryParametersBuilder {
         val before = pairs.size
-        pairs.sortWith { left, right -> compareByCodePoint(left.first, right.first) }
+        pairs.sortWith { left, right -> left.first.compareTo(right.first) }
         check(pairs.size == before) { "sort must not change the pair count" }
         return this
     }
@@ -206,28 +205,4 @@ internal fun QueryState.applyParameterEdit(
     } else {
         QueryState.Params(builder)
     }
-}
-
-/**
- * Compares [left] and [right] by Unicode code point sequence, surrogate-aware.
- *
- * Returns a negative, zero, or positive result as [left] orders before, equal to, or after [right];
- * when one is a prefix of the other the shorter sorts first.
- */
-private fun compareByCodePoint(
-    left: String,
-    right: String,
-): Int {
-    var i = 0
-    var j = 0
-    var result = 0
-    while (i < left.length && j < right.length && result == 0) {
-        val cpLeft = codePointAt(left, i)
-        val cpRight = codePointAt(right, j)
-        result = cpLeft - cpRight
-        i += charCount(cpLeft)
-        j += charCount(cpRight)
-    }
-    check(i <= left.length && j <= right.length) { "code-point scan overran a name" }
-    return if (result != 0) result else (left.length - i) - (right.length - j)
 }
