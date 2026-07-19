@@ -9,6 +9,7 @@ package org.dexpace.kuri.serde
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.StructureKind
 import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.encoding.CompositeEncoder
 import kotlinx.serialization.modules.EmptySerializersModule
@@ -59,14 +60,16 @@ internal class QueryEncoder : AbstractEncoder() {
      * pairs, so no marker is needed. An empty list has no elements to repeat, which would otherwise
      * make it indistinguishable on the wire from the property being absent altogether (see
      * [emptyListMarkerName]) — so this adds that marker up front, before [QueryListEncoder] contributes
-     * zero further pairs.
+     * zero further pairs. Scoped to [StructureKind.LIST] to mirror the decode side's
+     * `isPresentEmptyList`, which only recognizes the marker for list elements; the format doesn't
+     * currently support `Map`-typed properties, so this is hardening rather than a reachable fix.
      */
     override fun beginCollection(
         descriptor: SerialDescriptor,
         collectionSize: Int,
     ): CompositeEncoder {
         val name = requireName()
-        if (collectionSize == 0) builder.add(emptyListMarkerName(name), null)
+        if (collectionSize == 0 && descriptor.kind == StructureKind.LIST) builder.add(emptyListMarkerName(name), null)
         return QueryListEncoder(name, builder)
     }
 
@@ -111,7 +114,9 @@ internal class QueryListEncoder(
  * Suffix marking the wire-level "present but empty" sentinel for a list property, appended to its
  * declared name (e.g. `tags` -> `tags[]`). `[`/`]` are never percent-encoded by the query name encode
  * set, so the marker stays literal in the encoded string. A Kotlin property name cannot itself contain
- * `[`/`]`, so the marker can never collide with a real element name.
+ * `[`/`]`, so the marker cannot collide with a declared property's default serial name; a property whose
+ * serial name is deliberately overridden via `@SerialName` to end in `[]` could still collide — not a
+ * supported/tested shape.
  */
 private const val EMPTY_LIST_MARKER_SUFFIX: String = "[]"
 
