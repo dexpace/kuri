@@ -694,7 +694,7 @@ class IntegrationTest {
     @Test
     fun `rejects a uri root bound through the url entry point`() {
         val failure = assertFailsWith<KuriBindException> { KuriBind.toUrl(UriOnly()) }
-        assertTrue(failure.message.orEmpty().contains("@url"))
+        assertTrue(failure.message.orEmpty().contains("@Url"))
     }
 
     @Test

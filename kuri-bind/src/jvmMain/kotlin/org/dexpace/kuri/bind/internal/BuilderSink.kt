@@ -18,8 +18,10 @@ private fun escapeLiteralPercent(text: String): String = text.replace("%", "%25"
 /**
  * The narrow set of builder operations the binder needs, abstracting the two profiles.
  *
- * All profile-specific differences — userinfo split vs. verbatim-join, and fragment encoding — live
- * in the concrete implementations rather than in the binder. Callers pass decoded (raw) values; each
+ * [UrlBuilderSink] and [UriBuilderSink] both split-encode-then-join userinfo, forwarding to their
+ * underlying builder's `username`/`password` setters identically; there is no verbatim-join path in
+ * either sink. Fragment encoding is likewise shared, implemented once as the [fragmentDecoded] default
+ * on this interface rather than overridden per profile. Callers pass decoded (raw) values; each
  * implementation decides how to encode before forwarding to the underlying builder.
  */
 internal interface BuilderSink {

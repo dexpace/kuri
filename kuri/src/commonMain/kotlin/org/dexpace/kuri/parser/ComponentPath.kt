@@ -133,6 +133,23 @@ internal fun splitUriPath(path: String): ComponentPath.Segments =
     }
 
 /**
+ * Whether [path] denotes a directory-style path — one whose serialization ends in `/` (SPEC
+ * [PATH-3], [CONF-85]). Shared by the `Uri`/`Url` `isDirectory`/`hasTrailingSlash` projections.
+ *
+ * For a [Segments][ComponentPath.Segments] path this is exactly "the last segment is the empty
+ * string": a non-empty list whose final element is `""`, which covers both the root path `/`
+ * (`[""]`) and any explicitly trailing-slashed path (`/a/`, `["a", ""]`). A wholly empty path
+ * (`emptyList()`, serialized `""`) has no trailing slash to report. For an
+ * [Opaque][ComponentPath.Opaque] path — which has no segment structure — the equivalent
+ * serialization-ends-in-`/` test is applied directly to its verbatim text.
+ */
+internal fun ComponentPath.isDirectoryPath(): Boolean =
+    when (this) {
+        is ComponentPath.Segments -> segments.isNotEmpty() && segments.last().isEmpty()
+        is ComponentPath.Opaque -> path.endsWith(URI_PATH_SEPARATOR)
+    }
+
+/**
  * The "file name" of decoded path [segments]: the last non-empty segment, or `""` when there is
  * none (SPEC §3.3). Shared by the `Uri`/`Url` `fileName()` projections.
  *

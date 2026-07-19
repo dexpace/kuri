@@ -129,6 +129,11 @@ jobs:
     name: Smoke-test published artifact
     needs: publish
     runs-on: ubuntu-latest
+    # This job only checks out the repo and curls a public Maven Central URL — no GH_TOKEN, no write
+    # operation — so scope its token down from the workflow-level contents: write, which is only needed
+    # by the publish job's gh release create/upload calls.
+    permissions:
+      contents: read
     # The resolve loop below waits ~30 min for Central to propagate; timeout-minutes sits above that as
     # a backstop so the job is never killed mid-wait. Central propagation to repo1.maven.org can lag
     # well past even 30 min, so this stays a best-effort signal only and must never gate or fail the
