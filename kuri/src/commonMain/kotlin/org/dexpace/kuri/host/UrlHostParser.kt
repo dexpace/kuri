@@ -7,6 +7,7 @@ package org.dexpace.kuri.host
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.idna.Idna
+import org.dexpace.kuri.percent.DecodedWithSource
 import org.dexpace.kuri.percent.PercentCodec
 
 /** Sentinel for "no offending index found" returned by the host scanners. */
@@ -57,11 +58,17 @@ internal object UrlHostParser {
      * The special-scheme domain pipeline (§7.4): UTF-8 percent-decode, run the WHATWG "domain to
      * ASCII" wrapper ([Idna.domainToAsciiForUrl] — UTS-46 with the ASCII fast-path and empty-result
      * rule), then classify the ASCII domain. A domain-to-ASCII failure propagates unchanged ([HOST-26]).
+     *
+     * The decode keeps its per-unit source map ([PercentCodec.decodeTrackingSource]) so a
+     * forbidden-domain hit found after both percent-decoding and IDNA can be reported at its offset
+     * in [input] — the host substring this parser was given — rather than in the decoded/transformed
+     * text ([HOST-37]); [parse]'s caller then rebases that host-relative offset to full-input
+     * coordinates.
      */
     private fun parseSpecialDomain(input: String): ParseResult<Host> {
         require(input.isNotEmpty()) { "empty domain reached the IDNA pipeline" }
-        val decoded = PercentCodec.decode(input)
-        return when (val ascii = Idna.domainToAsciiForUrl(decoded)) {
+        val decoded = PercentCodec.decodeTrackingSource(input)
+        return when (val ascii = Idna.domainToAsciiForUrl(decoded.text)) {
             is ParseResult.Err -> ascii
             is ParseResult.Ok -> classifyAsciiDomain(decoded, ascii.value)
         }
@@ -71,11 +78,12 @@ internal object UrlHostParser {
      * Classifies the produced ASCII domain ([HOST-29]/[HOST-30]): a forbidden-domain code point is
      * fatal, an ends-in-a-number host parses as IPv4, otherwise it is a lowercase-ASCII [Host.RegName].
      *
-     * @param decoded the percent-decoded, pre-IDNA domain [asciiDomain] was produced from — carried
-     *   only to recover a forbidden hit's original position/code point ([forbiddenHostCodePoint]).
+     * @param decoded the percent-decoded, pre-IDNA domain [asciiDomain] was produced from, still
+     *   carrying its source map — used to recover a forbidden hit's original position/code point in
+     *   the host substring ([forbiddenHostCodePoint]).
      */
     private fun classifyAsciiDomain(
-        decoded: String,
+        decoded: DecodedWithSource,
         asciiDomain: String,
     ): ParseResult<Host> {
         val forbiddenAt = firstForbiddenDomainIndex(asciiDomain)
@@ -92,26 +100,29 @@ internal object UrlHostParser {
 
     /**
      * Builds the [UriParseError.ForbiddenHostCodePoint] for the domain-forbidden hit the
-     * *transformed* [asciiDomain] reports at [asciiIndex], preferring the pre-IDNA position and code
-     * point traced back through [Idna.traceMapping] over [decoded].
+     * *transformed* [asciiDomain] reports at [asciiIndex], reporting the pre-IDNA code point and its
+     * offset in the host substring [decoded] was produced from.
      *
-     * IDNA can both change a domain's length (a non-ASCII label Punycode-expands into a longer
-     * `xn--` label) and remap a code point's value (e.g. NBSP maps to SPACE), so [asciiIndex] and
-     * `asciiDomain[asciiIndex]` are not generally meaningful positions in the caller's original text
-     * ([HOST-37]). Falls back to the transformed string's own coordinates only when no traced unit
-     * matches — an unreachable case for a domain [Idna.domainToAsciiForUrl] has already accepted,
-     * kept only so a rejected domain is never silently turned into a [ParseResult.Ok] for the sake
-     * of a nicer diagnostic.
+     * The offset is recovered in two hops so it lands in the caller's original text ([HOST-37]):
+     * [Idna.traceMapping] maps the transformed position back to the source code point's offset in the
+     * percent-*decoded* domain, then [DecodedWithSource.sourceOffsetOf] maps that back through
+     * percent-decoding to the offset in the raw host substring. Both hops are needed because IDNA can
+     * change a domain's length (Punycode expansion) or remap a code point's value (NBSP to SPACE),
+     * and percent-decoding is not length-preserving (`%C3%A4` decodes to a single `ä`). Falls back to
+     * the transformed string's own coordinates only when no traced unit matches — an unreachable case
+     * for a domain [Idna.domainToAsciiForUrl] has already accepted, kept only so a rejected domain is
+     * never silently turned into a [ParseResult.Ok] for the sake of a nicer diagnostic.
      */
     private fun forbiddenHostCodePoint(
-        decoded: String,
+        decoded: DecodedWithSource,
         asciiDomain: String,
         asciiIndex: Int,
     ): UriParseError {
         require(asciiIndex in asciiDomain.indices) { "ascii index out of range: $asciiIndex" }
-        val traced = Idna.traceMapping(decoded).firstOrNull { unit -> unit.text.any { isForbiddenDomainCodePoint(it) } }
+        val traced =
+            Idna.traceMapping(decoded.text).firstOrNull { unit -> unit.text.any { isForbiddenDomainCodePoint(it) } }
         return if (traced != null) {
-            UriParseError.ForbiddenHostCodePoint(traced.sourceCodePoint, traced.sourceIndex)
+            UriParseError.ForbiddenHostCodePoint(traced.sourceCodePoint, decoded.sourceOffsetOf(traced.sourceIndex))
         } else {
             UriParseError.ForbiddenHostCodePoint(asciiDomain[asciiIndex].code, asciiIndex)
         }

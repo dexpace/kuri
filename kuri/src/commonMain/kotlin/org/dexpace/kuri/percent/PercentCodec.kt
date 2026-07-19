@@ -5,6 +5,8 @@
 package org.dexpace.kuri.percent
 
 import org.dexpace.kuri.text.NON_ASCII_MIN
+import org.dexpace.kuri.text.charCount
+import org.dexpace.kuri.text.codePointAt
 import org.dexpace.kuri.text.hasPercentHexPairAt
 import org.dexpace.kuri.text.isSurrogatePairAt
 import org.dexpace.kuri.text.percentByteAt
@@ -15,6 +17,56 @@ private const val BYTE_MASK: Int = 0xFF
 
 /** Length of a percent-encoded triplet, `%XX` (SPEC §5). */
 private const val TRIPLET_LENGTH: Int = 3
+
+/** Smallest code point that needs two UTF-8 octets. */
+private const val UTF8_TWO_OCTET_MIN: Int = 0x80
+
+/** Smallest code point that needs three UTF-8 octets. */
+private const val UTF8_THREE_OCTET_MIN: Int = 0x800
+
+/** Smallest code point that needs four UTF-8 octets. */
+private const val UTF8_FOUR_OCTET_MIN: Int = 0x10000
+
+/** UTF-8 octet length of a three-octet code point (U+0800..U+FFFF); U+FFFD is one such. */
+private const val UTF8_THREE_OCTETS: Int = 3
+
+/** UTF-8 octet length of a supplementary (four-octet) code point (>= U+10000). */
+private const val UTF8_FOUR_OCTETS: Int = 4
+
+/**
+ * The decoded text of [PercentCodec.decodeTrackingSource], paired with a per-code-unit map back to
+ * the offset in the pre-decode input each unit was decoded from.
+ *
+ * Lets a caller translate a position found in the *decoded* text into the raw input it came from —
+ * needed because percent-decoding is not length-preserving, so a length-ratio rescale cannot do it
+ * (`%C3%A4` is six input units decoding to the single unit `ä`). Deliberately not a `data class`: it
+ * wraps an [IntArray] whose structural equality would be by reference, and equality is neither needed
+ * nor meaningful here.
+ *
+ * @property text the decoded text (identical to [PercentCodec.decode] of the same input).
+ */
+internal class DecodedWithSource(
+    val text: String,
+    private val sources: IntArray,
+) {
+    init {
+        require(sources.size == text.length) { "one source offset per decoded code unit is required" }
+    }
+
+    /**
+     * The offset in the pre-decode input that produced the decoded code unit at [decodedIndex].
+     *
+     * For a unit decoded from a triplet run this is the offset of the first `%` of the triplet the
+     * code point began at; for a literal unit it is that unit's own position.
+     *
+     * @param decodedIndex a UTF-16 index into [text].
+     * @return the pre-decode input offset [decodedIndex] originated from.
+     */
+    internal fun sourceOffsetOf(decodedIndex: Int): Int {
+        require(decodedIndex in sources.indices) { "decoded index out of range: $decodedIndex" }
+        return sources[decodedIndex]
+    }
+}
 
 /** U+FFFD, substituted for a lone surrogate that cannot be UTF-8 encoded ([PCT-21]). */
 private const val REPLACEMENT_CHARACTER: String = "\uFFFD"
@@ -100,6 +152,36 @@ internal object PercentCodec {
                 }
         }
         return out.toString()
+    }
+
+    /**
+     * Percent-decodes [input] exactly as [decode] does (lenient, `plusAsSpace = false`) while
+     * recording, for every decoded UTF-16 code unit, the offset in [input] the unit was decoded from
+     * ([PCT-22]–[PCT-26]).
+     *
+     * The [DecodedWithSource.text] it returns is byte-for-byte the [decode] result for the same
+     * [input]; the extra source map only lets a caller rebase a position found in the decoded text —
+     * e.g. a forbidden-domain code point located after percent-decoding — back to raw input
+     * coordinates, which a length-based rescale cannot do (a triplet run is not 1:1 with the octet(s)
+     * it decodes to).
+     *
+     * @param input text that may contain percent-encoded triplets.
+     * @return the decoded text paired with its per-unit source offsets.
+     */
+    internal fun decodeTrackingSource(input: String): DecodedWithSource {
+        val out = StringBuilder(input.length)
+        val sources = ArrayList<Int>(input.length)
+        var i = 0
+        while (i < input.length) {
+            i =
+                if (input[i] == '%' && hasPercentHexPairAt(input, i)) {
+                    appendTrackedTripletRun(out, sources, input, i)
+                } else {
+                    appendTrackedLiteral(out, sources, input, i)
+                }
+        }
+        check(sources.size == out.length) { "each decoded code unit must carry exactly one source offset" }
+        return DecodedWithSource(out.toString(), sources.toIntArray())
     }
 
     /**
@@ -248,6 +330,79 @@ internal object PercentCodec {
         out.append(tripletRunBytes(input, start, end).decodeToString())
         return end
     }
+
+    /** Appends the literal unit at [i], its own offset as the source; returns [i] + 1 (see [decodeTrackingSource]). */
+    private fun appendTrackedLiteral(
+        out: StringBuilder,
+        sources: MutableList<Int>,
+        input: String,
+        i: Int,
+    ): Int {
+        out.append(input[i])
+        sources.add(i)
+        return i + 1
+    }
+
+    /**
+     * Decodes the triplet run at [start] exactly as [appendTripletRun] does, additionally recording
+     * each decoded code unit's source offset via [appendRunSources]; returns the index just past the
+     * run ([PCT-25]).
+     */
+    private fun appendTrackedTripletRun(
+        out: StringBuilder,
+        sources: MutableList<Int>,
+        input: String,
+        start: Int,
+    ): Int {
+        require(input[start] == '%') { "triplet run must start at a percent sign" }
+        var end = start
+        while (end < input.length && input[end] == '%' && hasPercentHexPairAt(input, end)) {
+            end += TRIPLET_LENGTH
+        }
+        val bytes = tripletRunBytes(input, start, end)
+        val decoded = bytes.decodeToString()
+        out.append(decoded)
+        appendRunSources(sources, decoded, start, bytes.size)
+        return end
+    }
+
+    /**
+     * Records the pre-decode source offset of every UTF-16 unit of a triplet run's [decoded] text.
+     *
+     * Each output code point consumed [utf8ByteLength] octets, and octet `n` of the run is the
+     * triplet at `runStart + n * TRIPLET_LENGTH`; both halves of a supplementary code point share the
+     * offset of its first octet. The octet cursor is clamped to the run's last octet so a decoded
+     * U+FFFD from malformed UTF-8 (which re-encodes to more octets than it consumed) can never point
+     * past the run — a defensive bound only, since IDNA rejects U+FFFD long before such a run would
+     * reach a caller that inspects these offsets.
+     */
+    private fun appendRunSources(
+        sources: MutableList<Int>,
+        decoded: String,
+        runStart: Int,
+        octetCount: Int,
+    ) {
+        require(octetCount >= 1) { "a triplet run must contain at least one octet" }
+        var octetCursor = 0
+        var j = 0
+        while (j < decoded.length) {
+            val codePoint = codePointAt(decoded, j)
+            val units = charCount(codePoint)
+            val offset = runStart + octetCursor.coerceAtMost(octetCount - 1) * TRIPLET_LENGTH
+            repeat(units) { sources.add(offset) }
+            octetCursor += utf8ByteLength(codePoint)
+            j += units
+        }
+    }
+
+    /** The number of UTF-8 octets that encode [codePoint] (1–4); U+FFFD encodes to three. */
+    private fun utf8ByteLength(codePoint: Int): Int =
+        when {
+            codePoint < UTF8_TWO_OCTET_MIN -> 1
+            codePoint < UTF8_THREE_OCTET_MIN -> 2
+            codePoint < UTF8_FOUR_OCTET_MIN -> UTF8_THREE_OCTETS
+            else -> UTF8_FOUR_OCTETS
+        }
 
     /**
      * Materializes the triplet run `input[start, end)` into one decoded octet per `%HH` triplet

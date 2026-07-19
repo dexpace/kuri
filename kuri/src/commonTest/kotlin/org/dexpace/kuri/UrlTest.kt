@@ -295,6 +295,52 @@ class UrlTest {
         assertEquals("https://example.com/", result.getOrNull()?.href)
     }
 
+    // --- forbidden host code point offsets rebased to full input ([HOST-37]) ---------
+
+    @Test
+    fun `parse rebases an opaque-host forbidden code point to full-input coordinates`() {
+        // Non-special scheme -> opaque host "h|ost" (no percent-decode before the forbidden scan);
+        // OpaqueHost reports '|' at host-relative index 1, which must be rebased by the host start
+        // (6, right after "foo://") to the full-input offset 7.
+        val err = assertIs<ParseResult.Err>(Url.parse("foo://h|ost"))
+        val cause = assertIs<UriParseError.ForbiddenHostCodePoint>(err.error)
+        assertEquals('|'.code, cause.codePoint)
+        assertEquals(7, cause.at)
+    }
+
+    @Test
+    fun `parse rebases a special-domain forbidden control character to full-input coordinates`() {
+        // Special scheme -> domain pipeline; U+0001 is forbidden and the host starts at 7 (right
+        // after "http://"), so its host-relative index 1 must rebase to full-input offset 8.
+        val err = assertIs<ParseResult.Err>(Url.parse("http://host/p"))
+        val cause = assertIs<UriParseError.ForbiddenHostCodePoint>(err.error)
+        assertEquals(1, cause.codePoint)
+        assertEquals(8, cause.at)
+    }
+
+    @Test
+    fun `parse rebases a special-domain forbidden code point past a Punycode-expanded label`() {
+        // "ä" Punycode-expands, so '^' sits at a different index in the transformed ASCII domain
+        // than in the original host; tracing back through IDNA gives host-relative index 3, which
+        // rebases by the host start (7) to full-input offset 10.
+        val err = assertIs<ParseResult.Err>(Url.parse("http://ä.a^b"))
+        val cause = assertIs<UriParseError.ForbiddenHostCodePoint>(err.error)
+        assertEquals('^'.code, cause.codePoint)
+        assertEquals(10, cause.at)
+    }
+
+    @Test
+    fun `parse rebases a forbidden code point through percent-decoding and IDNA`() {
+        // The host "%C3%A4.a^b" is percent-decoded to "ä.a^b" before IDNA runs, so a naive
+        // length-based rescale of the post-decode index (3) would land on the wrong raw offset
+        // (a linear guess gives 10). The '^' must be tracked back through percent-decoding to its
+        // real host-relative index 8, then rebased by the host start (7) to full-input offset 15.
+        val err = assertIs<ParseResult.Err>(Url.parse("http://%C3%A4.a^b"))
+        val cause = assertIs<UriParseError.ForbiddenHostCodePoint>(err.error)
+        assertEquals('^'.code, cause.codePoint)
+        assertEquals(15, cause.at)
+    }
+
     // --- RFC 6874 zone identifiers ([HOST-17]) ---------------------------------------
 
     @Test

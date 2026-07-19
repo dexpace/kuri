@@ -132,6 +132,21 @@ class UrlHostParserTest {
         assertEquals(3, cause.at)
     }
 
+    @Test
+    fun `parse locates a forbidden code point through percent-decoding and IDNA`() {
+        // "%C3%A4" is percent-decoded to "ä" (six host units collapsing to one) before IDNA runs, so
+        // the '^' the transformed domain forbids sits at decoded index 3 but raw host index 8. The
+        // reported offset must track back through BOTH the IDNA mapping and the percent-decoding to
+        // reach index 8 in the host substring -- a naive length rescale of the decoded index cannot
+        // ([HOST-37]).
+        val result = UrlHostParser.parse("%C3%A4.a^b", isSpecial = true)
+
+        val err = assertIs<ParseResult.Err>(result)
+        val cause = assertIs<UriParseError.ForbiddenHostCodePoint>(err.error)
+        assertEquals('^'.code, cause.codePoint)
+        assertEquals(8, cause.at)
+    }
+
     // --- Url profile, non-special opaque ---------------------------------------------
 
     @Test
