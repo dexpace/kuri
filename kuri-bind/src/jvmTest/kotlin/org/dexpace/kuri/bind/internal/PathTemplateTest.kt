@@ -52,9 +52,10 @@ class PathTemplateTest {
     }
 
     @Test
-    fun `parses adjacent holes with no literal between them`() {
-        val t = PathTemplate.parse("/{a}{b}")
-        assertEquals(listOf("a", "b"), t.holes.map { it.name })
+    fun `rejects adjacent holes with no literal between them`() {
+        // The composer emits one full segment per hole regardless of adjacency, so "/{a}{b}" would
+        // compose identically to "/{a}/{b}" despite its spelling implying a single merged segment.
+        assertFailsWith<KuriBindException> { PathTemplate.parse("/{a}{b}") }
     }
 
     @Test
@@ -91,6 +92,12 @@ class PathTemplateTest {
     @Test
     fun `rejects a catch-all hole sharing a segment with a literal prefix`() {
         assertFailsWith<KuriBindException> { PathTemplate.parse("/files{path...}") }
+    }
+
+    @Test
+    fun `rejects a hole with an unbounded literal on both sides at once`() {
+        // "/a{id}b/c" fails the check twice over: "a" doesn't end in '/' and "b" doesn't start with '/'.
+        assertFailsWith<KuriBindException> { PathTemplate.parse("/a{id}b/c") }
     }
 
     @Test

@@ -117,9 +117,12 @@ internal class PathTemplate private constructor(
         /**
          * A hole must occupy a whole path segment, matching `net/http.ServeMux`: literal text sharing a
          * segment with a hole (`{id}.json`, `v{version}`) is rejected rather than silently re-segmented
-         * when the path is composed (issue #82). A hole is exempt from this check on the side that abuts
-         * another hole (`{a}{b}`) or a template boundary (start/end of string) — only an adjacent
-         * [PathToken.Literal] that fails to carry a `/` at the shared edge is a violation.
+         * when the path is composed (issue #82). A hole is exempt from this check only at a true template
+         * boundary (start/end of string, i.e. no neighboring token at all) — any other neighbor, including
+         * another hole with nothing between them (`{a}{b}`), is a violation unless it's a [PathToken.Literal]
+         * carrying the `/` at the shared edge. The composer always emits one full segment per [PathToken.Hole]
+         * regardless of adjacency, so two adjacent holes can never merge into the single shared segment their
+         * spelling implies.
          */
         private fun requireHolesAtSegmentBoundaries(
             tokens: List<PathToken>,
@@ -127,16 +130,30 @@ internal class PathTemplate private constructor(
         ) {
             for (i in tokens.indices) {
                 val hole = tokens[i] as? PathToken.Hole ?: continue
-                val before = tokens.getOrNull(i - 1) as? PathToken.Literal
-                val after = tokens.getOrNull(i + 1) as? PathToken.Literal
-                val boundedBefore = before == null || before.raw.endsWith('/')
-                val boundedAfter = after == null || after.raw.startsWith('/')
-                if (!boundedBefore || !boundedAfter) {
+                if (!isBoundedBefore(tokens, i) || !isBoundedAfter(tokens, i)) {
                     throw KuriBindException(
                         "template hole '{${hole.name}}' must occupy a whole '/'-delimited path segment: $template",
                     )
                 }
             }
+        }
+
+        /** True when the hole at [index] has no preceding token, or a literal predecessor ending in `/`. */
+        private fun isBoundedBefore(
+            tokens: List<PathToken>,
+            index: Int,
+        ): Boolean {
+            val before = tokens.getOrNull(index - 1) ?: return true
+            return before is PathToken.Literal && before.raw.endsWith('/')
+        }
+
+        /** True when the hole at [index] has no following token, or a literal successor starting with `/`. */
+        private fun isBoundedAfter(
+            tokens: List<PathToken>,
+            index: Int,
+        ): Boolean {
+            val after = tokens.getOrNull(index + 1) ?: return true
+            return after is PathToken.Literal && after.raw.startsWith('/')
         }
     }
 }
