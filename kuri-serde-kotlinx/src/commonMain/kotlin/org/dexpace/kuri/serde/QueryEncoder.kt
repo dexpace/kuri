@@ -32,7 +32,7 @@ internal class QueryEncoder : AbstractEncoder() {
     fun build(): QueryParameters = builder.build()
 
     override fun beginStructure(descriptor: SerialDescriptor): CompositeEncoder {
-        if (entered) throw SerializationException("nested objects are not supported by the query format")
+        if (entered) throw SerializationException(NESTED_OBJECTS_REJECTED_MESSAGE)
         entered = true
         return this
     }
@@ -104,7 +104,7 @@ internal class QueryListEncoder(
      * [QueryEncoder.beginStructure]'s top-level guard.
      */
     override fun beginStructure(descriptor: SerialDescriptor): CompositeEncoder =
-        throw SerializationException("nested objects are not supported by the query format")
+        throw SerializationException(NESTED_OBJECTS_REJECTED_MESSAGE)
 
     override fun encodeValue(value: Any) {
         builder.add(name, value.toString())
@@ -117,6 +117,9 @@ internal class QueryListEncoder(
         builder.add(name, enumDescriptor.getElementName(index))
     }
 }
+
+/** Shared by [QueryEncoder.beginStructure] and [QueryListEncoder.beginStructure]'s nesting rejection. */
+private const val NESTED_OBJECTS_REJECTED_MESSAGE: String = "nested objects are not supported by the query format"
 
 /**
  * Suffix marking the wire-level "present but empty" sentinel for a list property, appended to its
