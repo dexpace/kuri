@@ -451,6 +451,18 @@ class UrlDxTest {
     }
 
     @Test
+    fun `isDirectory is true for an opaque path ending in a slash`() {
+        val url = parseOk("urn:example:a/")
+
+        // Confirms the path really is opaque (verbatim, colon-bearing text) rather than having
+        // been reinterpreted as segments, so the assertions below can't pass vacuously.
+        assertEquals("urn:example:a/", url.href)
+
+        assertTrue(url.isDirectory())
+        assertTrue(url.hasTrailingSlash())
+    }
+
+    @Test
     fun `isSpecial reflects whether the scheme is a WHATWG special scheme`() {
         val special = listOf("https://h/", "ws://h/", "ftp://h/", "file:///x")
         for (input in special) {
