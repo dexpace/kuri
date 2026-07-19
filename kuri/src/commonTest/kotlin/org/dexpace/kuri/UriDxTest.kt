@@ -583,6 +583,71 @@ class UriDxTest {
         assertNull(parseOk("http://h/p#x").withoutFragment().fragment)
     }
 
+    // --- redact ---
+
+    @Test
+    fun `redact strips userinfo query and fragment but keeps scheme host port and path`() {
+        val uri = parseOk("http://user:pass@h:8080/p/a?q=1#frag")
+
+        val redacted = uri.redact()
+
+        assertEquals("http://h:8080/p/a", redacted.uriString)
+        assertNull(redacted.userInfo)
+        assertNull(redacted.query)
+        assertNull(redacted.fragment)
+        assertEquals("h", redacted.hostName)
+        assertEquals(8080, redacted.port)
+        assertEquals("/p/a", redacted.encodedPath)
+    }
+
+    @Test
+    fun `redact is a no-op in value when there is no userinfo query or fragment already`() {
+        val uri = parseOk("http://h:8080/p")
+
+        assertEquals(uri, uri.redact())
+    }
+
+    @Test
+    fun `redact strips only the credential-bearing components on a relative reference`() {
+        val uri = parseOk("/a/b?q#f")
+
+        val redacted = uri.redact()
+
+        assertEquals("/a/b", redacted.uriString)
+        assertNull(redacted.query)
+        assertNull(redacted.fragment)
+    }
+
+    // --- isDirectory / hasTrailingSlash ---
+
+    @Test
+    fun `isDirectory and hasTrailingSlash agree on a trailing empty segment`() {
+        val trailingSlash = parseOk("http://h/a/")
+
+        assertTrue(trailingSlash.isDirectory())
+        assertTrue(trailingSlash.hasTrailingSlash())
+
+        val noTrailingSlash = parseOk("http://h/a")
+
+        assertFalse(noTrailingSlash.isDirectory())
+        assertFalse(noTrailingSlash.hasTrailingSlash())
+    }
+
+    @Test
+    fun `isDirectory is true for the root path`() {
+        assertTrue(parseOk("http://h/").isDirectory())
+    }
+
+    @Test
+    fun `isDirectory is false for a wholly empty path`() {
+        assertFalse(parseOk("http://h").isDirectory())
+    }
+
+    @Test
+    fun `isDirectory is false for an opaque path with no trailing slash`() {
+        assertFalse(parseOk("mailto:a@example.com").isDirectory())
+    }
+
     @Test
     fun `relativize returns null across different schemes`() {
         // The authorities match, but a differing scheme fails the shared-hierarchy check, so there is no

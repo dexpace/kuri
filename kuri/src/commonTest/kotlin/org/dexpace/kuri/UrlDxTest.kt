@@ -389,6 +389,80 @@ class UrlDxTest {
     }
 
     @Test
+    fun `redact strips userinfo query and fragment but keeps scheme host port and path`() {
+        val url = parseOk("https://user:pass@h:8443/p/a?q=1#frag")
+
+        val redacted = url.redact()
+
+        assertEquals("https://h:8443/p/a", redacted.href)
+        assertEquals("", redacted.username)
+        assertEquals("", redacted.password)
+        assertNull(redacted.query)
+        assertNull(redacted.fragment)
+        assertEquals("h", redacted.hostName)
+        assertEquals(8443, redacted.port)
+        assertEquals("/p/a", redacted.encodedPath)
+    }
+
+    @Test
+    fun `redact is a no-op in value when there is no userinfo query or fragment already`() {
+        val url = parseOk("https://h:8443/p")
+
+        assertEquals(url, url.redact())
+    }
+
+    @Test
+    fun `redact on an opaque-path URL clears only its query and fragment`() {
+        // mailto: has no authority at all, so its "userinfo" is really part of the opaque path and is
+        // untouched; only the real query and fragment components are stripped.
+        val url = parseOk("mailto:a@example.com?subject=hi#top")
+
+        val redacted = url.redact()
+
+        assertEquals("mailto:a@example.com", redacted.href)
+        assertNull(redacted.query)
+        assertNull(redacted.fragment)
+    }
+
+    @Test
+    fun `isDirectory and hasTrailingSlash agree on a trailing empty segment`() {
+        val trailingSlash = parseOk("https://h/a/")
+
+        assertTrue(trailingSlash.isDirectory())
+        assertTrue(trailingSlash.hasTrailingSlash())
+
+        val noTrailingSlash = parseOk("https://h/a")
+
+        assertFalse(noTrailingSlash.isDirectory())
+        assertFalse(noTrailingSlash.hasTrailingSlash())
+    }
+
+    @Test
+    fun `isDirectory is true for the root path`() {
+        assertTrue(parseOk("https://h/").isDirectory())
+        // A special-scheme empty path is WHATWG-canonicalized to the root "/", which is itself a
+        // directory path, so this also exercises the empty-input edge case.
+        assertTrue(parseOk("https://h").isDirectory())
+    }
+
+    @Test
+    fun `isDirectory is false for an opaque path with no trailing slash`() {
+        assertFalse(parseOk("mailto:a@example.com").isDirectory())
+    }
+
+    @Test
+    fun `isDirectory is true for an opaque path ending in a slash`() {
+        val url = parseOk("urn:example:a/")
+
+        // Confirms the path really is opaque (verbatim, colon-bearing text) rather than having
+        // been reinterpreted as segments, so the assertions below can't pass vacuously.
+        assertEquals("urn:example:a/", url.href)
+
+        assertTrue(url.isDirectory())
+        assertTrue(url.hasTrailingSlash())
+    }
+
+    @Test
     fun `isSpecial reflects whether the scheme is a WHATWG special scheme`() {
         val special = listOf("https://h/", "ws://h/", "ftp://h/", "file:///x")
         for (input in special) {
