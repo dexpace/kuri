@@ -150,8 +150,8 @@ public class Url internal constructor(
      *
      * Falls back to the scheme's registered default port when no [port] is stated, and to `null`
      * when the port is neither stated nor defaulted — a non-special scheme, or `file` (special, yet
-     * portless). Matches [Uri.effectivePort]'s sentinel-free contract rather than the `java.net`
-     * `-1` convention SPEC.md's `[MODEL-24]` forbids.
+     * portless), per SPEC §6.4 ([SCH-18]). Matches [Uri.effectivePort]'s sentinel-free contract
+     * rather than the `java.net` `-1` convention [MODEL-23] bans.
      *
      * @return the stated or default port, or `null` when the scheme has no default.
      */
