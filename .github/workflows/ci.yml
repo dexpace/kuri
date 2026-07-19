@@ -86,6 +86,7 @@ jobs:
         # koverVerify pulls in jvmTest and enforces each module's line/branch floors: kuri and
         # kuri-bind at 99% line / 85% and 88% branch respectively, kuri-serde-kotlinx at 90%
         # line / 80% branch (see each module's build.gradle.kts kover block). Piped through
+        # tee/grep (pipefail is on by default for `shell: bash`, so a gradlew failure still
         # fails the step) to surface Gradle's own configuration-cache hit/miss line in the job
         # summary — otherwise confirming the cache above is doing anything means digging
         # through the raw --stacktrace log by hand.
