@@ -257,6 +257,20 @@ class SerdeTest {
     }
 
     @Test
+    fun `decoding an empty boolean value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=")
+        }
+    }
+
+    @Test
+    fun `decoding a whitespace-padded boolean value throws instead of trimming`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=%20true")
+        }
+    }
+
+    @Test
     fun `decoding true and false boolean values still succeeds`() {
         assertEquals(Flag(flag = true), QueryParametersFormat.decodeFromQueryString<Flag>("flag=true"))
         assertEquals(Flag(flag = false), QueryParametersFormat.decodeFromQueryString<Flag>("flag=false"))
