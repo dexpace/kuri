@@ -559,6 +559,11 @@ class UriDxTest {
     }
 
     @Test
+    fun `effectivePort returns the literal zero port rather than falling back to the scheme default`() {
+        assertEquals(0, parseOk("http://h:0/").effectivePort())
+    }
+
+    @Test
     fun `withPort sets and elides the port`() {
         assertEquals(2, parseOk("http://h:1/").withPort(2).port)
         assertNull(parseOk("http://h:1/").withPort(null).port)
