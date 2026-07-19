@@ -248,8 +248,9 @@ internal object UriParser {
         val at = authority.lastIndexOf('@')
         val userinfo = if (at >= 0) authority.substring(0, at) else ""
         val hostPort = if (at >= 0) authority.substring(at + 1) else authority
+        val hostPortStart = if (at >= 0) authorityStart + at + 1 else authorityStart
         return when (val error = rawError(userinfo, authorityStart)) {
-            null -> buildAuthority(userinfo, hostPort, options)
+            null -> buildAuthority(userinfo, hostPort, hostPortStart, options)
             else -> ParseResult.Err(error)
         }
     }
@@ -258,18 +259,39 @@ internal object UriParser {
     private fun buildAuthority(
         userinfo: String,
         hostPort: String,
+        hostPortStart: Int,
         options: ParseOptions,
     ): ParseResult<Authority?> {
         val (username, password) = splitUserinfo(userinfo)
+        // `host` is always a prefix of `hostPort` (every splitHostPort branch takes a `substring(0,
+        // ...)` or returns `hostPort` itself), so it starts at the same offset as `hostPort`.
         val (host, portText) = splitHostPort(hostPort)
         return when (
             val parsed =
                 UriHostParser.parse(host, allowIpv6ZoneId = options.allowIpv6ZoneId)
         ) {
-            is ParseResult.Err -> parsed
+            is ParseResult.Err -> ParseResult.Err(rebaseHostError(parsed.error, hostPortStart))
             is ParseResult.Ok -> attachPort(username, password, parsed.value, portText)
         }
     }
+
+    /**
+     * Rebases a host-pipeline error's offset to full-input coordinates ([ERR-8]), matching how
+     * [rawError] rebases [UriParseError.InvalidPercentEncoding] with `start + at`.
+     *
+     * [UriHostParser] reports [UriParseError.ForbiddenHostCodePoint.at] relative to the host
+     * substring it was given, not the original `Uri` text; every other host-pipeline error either
+     * carries no offset ([UriParseError.EmptyHost]) or already carries the offending text verbatim
+     * ([UriParseError.InvalidHost]), so no other variant needs adjustment here.
+     */
+    private fun rebaseHostError(
+        error: UriParseError,
+        hostStart: Int,
+    ): UriParseError =
+        when (error) {
+            is UriParseError.ForbiddenHostCodePoint -> error.copy(at = hostStart + error.at)
+            else -> error
+        }
 
     /** Validates the optional port ([PARSE-32]/[PARSE-33]) and assembles the [Authority]. */
     private fun attachPort(

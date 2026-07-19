@@ -63,20 +63,25 @@ internal object UrlHostParser {
         val decoded = PercentCodec.decode(input)
         return when (val ascii = Idna.domainToAsciiForUrl(decoded)) {
             is ParseResult.Err -> ascii
-            is ParseResult.Ok -> classifyAsciiDomain(ascii.value)
+            is ParseResult.Ok -> classifyAsciiDomain(decoded, ascii.value)
         }
     }
 
     /**
      * Classifies the produced ASCII domain ([HOST-29]/[HOST-30]): a forbidden-domain code point is
      * fatal, an ends-in-a-number host parses as IPv4, otherwise it is a lowercase-ASCII [Host.RegName].
+     *
+     * @param decoded the percent-decoded, pre-IDNA domain [asciiDomain] was produced from — carried
+     *   only to recover a forbidden hit's original position/code point ([forbiddenHostCodePoint]).
      */
-    private fun classifyAsciiDomain(asciiDomain: String): ParseResult<Host> {
+    private fun classifyAsciiDomain(
+        decoded: String,
+        asciiDomain: String,
+    ): ParseResult<Host> {
         val forbiddenAt = firstForbiddenDomainIndex(asciiDomain)
         check(forbiddenAt == NOT_FOUND || forbiddenAt in asciiDomain.indices) { "bad index: $forbiddenAt" }
         return when {
-            forbiddenAt != NOT_FOUND ->
-                ParseResult.Err(UriParseError.ForbiddenHostCodePoint(asciiDomain[forbiddenAt].code, forbiddenAt))
+            forbiddenAt != NOT_FOUND -> ParseResult.Err(forbiddenHostCodePoint(decoded, asciiDomain, forbiddenAt))
             Ipv4.endsInANumber(asciiDomain) -> Ipv4Whatwg.parse(asciiDomain)
             else -> ParseResult.Ok(Host.RegName(asciiDomain))
         }
@@ -84,4 +89,31 @@ internal object UrlHostParser {
 
     /** Index of the first forbidden-domain code point in [domain] (§7.6 [HOST-37]), or [NOT_FOUND] (`-1`). */
     private fun firstForbiddenDomainIndex(domain: String): Int = domain.indexOfFirst { isForbiddenDomainCodePoint(it) }
+
+    /**
+     * Builds the [UriParseError.ForbiddenHostCodePoint] for the domain-forbidden hit the
+     * *transformed* [asciiDomain] reports at [asciiIndex], preferring the pre-IDNA position and code
+     * point traced back through [Idna.traceMapping] over [decoded].
+     *
+     * IDNA can both change a domain's length (a non-ASCII label Punycode-expands into a longer
+     * `xn--` label) and remap a code point's value (e.g. NBSP maps to SPACE), so [asciiIndex] and
+     * `asciiDomain[asciiIndex]` are not generally meaningful positions in the caller's original text
+     * ([HOST-37]). Falls back to the transformed string's own coordinates only when no traced unit
+     * matches — an unreachable case for a domain [Idna.domainToAsciiForUrl] has already accepted,
+     * kept only so a rejected domain is never silently turned into a [ParseResult.Ok] for the sake
+     * of a nicer diagnostic.
+     */
+    private fun forbiddenHostCodePoint(
+        decoded: String,
+        asciiDomain: String,
+        asciiIndex: Int,
+    ): UriParseError {
+        require(asciiIndex in asciiDomain.indices) { "ascii index out of range: $asciiIndex" }
+        val traced = Idna.traceMapping(decoded).firstOrNull { unit -> unit.text.any { isForbiddenDomainCodePoint(it) } }
+        return if (traced != null) {
+            UriParseError.ForbiddenHostCodePoint(traced.sourceCodePoint, traced.sourceIndex)
+        } else {
+            UriParseError.ForbiddenHostCodePoint(asciiDomain[asciiIndex].code, asciiIndex)
+        }
+    }
 }

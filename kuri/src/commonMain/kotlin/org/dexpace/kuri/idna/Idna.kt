@@ -12,8 +12,30 @@ import org.dexpace.kuri.text.MAX_CODE_POINT
 import org.dexpace.kuri.text.NON_ASCII_MIN
 import org.dexpace.kuri.text.appendCodePoint
 import org.dexpace.kuri.text.asciiLowercased
+import org.dexpace.kuri.text.charCount
 import org.dexpace.kuri.text.codePointsOf
 import org.dexpace.kuri.text.isAllAscii
+
+/**
+ * One fragment of a [Idna.traceMapping] result: the UTS-46 mapping-step output produced by a single
+ * pre-mapping code point, paired with that code point's own value and position.
+ *
+ * Deliberately narrower than a full ToASCII trace (see [Idna.traceMapping] for the scope this
+ * covers) — it exists solely so a caller can locate, in the *original* text, a code point whose
+ * mapped output is known to matter (e.g. a forbidden-domain code point found in the final ASCII
+ * domain, [HOST-37]).
+ *
+ * @property text the mapping step's output for [sourceCodePoint] (its own UTF-16 text for a kept
+ *   code point, the replacement text for a mapped one; empty is never produced — an ignored code
+ *   point contributes no [MappedUnit] at all).
+ * @property sourceIndex the UTF-16 offset of [sourceCodePoint] in the pre-mapping text.
+ * @property sourceCodePoint the original (pre-mapping) Unicode scalar value.
+ */
+internal data class MappedUnit(
+    val text: String,
+    val sourceIndex: Int,
+    val sourceCodePoint: Int,
+)
 
 /** ACE prefix marking a Punycode-encoded (`xn--`) label (RFC 5890 §2.3.2.1). */
 private const val ACE_PREFIX: String = "xn--"
@@ -197,6 +219,56 @@ internal object Idna {
             is IdnaMapping.Disallowed -> false
         }
     }
+
+    /**
+     * Traces the UTS-46 mapping step ([HOST-26] step 2, see [applyMapping]) over [domain] one source
+     * code point at a time, pairing each output fragment with the pre-mapping code point and offset
+     * that produced it.
+     *
+     * A **post-hoc diagnostic aid only**: it applies exactly the mapping table (byte-for-byte the
+     * same decisions [mapAll] makes) but skips the NFC/Punycode/validation steps that follow it, so
+     * it must be called only after [domainToAsciiForUrl] has already accepted the same [domain] — it
+     * cannot itself decide success or failure. Used to locate a forbidden-domain code point's
+     * original position ([HOST-37]) once the transformed ASCII domain is already known to contain
+     * one.
+     *
+     * @param domain the percent-decoded, pre-IDNA domain text (the same argument
+     *   [domainToAsciiForUrl] was called with).
+     * @return the mapped fragments in source order; an ignored code point contributes no entry.
+     */
+    internal fun traceMapping(domain: String): List<MappedUnit> {
+        val codePoints = codePointsOf(domain)
+        val out = ArrayList<MappedUnit>(codePoints.size)
+        var offset = 0
+        for (codePoint in codePoints) {
+            appendTracedUnit(out, codePoint, offset)
+            offset += charCount(codePoint)
+        }
+        check(out.size <= codePoints.size) { "trace produced more units than source code points" }
+        return out
+    }
+
+    /** Appends the traced mapping outcome of one [codePoint] at pre-mapping [offset] to [out] (see [traceMapping]). */
+    private fun appendTracedUnit(
+        out: MutableList<MappedUnit>,
+        codePoint: Int,
+        offset: Int,
+    ) {
+        require(offset >= 0) { "offset must not be negative: $offset" }
+        when (val mapping = IdnaMappingTable.map(codePoint)) {
+            is IdnaMapping.Valid, is IdnaMapping.Deviation ->
+                out.add(MappedUnit(codePointText(codePoint), offset, codePoint))
+            is IdnaMapping.Mapped -> out.add(MappedUnit(mapping.replacement, offset, codePoint))
+            is IdnaMapping.Ignored -> Unit
+            // Unreachable in the [traceMapping] contract: the caller already ran [domainToAsciiForUrl]
+            // to a successful [ParseResult.Ok] over this same domain, which fails fast on the first
+            // disallowed code point ([mapAll]) long before this trace runs.
+            is IdnaMapping.Disallowed -> Unit
+        }
+    }
+
+    /** Renders a single [codePoint] as its own UTF-16 text (one unit, or a surrogate pair above the BMP). */
+    private fun codePointText(codePoint: Int): String = buildString { appendCodePoint(this, codePoint) }
 
     /** Splits [domain] into labels on [LABEL_SEPARATOR]; an empty domain yields one empty label. */
     private fun splitLabels(domain: String): List<String> = domain.split(LABEL_SEPARATOR)

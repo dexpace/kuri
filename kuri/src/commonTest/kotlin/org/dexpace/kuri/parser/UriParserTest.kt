@@ -180,7 +180,23 @@ class UriParserTest {
         val result = UriParser.parse("http://h\u0001ost/p")
 
         assertIs<ParseResult.Err>(result)
-        assertIs<UriParseError.ForbiddenHostCodePoint>(result.error)
+        val error = assertIs<UriParseError.ForbiddenHostCodePoint>(result.error)
+        assertEquals(1, error.codePoint)
+        // UriHostParser reports index 1 relative to the host substring; UriParser must rebase that
+        // to the full-input offset 8 (the host starts right after "http://").
+        assertEquals(8, error.at)
+    }
+
+    @Test
+    fun `parse rebases a forbidden host code point past userinfo credentials`() {
+        // The host still reports its own offense at its local index 1, but here the host starts at
+        // full-input index 12 (right after "http://user@"), so the rebased offset must be 13.
+        val result = UriParser.parse("http://user@h\u0001ost/p")
+
+        assertIs<ParseResult.Err>(result)
+        val error = assertIs<UriParseError.ForbiddenHostCodePoint>(result.error)
+        assertEquals(1, error.codePoint)
+        assertEquals(13, error.at)
     }
 
     @Test

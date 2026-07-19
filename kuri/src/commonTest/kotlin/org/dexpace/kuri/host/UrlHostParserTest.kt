@@ -108,10 +108,28 @@ class UrlHostParserTest {
 
     @Test
     fun `parse rejects an NBSP-mapped special domain`() {
-        // U+00A0 maps to U+0020 SPACE under UTS-46, which the re-scan then forbids ([HOST-30]).
-        val result = UrlHostParser.parse("www .", isSpecial = true)
+        // U+00A0 maps to U+0020 SPACE under UTS-46, which the re-scan then forbids ([HOST-30]); the
+        // reported code point/offset must trace back to the original NBSP the caller actually wrote,
+        // not the SPACE the mapping step produced ([HOST-37]).
+        val result = UrlHostParser.parse("a b", isSpecial = true)
 
-        assertIs<ParseResult.Err>(result)
+        val err = assertIs<ParseResult.Err>(result)
+        val cause = assertIs<UriParseError.ForbiddenHostCodePoint>(err.error)
+        assertEquals(0x00A0, cause.codePoint)
+        assertEquals(1, cause.at)
+    }
+
+    @Test
+    fun `parse locates a forbidden code point past a Punycode-expanded label`() {
+        // "ä" Punycode-expands to the 7-character "xn--4ca", shifting every later index in the
+        // transformed string; the untouched ASCII label "a^b" must still report '^' at its ORIGINAL
+        // index 3 (in "ä.a^b"), not the post-IDNA index 9 (in "xn--4ca.a^b") ([HOST-37]).
+        val result = UrlHostParser.parse("ä.a^b", isSpecial = true)
+
+        val err = assertIs<ParseResult.Err>(result)
+        val cause = assertIs<UriParseError.ForbiddenHostCodePoint>(err.error)
+        assertEquals('^'.code, cause.codePoint)
+        assertEquals(3, cause.at)
     }
 
     // --- Url profile, non-special opaque ---------------------------------------------
