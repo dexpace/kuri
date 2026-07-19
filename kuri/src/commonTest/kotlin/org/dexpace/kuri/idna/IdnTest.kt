@@ -36,6 +36,14 @@ class IdnTest {
     }
 
     @Test
+    fun `toAscii keeps an invalid xn-- label as-is when the whole domain is ascii`() {
+        // "xn--pokxncvks" is not valid Punycode, but per [HOST-48] an all-ASCII domain's ToASCII
+        // failure is only a validation error, never fatal, for web compatibility — the domain is
+        // kept lowercased verbatim rather than rejected.
+        assertEquals("xn--pokxncvks.example", Idn.toAscii("xn--pokxncvks.example").getOrNull())
+    }
+
+    @Test
     fun `toAscii fails on an invalid xn-- label beside a genuine unicode sibling`() {
         // "xn--a" is not valid Punycode (it decodes to a disallowed control code point). Per
         // [HOST-48], the web-compat ToASCII leniency applies only when the *whole* percent-decoded
@@ -57,6 +65,18 @@ class IdnTest {
         val fullwidthLabel = Char(0xFF58).toString() + Char(0xFF4E) + Char(0xFF0D) + Char(0xFF0D) + "a"
 
         assertFalse(Idn.toAscii(fullwidthLabel).isOk())
+    }
+
+    @Test
+    fun `toAscii fails on an invalid xn-- label separated only by a non-ascii dot variant`() {
+        // U+3002 IDEOGRAPHIC FULL STOP is itself a non-ASCII code point, so a domain using it as a
+        // separator is not an ASCII string even if every label is otherwise plain ASCII text; per
+        // [HOST-48] the whole-domain leniency gate does not apply, so "xn--pokxncvks"'s invalid
+        // Punycode is fatal for the whole domain, not leniently kept.
+        val ideographicFullStop = Char(0x3002).toString()
+        val input = "xn--pokxncvks" + ideographicFullStop + "example"
+
+        assertFalse(Idn.toAscii(input).isOk())
     }
 
     @Test
