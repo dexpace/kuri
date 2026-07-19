@@ -407,13 +407,19 @@ internal object Resolver {
         return userinfoPrefix(c) + serializeHost(host) + port
     }
 
-    /** Builds the `userinfo@` prefix from the decoded credentials, or `""` when no userinfo is present. */
-    private fun userinfoPrefix(c: ParsedComponents): String =
-        when {
-            c.username.isEmpty() && c.password.isEmpty() -> ""
-            c.password.isEmpty() -> "${c.username}@"
-            else -> "${c.username}:${c.password}@"
-        }
+    /**
+     * Builds the `userinfo@` prefix from the decoded credentials, or `""` when no userinfo is
+     * present. `Resolver` serves only the `Uri` profile, so this follows [NORM-16]'s null/empty
+     * rule: presence is tracked by nullability, not emptiness, so a present-but-empty username
+     * or password still contributes its `@` or `:` ([MODEL-11]).
+     */
+    private fun userinfoPrefix(c: ParsedComponents): String {
+        val username = c.username
+        val password = c.password
+        if (username == null && password == null) return ""
+        val passwordPart = if (password != null) ":$password" else ""
+        return "${username.orEmpty()}$passwordPart@"
+    }
 
     /** The behaviour-free five-component view the §5 algorithm operates on (each component nullable per §5.3). */
     private data class UriParts(

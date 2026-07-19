@@ -54,4 +54,57 @@ class UriUrlBridgeTest {
 
         assertTrue(converted.href.startsWith("http://u@h:8080/p"))
     }
+
+    @Test
+    fun `toUri repairs a mid-path malformed percent triplet instead of throwing`() {
+        // WHATWG's path percent-encode set does not reserve `%`, so "a%zzb" is a valid path segment
+        // for a Url even though "%zz" is not a valid RFC 3986 pct-encoded triplet.
+        val source = url("http://h/a%zzb")
+
+        val bridged = source.toUri()
+
+        assertEquals("http://h/a%25zzb", bridged.uriString)
+    }
+
+    @Test
+    fun `toUri repairs a trailing incomplete percent escape instead of throwing`() {
+        val source = url("http://h/a%")
+
+        val bridged = source.toUri()
+
+        assertEquals("http://h/a%25", bridged.uriString)
+    }
+
+    @Test
+    fun `toUri repairs a malformed percent triplet in the query instead of throwing`() {
+        // WHATWG's query percent-encode set does not reserve `%`, so "a%zzb=1" is a valid query
+        // for a Url even though "%zz" is not a valid RFC 3986 pct-encoded triplet.
+        val source = url("http://h/p?a%zzb=1")
+
+        val bridged = source.toUri()
+
+        assertEquals("http://h/p?a%25zzb=1", bridged.uriString)
+    }
+
+    @Test
+    fun `toUri repairs a malformed percent triplet in the fragment instead of throwing`() {
+        // WHATWG's fragment percent-encode set does not reserve `%`, so "a%zzb" is a valid fragment
+        // for a Url even though "%zz" is not a valid RFC 3986 pct-encoded triplet.
+        val source = url("http://h/p#a%zzb")
+
+        val bridged = source.toUri()
+
+        assertEquals("http://h/p#a%25zzb", bridged.uriString)
+    }
+
+    @Test
+    fun `toUri leaves an already-valid percent triplet untouched when adjacent to a malformed one`() {
+        // "%41" is already a valid triplet and must survive verbatim; only the adjacent malformed
+        // "%zz" should be escaped.
+        val source = url("http://h/a%41%zzb")
+
+        val bridged = source.toUri()
+
+        assertEquals("http://h/a%41%25zzb", bridged.uriString)
+    }
 }

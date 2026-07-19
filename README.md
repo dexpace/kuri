@@ -143,7 +143,6 @@ A few accessors differ between the profiles by design; getting them wrong is a c
 | Reading                    | `Uri` (RFC 3986)                     | `Url` (WHATWG)                                          |
 |----------------------------|--------------------------------------|--------------------------------------------------------|
 | `port`                     | preserved verbatim                   | `null` when elided **or** equal to the scheme default  |
-| port with no scheme default | `effectivePort()` → `null`          | `effectivePort` → `-1`                                 |
 | opaque origin              | —                                    | `origin` is the literal string `"null"`; test `hasOpaqueOrigin()` |
 
 Across both, `host` is the structured `Host` ADT and `hostName` is its serialized text; to render a

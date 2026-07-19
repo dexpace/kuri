@@ -72,21 +72,27 @@ internal class QueryDecoder(
     override fun decodeString(): String =
         params[currentName] ?: throw SerializationException("missing query parameter '$currentName'")
 
-    override fun decodeBoolean(): Boolean = decodeString().toBoolean()
+    override fun decodeBoolean(): Boolean = parseStrictBoolean(decodeString())
 
-    override fun decodeInt(): Int = decodeString().toInt()
+    override fun decodeInt(): Int = scalarOrFail("Int", decodeString(), "value for '$currentName'", String::toIntOrNull)
 
-    override fun decodeLong(): Long = decodeString().toLong()
+    override fun decodeLong(): Long =
+        scalarOrFail("Long", decodeString(), "value for '$currentName'", String::toLongOrNull)
 
-    override fun decodeShort(): Short = decodeString().toShort()
+    override fun decodeShort(): Short =
+        scalarOrFail("Short", decodeString(), "value for '$currentName'", String::toShortOrNull)
 
-    override fun decodeByte(): Byte = decodeString().toByte()
+    override fun decodeByte(): Byte =
+        scalarOrFail("Byte", decodeString(), "value for '$currentName'", String::toByteOrNull)
 
-    override fun decodeDouble(): Double = decodeString().toDouble()
+    override fun decodeDouble(): Double =
+        scalarOrFail("Double", decodeString(), "value for '$currentName'", String::toDoubleOrNull)
 
-    override fun decodeFloat(): Float = decodeString().toFloat()
+    override fun decodeFloat(): Float =
+        scalarOrFail("Float", decodeString(), "value for '$currentName'", String::toFloatOrNull)
 
-    override fun decodeChar(): Char = decodeString().single()
+    override fun decodeChar(): Char =
+        scalarOrFail("Char", decodeString(), "value for '$currentName'") { it.singleOrNull() }
 
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = enumIndex(enumDescriptor, decodeString())
 }
@@ -111,24 +117,46 @@ internal class QueryListDecoder(
 
     override fun decodeString(): String = next()
 
-    override fun decodeBoolean(): Boolean = next().toBoolean()
+    override fun decodeBoolean(): Boolean = parseStrictBoolean(next())
 
-    override fun decodeInt(): Int = next().toInt()
+    override fun decodeInt(): Int = scalarOrFail("Int", next(), "list element", String::toIntOrNull)
 
-    override fun decodeLong(): Long = next().toLong()
+    override fun decodeLong(): Long = scalarOrFail("Long", next(), "list element", String::toLongOrNull)
 
-    override fun decodeShort(): Short = next().toShort()
+    override fun decodeShort(): Short = scalarOrFail("Short", next(), "list element", String::toShortOrNull)
 
-    override fun decodeByte(): Byte = next().toByte()
+    override fun decodeByte(): Byte = scalarOrFail("Byte", next(), "list element", String::toByteOrNull)
 
-    override fun decodeDouble(): Double = next().toDouble()
+    override fun decodeDouble(): Double = scalarOrFail("Double", next(), "list element", String::toDoubleOrNull)
 
-    override fun decodeFloat(): Float = next().toFloat()
+    override fun decodeFloat(): Float = scalarOrFail("Float", next(), "list element", String::toFloatOrNull)
 
-    override fun decodeChar(): Char = next().single()
+    override fun decodeChar(): Char = scalarOrFail("Char", next(), "list element") { it.singleOrNull() }
 
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = enumIndex(enumDescriptor, next())
 }
+
+/** Converts [raw] with [convert], failing with a [SerializationException] describing [kind] and [context] on error. */
+private fun <T : Any> scalarOrFail(
+    kind: String,
+    raw: String,
+    context: String,
+    convert: (String) -> T?,
+): T = convert(raw) ?: throw SerializationException("invalid $kind $context: '$raw'")
+
+/**
+ * Parses a query value as a boolean, accepting only `"true"`/`"false"` case-insensitively.
+ *
+ * Kotlin's [String.toBoolean] treats every non-`"true"` value (including typos like `"ture"` or
+ * numeric flags like `"1"`) as `false` without ever failing, which would silently corrupt untrusted
+ * query input. This mirrors how the enum and numeric decoders reject unrecognized values instead.
+ */
+private fun parseStrictBoolean(value: String): Boolean =
+    when {
+        value.equals("true", ignoreCase = true) -> true
+        value.equals("false", ignoreCase = true) -> false
+        else -> throw SerializationException("invalid boolean value '$value', expected 'true' or 'false'")
+    }
 
 /** Resolves an enum constant name to its index, failing on an unknown value. */
 private fun enumIndex(
