@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
 
 /**
  * Behavioural tests for [QueryParametersBuilder] against SPEC §10.3.2 ([QUERY-15]-[QUERY-18]):
- * append, replace-first/remove-rest, remove-all, and a stable code-point sort.
+ * append, replace-first/remove-rest, remove-all, and a stable UTF-16 code-unit sort.
  */
 class QueryParametersBuilderTest {
     @Test
@@ -68,7 +68,7 @@ class QueryParametersBuilderTest {
     }
 
     @Test
-    fun `sort orders by name code point and is stable for equal names per QUERY-18`() {
+    fun `sort orders by name UTF-16 code unit and is stable for equal names per QUERY-18`() {
         val params =
             QueryParameters
                 .parse("b=1&a=2&b=3&a=4&c=5")
@@ -83,9 +83,12 @@ class QueryParametersBuilderTest {
     }
 
     @Test
-    fun `sort places supplementary plane names after every BMP name per QUERY-18`() {
-        // U+1F600 (astral) must sort after the BMP name despite its leading surrogate U+D83D
-        // ordering below '￿' in raw UTF-16 unit comparison.
+    fun `sort orders a supplementary name by its leading surrogate per QUERY-18 issue 87`() {
+        // WHATWG mandates UTF-16 code-unit order, not code-point order: U+1F600's leading
+        // surrogate U+D83D (0xD83D) sorts below the single BMP unit U+FFFF (0xFFFF), so the
+        // astral name sorts *before* the BMP name -- the reverse of code-point order, which
+        // would place every supplementary code point after every BMP character. This is the
+        // reproduction from issue #87.
         val astral = "😀"
         val bmp = "￿"
         val params =
@@ -94,13 +97,30 @@ class QueryParametersBuilderTest {
                 .add(bmp, "bmp")
                 .sort()
                 .build()
-        assertEquals(listOf(bmp to "bmp", astral to "emoji"), params.entries)
+        assertEquals(listOf(astral to "emoji", bmp to "bmp"), params.entries)
+    }
+
+    @Test
+    fun `sort matches the WPT urlsearchparams-sort ligature vs rainbow vector per QUERY-18 issue 87`() {
+        // Real WPT urlsearchparams-sort corpus vector: "ﬃ&🌈" (U+FB03 vs U+1F308) must sort as
+        // [🌈, ﬃ] under UTF-16 code-unit order. Code-point order would put U+FB03 (64259) before
+        // U+1F308 (127752); code-unit order instead compares 🌈's leading surrogate U+D83C
+        // (55356) against U+FB03 (64259), reversing the pair.
+        val ligature = "ﬃ"
+        val rainbow = "🌈"
+        val params =
+            QueryParametersBuilder()
+                .add(ligature, "")
+                .add(rainbow, "")
+                .sort()
+                .build()
+        assertEquals(listOf(rainbow to "", ligature to ""), params.entries)
     }
 
     @Test
     fun `sort orders a name before the longer name that extends it per QUERY-18`() {
-        // A prefix compares as less than its extension: the code-point scan runs out of the
-        // shorter name with every compared point equal, so length alone breaks the tie.
+        // A prefix compares as less than its extension: `String.compareTo` runs out of the
+        // shorter name with every compared unit equal, so length alone breaks the tie.
         val params =
             QueryParametersBuilder()
                 .add("ab", "1")
@@ -112,8 +132,8 @@ class QueryParametersBuilderTest {
 
     @Test
     fun `sort compares names that differ before their final character per QUERY-18`() {
-        // "aac" and "abc" first diverge at the middle point while characters still remain, so the
-        // scan stops on the unequal point rather than running off either name's end.
+        // "aac" and "abc" first diverge at the middle character while characters still remain, so
+        // `compareTo` stops on the unequal unit rather than running off either name's end.
         val params =
             QueryParametersBuilder()
                 .add("abc", "1")
@@ -125,8 +145,8 @@ class QueryParametersBuilderTest {
 
     @Test
     fun `sort runs the shorter name off each comparison side per QUERY-18`() {
-        // Repeated "m"/"ma" comparisons drive the code-point scan off the end of the shorter name
-        // from both comparison sides, exercising each length-exit arm of the surrogate-aware scan.
+        // Repeated "m"/"ma" comparisons drive `compareTo` off the end of the shorter name from
+        // both comparison sides, exercising each length-exit arm of the code-unit comparison.
         val params =
             QueryParametersBuilder()
                 .add("ma", "1")

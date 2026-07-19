@@ -16,6 +16,7 @@ import org.dexpace.kuri.parser.UriParser
 import org.dexpace.kuri.parser.decodedSegments
 import org.dexpace.kuri.parser.fileExtensionOf
 import org.dexpace.kuri.parser.fileNameOf
+import org.dexpace.kuri.parser.isDirectoryPath
 import org.dexpace.kuri.parser.toUriPathString
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSet
@@ -459,9 +460,8 @@ public class Uri internal constructor(
      *
      * Falls back to the scheme's registered default port (e.g. `80` for `http`, `443` for `https`)
      * when no [port] is stated, and to `null` when the port is neither stated nor defaulted — a
-     * scheme-less reference, or a scheme with no default such as `mailto` or `file`. Unlike
-     * [Url.effectivePort] (which returns the sentinel `-1`), the `Uri` profile reports the "no port"
-     * case as `null`.
+     * scheme-less reference, or a scheme with no default such as `mailto` or `file`. [Url.effectivePort]
+     * reports the "no port" case the same way, as `null`.
      *
      * @return the stated port, else the scheme default, else `null` when neither applies.
      */
@@ -501,6 +501,46 @@ public class Uri internal constructor(
      * @return a new `Uri` with no `#` fragment.
      */
     public fun withoutFragment(): Uri = withFragment(null)
+
+    /**
+     * Returns a copy of this URI with its userinfo, query, and fragment removed, leaving the
+     * [scheme], [host], [port], and [path] intact (SPEC [CONF-120]).
+     *
+     * A convenience for logging or telemetry: it strips exactly the three components RFC 3986
+     * treats as sensitive or context-dependent (credentials, the query string, and the fragment)
+     * while every other component — including a userinfo-less authority — is preserved verbatim.
+     * A URI that already carries none of the three is returned equal in value (though [newBuilder]
+     * always rebuilds, so the result is not necessarily the same reference).
+     *
+     * @return a new `Uri` with no userinfo, query, or fragment.
+     */
+    public fun redact(): Uri =
+        newBuilder()
+            .userInfo(null)
+            .query(null)
+            .fragment(null)
+            .build()
+
+    /**
+     * Reports whether this URI's path denotes a directory — its [encodedPath] ends in `/` (SPEC
+     * [PATH-3], [CONF-85]).
+     *
+     * True for a trailing-slash path such as `/a/` and for the root path `/` (a single empty
+     * segment); `false` for a path with content after its last segment (`/a`) and for a wholly
+     * empty path, which has no trailing slash to report. [hasTrailingSlash] is an exact alias, for
+     * a call site that prefers the WHATWG "trailing slash" phrasing over the filesystem-style
+     * "directory" term.
+     *
+     * @return `true` iff [encodedPath] ends in `/`.
+     */
+    public fun isDirectory(): Boolean = components.path.isDirectoryPath()
+
+    /**
+     * Alias of [isDirectory] (SPEC [PATH-3], [CONF-85]); both accessors report the same condition.
+     *
+     * @return `true` iff [encodedPath] ends in `/`.
+     */
+    public fun hasTrailingSlash(): Boolean = isDirectory()
 
     /** The canonical [uriString]; a parsed `Uri` round-trips through `toString` then [parse]. */
     override fun toString(): String = uriString

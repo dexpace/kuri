@@ -74,6 +74,16 @@ private data class Nested(
     val inner: Search,
 )
 
+@Serializable
+private data class Flag(
+    val flag: Boolean,
+)
+
+@Serializable
+private data class Flags(
+    val flags: List<Boolean>,
+)
+
 class SerdeTest {
     @Test
     fun `url serializes as its canonical string in json`() {
@@ -219,6 +229,60 @@ class SerdeTest {
     }
 
     @Test
+    fun `decoding a numeric boolean value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=1")
+        }
+    }
+
+    @Test
+    fun `decoding a word other than true or false throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=yes")
+        }
+    }
+
+    @Test
+    fun `decoding a misspelled boolean value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=ture")
+        }
+    }
+
+    @Test
+    fun `decoding an invalid boolean list element throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flags>("flags=true&flags=nope")
+        }
+    }
+
+    @Test
+    fun `decoding an empty boolean value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=")
+        }
+    }
+
+    @Test
+    fun `decoding a whitespace-padded boolean value throws instead of trimming`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=%20true")
+        }
+    }
+
+    @Test
+    fun `decoding true and false boolean values still succeeds`() {
+        assertEquals(Flag(flag = true), QueryParametersFormat.decodeFromQueryString<Flag>("flag=true"))
+        assertEquals(Flag(flag = false), QueryParametersFormat.decodeFromQueryString<Flag>("flag=false"))
+    }
+
+    @Test
+    fun `decoding a boolean value is case-insensitive`() {
+        assertEquals(Flag(flag = true), QueryParametersFormat.decodeFromQueryString<Flag>("flag=TRUE"))
+        assertEquals(Flag(flag = false), QueryParametersFormat.decodeFromQueryString<Flag>("flag=FALSE"))
+    }
+
+    @Test
     fun `a missing required parameter fails to decode`() {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.decodeFromQueryString<Search>("page=1")
@@ -229,6 +293,99 @@ class SerdeTest {
     fun `a null list element fails to decode`() {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.decodeFromQueryString<Search>("q=x&tags&tags=a")
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Int value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Search>("q=x&page=abc")
+        }
+    }
+
+    @Test
+    fun `decoding an empty Int value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Search>("q=x&page=")
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Long value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=notanumber" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Short value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=notanumber&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Byte value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=notanumber&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Double value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=notanumber&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Float value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=notanumber&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding an empty Char value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a multi-character Char value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=ab&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed list element throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllLists>(
+                "bytes=abc&shorts=1&ints=1&longs=1&floats=1.0&doubles=1.0&chars=a&flags=true&sorts=ASC",
+            )
         }
     }
 
