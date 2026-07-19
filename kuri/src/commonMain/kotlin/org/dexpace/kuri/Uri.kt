@@ -806,6 +806,12 @@ public class Uri internal constructor(
          * priority and combination rules the two setters share, and for the literal-`%` escape
          * this setter also applies.
          *
+         * Calling this setter alone, without a preceding or following [username] call, still
+         * normalizes the built username to `""` (present-but-empty) rather than leaving it
+         * absent — a non-null password never pairs with a `null` username ([MODEL-13]). For
+         * example, `Uri.Builder().password("pw").host("h").build().userInfo` is `":pw"`, not a
+         * password with no username at all.
+         *
          * @param password the decoded password; `""` clears the password.
          * @return this builder, for chaining.
          */
