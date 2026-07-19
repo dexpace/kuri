@@ -43,7 +43,7 @@ class BuilderSinkTest {
         assertEquals("https", url.scheme)
     }
 
-    // UriBuilderSink — verbatim-join userinfo and fragment encoding
+    // UriBuilderSink — split-encode-then-join userinfo and fragment encoding
 
     @Test
     fun `uri sink joins userinfo with encoded parts and a literal colon`() {
