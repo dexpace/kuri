@@ -49,8 +49,8 @@ internal object UriNormalizer {
         check(scheme == null || scheme.none { it in 'A'..'Z' }) { "scheme normalization left upper-case" }
         return c.copy(
             scheme = scheme,
-            username = normalizeText(c.username),
-            password = normalizeText(c.password),
+            username = c.username?.let { normalizeText(it) },
+            password = c.password?.let { normalizeText(it) },
             host = host,
             port = normalizePort(scheme, c.port),
             path = normalizePath(c.path, hasAuthority = c.host != null),

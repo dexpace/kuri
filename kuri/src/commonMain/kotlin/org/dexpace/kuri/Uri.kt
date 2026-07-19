@@ -78,8 +78,11 @@ public class Uri internal constructor(
     /**
      * The RFC 3986 `userinfo` component, reconstructed from the parsed credentials and preserved verbatim.
      *
-     * `null` when the URI has no authority or no userinfo; otherwise `user` or `user:password`. An empty
-     * userinfo (e.g. `//@h`) carries no credentials and is therefore reported as absent (`null`).
+     * `null` when the URI has no authority or no userinfo at all — no `@` in the source; otherwise the
+     * verbatim text between the authority's `//` and its `@`: `""` for a present-but-empty userinfo (e.g.
+     * `//@h`), `user` when no `:` was present, or `user:password` (either half possibly empty) when a `:`
+     * was. The absent-vs-present-empty and no-colon-vs-empty-password distinctions are preserved exactly
+     * as parsed ([MODEL-11], [MODEL-12]).
      */
     @get:JvmName("userInfo")
     public val userInfo: String?
@@ -548,12 +551,19 @@ public class Uri internal constructor(
     /** The hash of the canonical [uriString], consistent with [equals]. */
     override fun hashCode(): Int = uriString.hashCode()
 
-    /** Reconstructs the raw `userinfo` from the decoded credentials, or `null` when none is present. */
+    /**
+     * Reconstructs the raw `userinfo` from the decoded credentials, or `null` when none is present.
+     *
+     * Presence is tracked by nullability, not emptiness ([MODEL-11], [MODEL-12]): a `username` of
+     * `""` (an `@` present with nothing before it) still yields `""`, not `null`, and a `password` of
+     * `""` (a `:` present with nothing after it) still contributes its `:` — so `//@h` and `//u:@h`
+     * round-trip distinctly from `//h` and `//u@h`.
+     */
     private fun reconstructUserInfo(): String? =
         when {
             components.host == null -> null
-            components.username.isEmpty() && components.password.isEmpty() -> null
-            components.password.isEmpty() -> components.username
+            components.username == null -> null
+            components.password == null -> components.username
             else -> "${components.username}:${components.password}"
         }
 
@@ -751,7 +761,12 @@ public class Uri internal constructor(
          * [password] call made alone (without re-setting the other) starts from `""` rather than
          * leaking the value this call just discarded.
          *
-         * @param userInfo the encoded userinfo (e.g. `user` or `user:password`), or `null` to clear it.
+         * `null` and `""` are distinct here: `null` omits the userinfo entirely (no `@`), while `""`
+         * produces a present-but-empty userinfo (e.g. `//@h`) — matching [Uri.userInfo]'s own
+         * absent-vs-present-empty distinction ([MODEL-11]).
+         *
+         * @param userInfo the encoded userinfo (e.g. `user` or `user:password`), `""` for a
+         *   present-but-empty userinfo, or `null` to omit it entirely.
          */
         public fun userInfo(userInfo: String?): Builder {
             this.userInfo = userInfo
@@ -790,6 +805,12 @@ public class Uri internal constructor(
          * As [username], switches this builder to split userinfo mode; see its doc for the
          * priority and combination rules the two setters share, and for the literal-`%` escape
          * this setter also applies.
+         *
+         * Calling this setter alone, without a preceding or following [username] call, still
+         * normalizes the built username to `""` (present-but-empty) rather than leaving it
+         * absent — a non-null password never pairs with a `null` username ([MODEL-13]). For
+         * example, `Uri.Builder().password("pw").host("h").build().userInfo` is `":pw"`, not a
+         * password with no username at all.
          *
          * @param password the decoded password; `""` clears the password.
          * @return this builder, for chaining.
@@ -1164,12 +1185,20 @@ public class Uri internal constructor(
             return sb.toString()
         }
 
-        /** Appends `//[userinfo@]host[:port]` for a present authority (RFC 3986 §3.2). */
+        /**
+         * Appends `//[userinfo@]host[:port]` for a present authority (RFC 3986 §3.2).
+         *
+         * Emits `@` whenever [effectiveUserInfo] is non-`null`, even `""` — a present-but-empty
+         * verbatim [userInfo] (e.g. from `userInfo("")`, or pre-filled by [newBuilder] from a
+         * parsed `//@h`) must still round-trip to `//@host` ([MODEL-11], [NORM-27]). A split-mode
+         * [combinedUserInfo] never yields non-null `""`: [username]/[password] alone cannot express
+         * a present-but-empty userinfo, so this only changes behaviour for verbatim mode.
+         */
         private fun appendAuthority(sb: StringBuilder) {
             val authorityHost = requireNotNull(host) { "authority requires a host" }
             val effectiveUserInfo = if (usesSplitUserInfo) combinedUserInfo() else userInfo
             sb.append(SLASH).append(SLASH)
-            if (!effectiveUserInfo.isNullOrEmpty()) sb.append(effectiveUserInfo).append('@')
+            if (effectiveUserInfo != null) sb.append(effectiveUserInfo).append('@')
             sb.append(authorityHost)
             if (port != null) sb.append(':').append(port)
         }
