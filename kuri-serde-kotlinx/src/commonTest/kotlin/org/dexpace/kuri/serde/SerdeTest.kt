@@ -89,6 +89,11 @@ private data class Flags(
     val flags: List<Boolean>,
 )
 
+@Serializable
+private data class NullableTags(
+    val tags: List<String>? = null,
+)
+
 class SerdeTest {
     @Test
     fun `url serializes as its canonical string in json`() {
@@ -239,6 +244,18 @@ class SerdeTest {
         val encoded = QueryParametersFormat.encodeToQueryString(original)
         assertEquals("tags=a&tags=b&tags=c", encoded)
         assertEquals(original, QueryParametersFormat.decodeFromQueryString<Foo>(encoded))
+    }
+
+    @Test
+    fun `an explicitly-empty nullable list round-trips to an empty list rather than null`() {
+        // Regression for #86: NullableSerializer calls decodeNotNullMark() before ever reaching
+        // QueryListDecoder. With only the empty-list marker on the wire (no tags=... pairs),
+        // params.has("tags") is false, so a marker-blind decodeNotNullMark() would short-circuit
+        // straight to null instead of decoding an empty list.
+        val encoded = QueryParametersFormat.encodeToQueryString(NullableTags(tags = emptyList()))
+        assertEquals("tags[]", encoded)
+        val decoded = QueryParametersFormat.decodeFromQueryString<NullableTags>(encoded)
+        assertEquals(NullableTags(tags = emptyList()), decoded)
     }
 
     @Test
