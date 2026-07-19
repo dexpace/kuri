@@ -75,4 +75,10 @@ internal data class ParsedComponents(
     val query: String? = null,
     val fragment: String? = null,
     val validationErrors: List<ValidationError> = emptyList(),
-)
+) {
+    init {
+        check(username != null || password == null) {
+            "a non-null password requires a non-null username (MODEL-13): password=$password"
+        }
+    }
+}
