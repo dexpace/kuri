@@ -456,9 +456,8 @@ public class Uri internal constructor(
      *
      * Falls back to the scheme's registered default port (e.g. `80` for `http`, `443` for `https`)
      * when no [port] is stated, and to `null` when the port is neither stated nor defaulted — a
-     * scheme-less reference, or a scheme with no default such as `mailto` or `file`. Unlike
-     * [Url.effectivePort] (which returns the sentinel `-1`), the `Uri` profile reports the "no port"
-     * case as `null`.
+     * scheme-less reference, or a scheme with no default such as `mailto` or `file`. [Url.effectivePort]
+     * reports the "no port" case the same way, as `null`.
      *
      * @return the stated port, else the scheme default, else `null` when neither applies.
      */
