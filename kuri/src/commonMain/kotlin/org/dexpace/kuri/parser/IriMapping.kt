@@ -35,8 +35,9 @@ private const val DOUBLE_SLASH_LENGTH: Int = 2
  * ASCII delimiters, and the final parse is authoritative, the coarse locator does not need to be a
  * full grammar.
  *
- * Percent-encoding grows the input, so the engine's `MAX_INPUT_LENGTH` bound applies to the
- * *expanded* ASCII string; a very long all-non-ASCII IRI may exceed it after encoding and be rejected.
+ * Percent-encoding grows the input, so the parser's input-length bound (`ResourceLimit.InputLength`,
+ * applied by [UriParser] to the re-assembled ASCII string) governs the *expanded* text; a very long
+ * all-non-ASCII IRI may exceed it after encoding and be rejected.
  *
  * Before any mapping happens, [precheckError] runs two RFC 3987 checks over the raw text:
  * [findBidiFormattingCharacter] rejects a bidi formatting character (LRM, RLM, LRE, RLE, PDF, LRO,
