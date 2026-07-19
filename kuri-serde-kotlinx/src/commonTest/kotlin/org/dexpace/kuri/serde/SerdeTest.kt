@@ -202,7 +202,7 @@ class SerdeTest {
     }
 
     @Test
-    fun `an explicitly-empty list round-trips to an empty list, not the declared default`() {
+    fun `an explicitly-empty list round-trips to an empty list rather than the declared default`() {
         // Regression test for #86: encoding Foo(tags = emptyList()) against a non-empty default
         // (listOf("x")) must not be indistinguishable from tags being absent altogether.
         val encoded = QueryParametersFormat.encodeToQueryString(Foo(tags = emptyList()))
