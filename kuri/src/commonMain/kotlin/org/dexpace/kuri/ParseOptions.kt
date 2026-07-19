@@ -4,6 +4,7 @@
  */
 package org.dexpace.kuri
 
+import org.dexpace.kuri.error.ResourceLimit
 import org.dexpace.kuri.host.Host
 import kotlin.jvm.JvmField
 import kotlin.jvm.JvmName
@@ -35,10 +36,11 @@ internal fun roundTripOptions(host: Host?): ParseOptions =
  * regardless of any option. This keeps the `Url` profile unconditionally
  * WHATWG-conformant.
  *
- * Every option defaults to **off**, so [DEFAULT] reproduces the library's standards-baseline
- * behaviour and enabling an option never changes the result of an input that does not exercise it.
- * A `ParseOptions` is a value type — equality and hashing are structural over its
- * single field — so it is a safe `Map`/`Set` key and can be shared freely across threads.
+ * Every opt-in flag defaults to **off**, and every resource limit defaults to the bound documented
+ * on [ResourceLimit] (SPEC §12.6), so [DEFAULT] reproduces the library's standards-baseline
+ * behaviour: enabling an option, or lowering a limit, never changes the result of an input that
+ * does not exercise it. A `ParseOptions` is a value type — equality and hashing are structural over
+ * its fields — so it is a safe `Map`/`Set` key and can be shared freely across threads.
  *
  * Construct one with [Builder] (`new ParseOptions.Builder().allowIpv6ZoneId(true).build()` from
  * Java) or take the off value from [DEFAULT]; [newBuilder] produces a pre-filled builder for a
@@ -51,6 +53,10 @@ internal fun roundTripOptions(host: Host?): ParseOptions =
  */
 public class ParseOptions private constructor(
     allowIpv6ZoneId: Boolean,
+    inputLength: Int,
+    expandedLength: Int,
+    pathSegments: Int,
+    resolutionDepth: Int,
 ) {
     /**
      * Whether an RFC 6874 IPv6 zone identifier (`[` IPv6address `%25` ZoneID `]`) is accepted;
@@ -66,6 +72,44 @@ public class ParseOptions private constructor(
     public val allowIpv6ZoneId: Boolean = allowIpv6ZoneId
 
     /**
+     * The maximum accepted length, in UTF-16 code units, of the raw input string
+     * ([ResourceLimit.InputLength], SPEC §12.6, [ERR-30]).
+     *
+     * Defaults to [ResourceLimit.InputLength]'s documented bound. Exceeding it is reported as
+     * `UriParseError.InputTooLong`.
+     */
+    public val inputLength: Int = inputLength
+
+    /**
+     * The maximum accepted length, in UTF-16 code units, of text derived from the input by an
+     * operation that can lengthen it — percent-decoding, IDNA expansion, or §5.2.3 path merging
+     * during reference resolution ([ResourceLimit.ExpandedLength], SPEC §12.6, [ERR-31]).
+     *
+     * Defaults to this [ParseOptions]'s effective [inputLength] unless set explicitly on the
+     * [Builder]. Exceeding it is reported as `UriParseError.InputTooLong`.
+     */
+    public val expandedLength: Int = expandedLength
+
+    /**
+     * The maximum number of `/`-delimited segments a parsed path may carry
+     * ([ResourceLimit.PathSegments], SPEC §12.6, [ERR-33]).
+     *
+     * Defaults to [ResourceLimit.PathSegments]'s documented bound. Exceeding it is reported as
+     * `UriParseError.LimitExceeded`.
+     */
+    public val pathSegments: Int = pathSegments
+
+    /**
+     * The bound on reference-resolution / dot-segment work ([ResourceLimit.ResolutionDepth], SPEC
+     * §12.6, [ERR-33]).
+     *
+     * Defaults to [ResourceLimit.ResolutionDepth]'s documented bound. See
+     * [ResourceLimit.ResolutionDepth] for why this value is accepted and stored but not yet
+     * independently enforced by a resolve call.
+     */
+    public val resolutionDepth: Int = resolutionDepth
+
+    /**
      * Returns a [Builder] pre-filled with these options, for producing a modified copy.
      *
      * `options.newBuilder().build()` reproduces an equal `ParseOptions`.
@@ -74,18 +118,36 @@ public class ParseOptions private constructor(
      */
     public fun newBuilder(): Builder = Builder(this)
 
-    /** Structural equality over the single [allowIpv6ZoneId] field; consistent with [hashCode]. */
-    override fun equals(other: Any?): Boolean = other is ParseOptions && other.allowIpv6ZoneId == allowIpv6ZoneId
+    /** Structural equality over every field, consistent with [hashCode]. */
+    override fun equals(other: Any?): Boolean =
+        other is ParseOptions &&
+            other.allowIpv6ZoneId == allowIpv6ZoneId &&
+            other.inputLength == inputLength &&
+            other.expandedLength == expandedLength &&
+            other.pathSegments == pathSegments &&
+            other.resolutionDepth == resolutionDepth
 
-    /** The hash of the single [allowIpv6ZoneId] field, consistent with [equals]. */
-    override fun hashCode(): Int = allowIpv6ZoneId.hashCode()
+    /** The combined hash of every field, consistent with [equals]. */
+    override fun hashCode(): Int {
+        var result = allowIpv6ZoneId.hashCode()
+        result = HASH_MULTIPLIER * result + inputLength
+        result = HASH_MULTIPLIER * result + expandedLength
+        result = HASH_MULTIPLIER * result + pathSegments
+        result = HASH_MULTIPLIER * result + resolutionDepth
+        return result
+    }
 
-    /** A debug rendering listing the single [allowIpv6ZoneId] field. */
-    override fun toString(): String = "ParseOptions(allowIpv6ZoneId=$allowIpv6ZoneId)"
+    /** A debug rendering listing every field. */
+    override fun toString(): String =
+        "ParseOptions(allowIpv6ZoneId=$allowIpv6ZoneId, inputLength=$inputLength, " +
+            "expandedLength=$expandedLength, pathSegments=$pathSegments, resolutionDepth=$resolutionDepth)"
 
     /** The shared off value and the entry point for the value type. */
     public companion object {
-        /** The default configuration with every opt-in off; the standards-baseline behaviour. */
+        /** The base multiplier folded per field into [hashCode]; standard odd-prime choice. */
+        private const val HASH_MULTIPLIER: Int = 31
+
+        /** The default configuration with every opt-in off and every limit at its [ResourceLimit] default. */
         @JvmField
         public val DEFAULT: ParseOptions = Builder().build()
     }
@@ -98,13 +160,21 @@ public class ParseOptions private constructor(
      */
     public class Builder {
         private var allowIpv6ZoneId: Boolean = false
+        private var inputLength: Int = ResourceLimit.InputLength.defaultMax.toInt()
+        private var expandedLength: Int? = null
+        private var pathSegments: Int = ResourceLimit.PathSegments.defaultMax.toInt()
+        private var resolutionDepth: Int = ResourceLimit.ResolutionDepth.defaultMax.toInt()
 
-        /** Creates a builder with every option at its default (off) value. */
+        /** Creates a builder with every option at its default value ([ResourceLimit] for the limits). */
         public constructor()
 
         /** Creates a builder pre-filled from [source] so `source.newBuilder().build()` reproduces it. */
         internal constructor(source: ParseOptions) {
             allowIpv6ZoneId = source.allowIpv6ZoneId
+            inputLength = source.inputLength
+            expandedLength = source.expandedLength
+            pathSegments = source.pathSegments
+            resolutionDepth = source.resolutionDepth
         }
 
         /**
@@ -119,10 +189,68 @@ public class ParseOptions private constructor(
         }
 
         /**
+         * Overrides [ResourceLimit.InputLength] for this parse; defaults to its documented bound
+         * (64 KiB) when not called.
+         *
+         * @param max the maximum accepted raw-input length, in UTF-16 code units.
+         * @return this builder, for chaining.
+         * @throws IllegalArgumentException if [max] is not positive.
+         */
+        public fun inputLength(max: Int): Builder {
+            require(max > 0) { "inputLength must be positive: $max" }
+            inputLength = max
+            return this
+        }
+
+        /**
+         * Overrides [ResourceLimit.ExpandedLength] for this parse; when not called, it tracks
+         * whatever [inputLength] resolves to (default or overridden).
+         *
+         * @param max the maximum accepted post-expansion length, in UTF-16 code units.
+         * @return this builder, for chaining.
+         * @throws IllegalArgumentException if [max] is not positive.
+         */
+        public fun expandedLength(max: Int): Builder {
+            require(max > 0) { "expandedLength must be positive: $max" }
+            expandedLength = max
+            return this
+        }
+
+        /**
+         * Overrides [ResourceLimit.PathSegments] for this parse; defaults to its documented bound
+         * (10,000) when not called.
+         *
+         * @param max the maximum accepted number of `/`-delimited path segments.
+         * @return this builder, for chaining.
+         * @throws IllegalArgumentException if [max] is not positive.
+         */
+        public fun pathSegments(max: Int): Builder {
+            require(max > 0) { "pathSegments must be positive: $max" }
+            pathSegments = max
+            return this
+        }
+
+        /**
+         * Overrides [ResourceLimit.ResolutionDepth] for this parse; defaults to its documented
+         * bound (256) when not called. See [ResourceLimit.ResolutionDepth]: the value is stored and
+         * validated, but not yet independently enforced by a resolve call.
+         *
+         * @param max the maximum bound on reference-resolution / dot-segment work.
+         * @return this builder, for chaining.
+         * @throws IllegalArgumentException if [max] is not positive.
+         */
+        public fun resolutionDepth(max: Int): Builder {
+            require(max > 0) { "resolutionDepth must be positive: $max" }
+            resolutionDepth = max
+            return this
+        }
+
+        /**
          * Snapshots the accumulated options into an immutable [ParseOptions].
          *
          * @return the [ParseOptions] for the assembled state.
          */
-        public fun build(): ParseOptions = ParseOptions(allowIpv6ZoneId)
+        public fun build(): ParseOptions =
+            ParseOptions(allowIpv6ZoneId, inputLength, expandedLength ?: inputLength, pathSegments, resolutionDepth)
     }
 }

@@ -144,16 +144,31 @@ internal class ResolverTest {
 
     @Test
     fun `resolve returns an error instead of throwing when the merge exceeds the length bound`() {
-        // Each individual input parses fine, but base's directory prefix concatenated with the
-        // rootless reference exceeds the resolver's defensive length bound (8192); this must
-        // surface as a ParseResult.Err, never an escaping exception ("total, never throws").
-        val base = "a:/" + "x".repeat(5000) + "/c"
-        val longRef = "y".repeat(5000)
+        // Each individual input parses fine (well under ParseOptions.DEFAULT.inputLength), but
+        // base's directory prefix concatenated with the rootless reference exceeds the resolver's
+        // ExpandedLength bound; this must surface as a ParseResult.Err, never an escaping
+        // exception ("total, never throws").
+        val base = "a:/" + "x".repeat(SEGMENT_LENGTH) + "/c"
+        val longRef = "y".repeat(SEGMENT_LENGTH)
 
         val result = Resolver.resolve(base, longRef)
 
         val err = assertIs<ParseResult.Err>(result)
         assertIs<UriParseError.InputTooLong>(err.error)
+    }
+
+    @Test
+    fun `resolve respects an overridden expandedLength and reports InputTooLong with the configured max`() {
+        // A merge that fits under the default ExpandedLength must fail once the caller lowers it.
+        val base = "a:/aaaa/c"
+        val longRef = "y".repeat(20)
+        val options = ParseOptions.Builder().expandedLength(10).build()
+
+        val result = Resolver.resolve(base, longRef, options)
+
+        val err = assertIs<ParseResult.Err>(result)
+        val tooLong = assertIs<UriParseError.InputTooLong>(err.error)
+        assertEquals(10, tooLong.max)
     }
 
     @Test
@@ -279,10 +294,10 @@ internal class ResolverTest {
     fun `structured resolve returns an error instead of throwing when the merge exceeds the length bound`() {
         // Mirrors "resolve returns an error instead of throwing when the merge exceeds the length
         // bound" on the structured overload: both inputs parse fine individually, but base's
-        // directory prefix concatenated with the rootless reference exceeds the resolver's
-        // defensive length bound (8192), which the structured resolve shares via transformReferences.
-        val base = UriParser.parse("a:/" + "x".repeat(5000) + "/c").getOrThrow()
-        val reference = UriParser.parse("y".repeat(5000)).getOrThrow()
+        // directory prefix concatenated with the rootless reference exceeds the resolver's default
+        // ExpandedLength bound, which the structured resolve shares via transformReferences.
+        val base = UriParser.parse("a:/" + "x".repeat(SEGMENT_LENGTH) + "/c").getOrThrow()
+        val reference = UriParser.parse("y".repeat(SEGMENT_LENGTH)).getOrThrow()
 
         val result = Resolver.resolve(base, reference)
 
@@ -306,5 +321,12 @@ internal class ResolverTest {
     private companion object {
         /** The canonical RFC 3986 §5.4 base URI every example table resolves against. */
         const val BASE: String = "http://a/b/c/d;p?q"
+
+        /**
+         * Half of each length-bound test case's segment length: each half stays under
+         * `ParseOptions.DEFAULT.inputLength` (65,536) on its own, but the merged path exceeds
+         * `ParseOptions.DEFAULT.expandedLength` (also 65,536 by default).
+         */
+        const val SEGMENT_LENGTH: Int = 40_000
     }
 }

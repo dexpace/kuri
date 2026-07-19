@@ -15,9 +15,6 @@ import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.scheme.schemeColonIndex
 import org.dexpace.kuri.serialize.guardRecomposedUriPath
 
-/** A generous upper bound on a path/URI length used only for defensive assertions (mirrors the parser cap). */
-private const val MAX_PATH_LENGTH: Int = 8192
-
 /** The path-segment separator, hoisted so the dot-segment prefix tests carry no bare string literals. */
 private const val SLASH: String = "/"
 
@@ -79,10 +76,16 @@ internal object Resolver {
      * bounded by the input length.
      *
      * @param path the merged/extracted path to normalize; may be empty.
+     * @param options supplies the [ParseOptions.expandedLength] bound this call asserts against;
+     *   defaults to [ParseOptions.DEFAULT] for the many direct, non-parse-configured call sites
+     *   (tests, and the structured resolve's own internal use).
      * @return the path with extraneous dot-segments removed.
      */
-    internal fun removeDotSegments(path: String): String {
-        require(path.length <= MAX_PATH_LENGTH) { "path exceeds the supported length bound: ${path.length}" }
+    internal fun removeDotSegments(
+        path: String,
+        options: ParseOptions = ParseOptions.DEFAULT,
+    ): String {
+        require(path.length <= options.expandedLength) { "path exceeds the supported length bound: ${path.length}" }
         val output = StringBuilder()
         var input = path
         val maxIterations = path.length + 1
@@ -105,7 +108,9 @@ internal object Resolver {
      * @param baseUri the absolute base URI the reference is interpreted against.
      * @param reference the (possibly relative) URI reference to resolve.
      * @param options the opt-in parsing configuration applied to the validation parses of both
-     *   inputs, so a base (or reference) carrying an RFC 6874 zone id is accepted ([HOST-18]).
+     *   inputs, so a base (or reference) carrying an RFC 6874 zone id is accepted ([HOST-18]); its
+     *   [ParseOptions.expandedLength] also bounds the §5.2.3 path merge (`ResourceLimit.ExpandedLength`,
+     *   [ERR-31]).
      * @return the recomposed target URI, or the first fatal parse error.
      */
     internal fun resolve(
@@ -116,7 +121,7 @@ internal object Resolver {
         require(baseUri.isNotEmpty()) { "an absolute base URI is required for resolution" }
         val base = UriParser.parse(baseUri, options)
         val ref = UriParser.parse(reference, options)
-        return resolveOutcome(baseUri, reference, base, ref)
+        return resolveOutcome(baseUri, reference, base, ref, options)
     }
 
     /**
@@ -138,9 +143,10 @@ internal object Resolver {
         reference: ParsedComponents,
     ): ParseResult<ParsedComponents> {
         require(base.scheme != null) { "structured resolution requires an absolute base scheme" }
-        return when (val target = transformReferences(partsOf(base), partsOf(reference))) {
+        val options = structuredOptions(base, reference)
+        return when (val target = transformReferences(partsOf(base), partsOf(reference), options)) {
             is ParseResult.Err -> target
-            is ParseResult.Ok -> UriParser.parse(recompose(target.value), structuredOptions(base, reference))
+            is ParseResult.Ok -> UriParser.parse(recompose(target.value, options), options)
         }
     }
 
@@ -157,13 +163,16 @@ internal object Resolver {
     private fun transformReferences(
         base: UriParts,
         ref: UriParts,
+        options: ParseOptions,
     ): ParseResult<UriParts> {
         require(base.scheme != null) { "reference resolution requires an absolute base scheme" }
         val resolved =
             when {
                 ref.scheme != null ->
-                    ParseResult.Ok(UriParts(ref.scheme, ref.authority, removeDotSegments(ref.path), ref.query, null))
-                else -> resolveRelative(base, ref)
+                    ParseResult.Ok(
+                        UriParts(ref.scheme, ref.authority, removeDotSegments(ref.path, options), ref.query, null),
+                    )
+                else -> resolveRelative(base, ref, options)
             }
         return resolved.map { part ->
             val withFragment = part.copy(fragment = ref.fragment)
@@ -176,29 +185,35 @@ internal object Resolver {
     private fun resolveRelative(
         base: UriParts,
         ref: UriParts,
+        options: ParseOptions,
     ): ParseResult<UriParts> =
         when {
             ref.authority != null ->
-                ParseResult.Ok(UriParts(base.scheme, ref.authority, removeDotSegments(ref.path), ref.query, null))
-            else -> resolveNoAuthority(base, ref)
+                ParseResult.Ok(
+                    UriParts(base.scheme, ref.authority, removeDotSegments(ref.path, options), ref.query, null),
+                )
+            else -> resolveNoAuthority(base, ref, options)
         }
 
     /** §5.2.2 with neither reference scheme nor authority: the base authority is inherited. */
     private fun resolveNoAuthority(
         base: UriParts,
         ref: UriParts,
+        options: ParseOptions,
     ): ParseResult<UriParts> =
-        resolvePathAndQuery(base, ref).map { (path, query) -> UriParts(base.scheme, base.authority, path, query, null) }
+        resolvePathAndQuery(base, ref, options)
+            .map { (path, query) -> UriParts(base.scheme, base.authority, path, query, null) }
 
     /** §5.2.2 path/query selection: empty reference path keeps the base path (and base query if absent). */
     private fun resolvePathAndQuery(
         base: UriParts,
         ref: UriParts,
+        options: ParseOptions,
     ): ParseResult<Pair<String, String?>> =
         when {
             ref.path.isEmpty() -> ParseResult.Ok(Pair(base.path, ref.query ?: base.query))
-            ref.path.startsWith(SLASH) -> ParseResult.Ok(Pair(removeDotSegments(ref.path), ref.query))
-            else -> mergedPath(base, ref.path).map { Pair(removeDotSegments(it), ref.query) }
+            ref.path.startsWith(SLASH) -> ParseResult.Ok(Pair(removeDotSegments(ref.path, options), ref.query))
+            else -> mergedPath(base, ref.path, options).map { Pair(removeDotSegments(it, options), ref.query) }
         }
 
     // --- §5.2.3 Merge Paths -----------------------------------------------------------------------
@@ -229,17 +244,19 @@ internal object Resolver {
     /**
      * Guards [merge]'s concatenation: the only point two independently length-bounded paths (the
      * base's directory prefix and the reference path) combine into something that can exceed
-     * [MAX_PATH_LENGTH], since every already-parsed single path is bounded by the parser's own cap.
+     * [ParseOptions.expandedLength] (`ResourceLimit.ExpandedLength`, [ERR-31]), since every
+     * already-parsed single path is bounded by the parser's own [ParseOptions.inputLength] cap.
      */
     private fun mergedPath(
         base: UriParts,
         refPath: String,
+        options: ParseOptions,
     ): ParseResult<String> {
         val merged = merge(base, refPath)
-        return if (merged.length <= MAX_PATH_LENGTH) {
+        return if (merged.length <= options.expandedLength) {
             ParseResult.Ok(merged)
         } else {
-            ParseResult.Err(UriParseError.InputTooLong(merged.length, MAX_PATH_LENGTH))
+            ParseResult.Err(UriParseError.InputTooLong(merged.length, options.expandedLength))
         }
     }
 
@@ -300,11 +317,15 @@ internal object Resolver {
      * §3.3 `/.`-guard so an authority-less path produced by dot-segment removal never re-parses as
      * fabricating an authority (RFC 3986 §3.3/§5.2.2). The length invariant is a postcondition, not a
      * precondition: by the time [transformReferences] returns [ParseResult.Ok], its path is already
-     * known to fit (the one path that can exceed [MAX_PATH_LENGTH] — [merge]'s concatenation — is
-     * caught earlier, in [mergedPath]), so a violation here means this class's own invariant broke.
+     * known to fit (the one path that can exceed [ParseOptions.expandedLength] — [merge]'s
+     * concatenation — is caught earlier, in [mergedPath]), so a violation here means this class's own
+     * invariant broke.
      */
-    private fun recompose(parts: UriParts): String {
-        check(parts.path.length <= MAX_PATH_LENGTH) { "resolved path exceeds the supported length bound" }
+    private fun recompose(
+        parts: UriParts,
+        options: ParseOptions,
+    ): String {
+        check(parts.path.length <= options.expandedLength) { "resolved path exceeds the supported length bound" }
         val sb = StringBuilder()
         if (parts.scheme != null) sb.append(parts.scheme).append(':')
         if (parts.authority != null) sb.append(DOUBLE_SLASH).append(parts.authority)
@@ -323,24 +344,26 @@ internal object Resolver {
         reference: String,
         base: ParseResult<ParsedComponents>,
         ref: ParseResult<ParsedComponents>,
+        options: ParseOptions,
     ): ParseResult<String> =
         when {
             base is ParseResult.Err -> base
             ref is ParseResult.Err -> ref
             base is ParseResult.Ok && base.value.scheme == null -> ParseResult.Err(UriParseError.MissingScheme)
-            else -> resolveStrings(baseUri, reference)
+            else -> resolveStrings(baseUri, reference, options)
         }
 
     /** Splits both strings into raw 5-tuples, transforms, and recomposes the target URI string. */
     private fun resolveStrings(
         baseUri: String,
         reference: String,
+        options: ParseOptions,
     ): ParseResult<String> {
         val baseParts = splitUri(baseUri)
         require(baseParts.scheme != null) { "an absolute base must carry a scheme" }
-        return transformReferences(baseParts, splitUri(reference)).map { target ->
+        return transformReferences(baseParts, splitUri(reference), options).map { target ->
             check(target.scheme != null) { "the resolved target must be absolute" }
-            recompose(target)
+            recompose(target, options)
         }
     }
 
