@@ -21,6 +21,20 @@ Standard, and UTS #46 for internationalized hosts. Parsing returns a result inst
 immutable, and the whole API reads naturally from both Kotlin and Java. It runs everywhere Kotlin does — JVM,
 Android, JS, Wasm, and native.
 
+## Why kuri?
+
+- URL parsing looks trivial and almost never is. The parts most parsers skip (percent-encoding, IDNA hosts,
+  dot-segment resolution, port elision) are where the bugs hide.
+- RFC 3986 and the WHATWG URL Standard are different specs with different rules. When two parts of a system
+  read the same URL differently, that gap becomes an SSRF filter bypass, an origin mix-up, a poisoned cache key.
+- The JVM's built-ins don't help: `java.net.URI` is specified against the superseded RFC 2396, `java.net.URL`
+  barely validates and its `equals()` makes a blocking DNS call to compare two values, and neither exists off
+  the JVM.
+- That leaves a gap on Kotlin Multiplatform: the standard library has no URL type, so shared code either drops
+  to a JVM-only parser and loses the other targets, or reimplements parsing per platform and drifts.
+- kuri closes it: one parser in common Kotlin, checked against the standards' own conformance suites, so you
+  get the same result on JVM, Android, JS, Wasm, and native, with errors as values and your choice of spec.
+
 ## Installation
 
 ```kotlin
