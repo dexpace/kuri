@@ -144,6 +144,10 @@ internal object Resolver {
      *
      * @param base the absolute base components; its scheme MUST be present.
      * @param reference the reference components to resolve.
+     * @param options the effective parse configuration whose limits bound this resolve; defaults to
+     *   [ParseOptions.DEFAULT], in which case [structuredOptions] derives the zone-id opt-in from the
+     *   operands so a direct caller (not routing a stored `Uri`'s options through) still round-trips
+     *   a zoned host.
      * @return [ParseResult.Ok] with the resolved target components, or [ParseResult.Err] when the
      *   recomposed target does not parse — e.g. dot-segment removal produced a `//`-leading, authority-less
      *   path that re-reads as an invalid authority.
@@ -151,16 +155,21 @@ internal object Resolver {
     internal fun resolve(
         base: ParsedComponents,
         reference: ParsedComponents,
+        options: ParseOptions = ParseOptions.DEFAULT,
     ): ParseResult<ParsedComponents> {
         require(base.scheme != null) { "structured resolution requires an absolute base scheme" }
-        val options = structuredOptions(base, reference)
-        return when (val target = transformReferences(partsOf(base), partsOf(reference), options)) {
+        val effective = if (options == ParseOptions.DEFAULT) structuredOptions(base, reference) else options
+        return when (val target = transformReferences(partsOf(base), partsOf(reference), effective)) {
             is ParseResult.Err -> target
-            is ParseResult.Ok -> UriParser.parse(recompose(target.value), options)
+            is ParseResult.Ok -> UriParser.parse(recompose(target.value), effective)
         }
     }
 
-    /** Derives the round-trip [ParseOptions] for a structured resolve: a zone id on either input opts in. */
+    /**
+     * Derives the round-trip [ParseOptions] for a structured resolve given only the operands: a zone
+     * id on either input opts in. Used as the fallback when the caller passes [ParseOptions.DEFAULT]
+     * (no stored options to honour), so a zoned host still re-parses through the recompose.
+     */
     private fun structuredOptions(
         base: ParsedComponents,
         reference: ParsedComponents,

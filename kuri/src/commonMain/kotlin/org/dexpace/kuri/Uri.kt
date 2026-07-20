@@ -64,11 +64,17 @@ private val URI_PATH_SEGMENT_ENCODE_SET: PercentEncodeSet = PercentEncodeSets.CO
  * `HTTP://H/` and `http://h/` are distinct. Apply [normalized] (RFC 3986 §6.2) or [normalizedEquals]
  * to fold the §6.2 equivalences explicitly. A `Uri` is I/O-free and so a safe `Map`/`Set` key.
  *
+ * The effective [ParseOptions] this value was parsed under are retained so it round-trips through
+ * [newBuilder], [resolve], and [relativize] under the same limits and opt-ins — but they are **not**
+ * part of its identity: two `Uri` values compare equal on their serialization alone, whatever
+ * options produced each.
+ *
  * @sample org.dexpace.kuri.Uri.Companion.parse
  */
 @Suppress("TooManyFunctions") // Mirrors the RFC 3986 component surface; each member is a thin projection.
 public class Uri internal constructor(
     internal val components: ParsedComponents,
+    internal val options: ParseOptions = ParseOptions.DEFAULT,
 ) {
     /** The scheme without its trailing `:`, preserved with its original case, or `null` for a relative reference. */
     @get:JvmName("scheme")
@@ -242,14 +248,14 @@ public class Uri internal constructor(
      *
      * @param reference the (possibly relative) reference to resolve.
      * @param options the opt-in parsing configuration applied to the resolved reference; defaults to
-     *   the options this base's own components imply, so a zoned base resolves without the caller
-     *   re-supplying options.
+     *   the options this base was parsed under, so a zoned base (or a base parsed with raised
+     *   limits) resolves without the caller re-supplying options.
      * @return [ParseResult.Ok] with the resolved [Uri], or [ParseResult.Err] when resolution fails.
      */
     @JvmOverloads
     public fun resolve(
         reference: String,
-        options: ParseOptions = roundTripOptions(components.host),
+        options: ParseOptions = this.options,
     ): ParseResult<Uri> =
         when (val resolved = Resolver.resolve(uriString, reference, options)) {
             is ParseResult.Err -> resolved
@@ -265,13 +271,13 @@ public class Uri internal constructor(
      *
      * @param reference the (possibly relative) reference to resolve.
      * @param options the opt-in parsing configuration applied to the resolved reference; defaults to
-     *   the options this base's own components imply.
+     *   the options this base was parsed under.
      * @return the resolved [Uri], or `null` when resolution fails.
      */
     @JvmOverloads
     public fun resolveOrNull(
         reference: String,
-        options: ParseOptions = roundTripOptions(components.host),
+        options: ParseOptions = this.options,
     ): Uri? = resolve(reference, options).getOrNull()
 
     /**
@@ -282,14 +288,14 @@ public class Uri internal constructor(
      *
      * @param reference the (possibly relative) reference to resolve.
      * @param options the opt-in parsing configuration applied to the resolved reference; defaults to
-     *   the options this base's own components imply.
+     *   the options this base was parsed under.
      * @return the resolved [Uri].
      * @throws UriSyntaxException when this URI has no [scheme] or [reference] does not resolve.
      */
     @JvmOverloads
     public fun resolveOrThrow(
         reference: String,
-        options: ParseOptions = roundTripOptions(components.host),
+        options: ParseOptions = this.options,
     ): Uri = resolve(reference, options).getOrThrow()
 
     /**
@@ -328,7 +334,7 @@ public class Uri internal constructor(
         // resolution does not yield a valid URI (dot-segment removal can produce a //-leading path that
         // re-reads as an invalid authority) means no relative form exists, so fold that failure to null
         // rather than letting the resolver's internal parse error surface — relativize stays total.
-        val resolved = candidate?.let { Resolver.resolve(components, it.components).getOrNull() }
+        val resolved = candidate?.let { Resolver.resolve(components, it.components, options).getOrNull() }
         return candidate?.takeIf { resolved != null && Uri(resolved) == target }
     }
 
@@ -384,7 +390,7 @@ public class Uri internal constructor(
      *
      * @return a new, fully normalized `Uri`.
      */
-    public fun normalized(): Uri = Uri(UriNormalizer.normalize(components))
+    public fun normalized(): Uri = Uri(UriNormalizer.normalize(components), options)
 
     /**
      * Reports whether this URI and [other] are equal after RFC 3986 §6.2 normalization (SPEC §11.3).
@@ -639,7 +645,7 @@ public class Uri internal constructor(
         public fun parse(
             input: String,
             options: ParseOptions = ParseOptions.DEFAULT,
-        ): ParseResult<Uri> = UriParser.parse(input, options).map { Uri(it) }
+        ): ParseResult<Uri> = UriParser.parse(input, options).map { Uri(it, options) }
 
         /**
          * Parses [input], punning a failure to `null`.
@@ -737,7 +743,7 @@ public class Uri internal constructor(
             path = BuilderPath.verbatim(source.encodedPath)
             queryState = QueryState.Raw(source.query)
             fragment = source.fragment
-            options = roundTripOptions(source.components.host)
+            options = source.options
         }
 
         /**
@@ -1115,7 +1121,7 @@ public class Uri internal constructor(
          * [ParseResult.getOrThrow] to surface a parse failure as [UriSyntaxException].
          */
         private fun buildResult(path: String): ParseResult<Uri> =
-            UriParser.parse(recompose(path), options).map { Uri(it) }
+            UriParser.parse(recompose(path), options).map { Uri(it, options) }
 
         /**
          * The RFC 3986 §3.2/§3.3 message for the first component combination no recomposition can

@@ -240,16 +240,43 @@ class UriTest {
     }
 
     @Test
-    fun `normalized does not throw for a path within a raised inputLength but beyond the default expandedLength`() {
-        // ParseOptions is never stored on a Uri, so a path admitted under a raised inputLength must
-        // not be re-checked against the unrelated, smaller default expandedLength on normalize.
+    fun `normalized round-trips a path within a raised inputLength but beyond the default expandedLength`() {
+        // A path admitted under a raised inputLength must not be re-checked against the unrelated,
+        // smaller default expandedLength on normalize; normalize works on the already-bounded parsed
+        // path and its value round-trips (no dot-segments, already-lowercase scheme/host).
         val options = ParseOptions.Builder().inputLength(200_000).build()
         val parsed = Uri.parse("http://h/" + "a".repeat(100_000), options)
 
         val uri = parsed.getOrNull() ?: fail("expected the raised-inputLength parse to succeed")
         val normalized = uri.normalized()
 
-        assertTrue(normalized.uriString.isNotEmpty())
+        assertEquals(uri.uriString, normalized.uriString)
+    }
+
+    @Test
+    fun `a value parsed under raised limits round-trips through newBuilder, resolve, and relativize`() {
+        // ParseOptions is stored on the Uri, so every follow-on operation reuses the raised limits
+        // rather than silently reverting to the default 64 KiB and rejecting the value it produced.
+        val options =
+            ParseOptions
+                .Builder()
+                .inputLength(200_000)
+                .expandedLength(200_000)
+                .build()
+        val base = Uri.parse("http://h/" + "a".repeat(100_000) + "/x", options).getOrThrow()
+
+        // newBuilder rebuild reproduces the value -- would fail under the default inputLength.
+        assertEquals(base, base.newBuilder().build())
+        // re-parsing the serialization under the stored options round-trips.
+        assertEquals(base, Uri.parse(base.uriString, options).getOrThrow())
+
+        // resolve honours the stored expandedLength when merging onto the long base directory.
+        val target = base.resolve("sub").getOrNull() ?: fail("resolve should honour the raised limits")
+        assertTrue(target.uriString.endsWith("/sub"))
+
+        // relativize is not spuriously null: it resolves the candidate back under the stored limits.
+        val relative = base.relativize(target) ?: fail("relativize should find a relative form")
+        assertEquals(target, base.resolve(relative.uriString).getOrThrow())
     }
 
     @Test

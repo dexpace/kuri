@@ -16,17 +16,6 @@ internal val ZONE_ID_ENABLED: ParseOptions = ParseOptions.Builder().allowIpv6Zon
 internal fun Host?.carriesZoneId(): Boolean = this is Host.Ipv6 && zoneId != null
 
 /**
- * The [ParseOptions] a value whose authority is [host] needs to round-trip through serialize-then-parse.
- *
- * A value's opt-in features are fully reflected in its stored components (today only a zone id on an
- * IPv6 host), so the round-trip options are derived from [host] rather than stored on the value.
- * Every future opt-in feature MUST likewise be reflected in the stored components for
- * this derivation to remain complete.
- */
-internal fun roundTripOptions(host: Host?): ParseOptions =
-    if (host.carriesZoneId()) ZONE_ID_ENABLED else ParseOptions.DEFAULT
-
-/**
  * Immutable, opt-in parsing configuration accepted by the [Uri] parse and resolve factories
  * (SPEC §7.2.2).
  *
