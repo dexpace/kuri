@@ -47,6 +47,31 @@ Runs on **Java 8+** and **Kotlin 2.0+**, with no runtime dependencies beyond the
 > kuri is in the `0.x` series — the public API is not yet frozen and may change between minor releases, so
 > pin to an exact version.
 
+## Modules
+
+kuri ships as three artifacts under `org.dexpace`, so you pull in only what you use:
+
+- **`kuri`** — the core engine: the `Url` and `Uri` models, parsing, building, the query API, and the
+  standalone `Percent` / `Idn` / `Schemes` utilities. Kotlin Multiplatform (JVM, Android, JS, Wasm, native).
+  This is the only module the [quick start](#quick-start) needs.
+- **`kuri-bind`** — maps an annotated request object onto a `Url`/`Uri` builder (`@Url`, `@Path`, `@Query`,
+  …). JVM-only, since it uses Kotlin reflection; the core stays dependency-free. See
+  [Annotation binding](docs/GUIDE.md#annotation-binding-kuri-bind).
+- **`kuri-serde-kotlinx`** — a [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization)
+  bridge: `Url`/`Uri` serializers plus a query-parameters format. Multiplatform across the same targets as
+  `kuri`, minus Android. See
+  [kotlinx.serialization](docs/GUIDE.md#kotlinxserialization-kuri-serde-kotlinx).
+
+The optional modules depend on the core, and you add them the same way:
+
+```kotlin
+dependencies {
+    implementation("org.dexpace:kuri:0.1.0")
+    implementation("org.dexpace:kuri-bind:0.1.0")           // optional — annotation binding
+    implementation("org.dexpace:kuri-serde-kotlinx:0.1.0")  // optional — kotlinx.serialization
+}
+```
+
 ## Quick start
 
 ```kotlin
@@ -79,9 +104,6 @@ url.queryParameters().get("q");  // "1"
 url.toString();                  // "https://example.com/b?q=1#frag"
 ```
 
-Parsing never throws: `parse` returns a `ParseResult`, with `parseOrNull` / `parseOrThrow` / `canParse` when
-you want a `null`, an exception, or a boolean instead.
-
 ## Two models
 
 kuri gives you two profiles over one engine. Reach for **`Url`** for WHATWG web URLs — `http`, `https`, `ws`,
@@ -96,6 +118,91 @@ Url.parseOrThrow("HTTP://Example.com/a/../b").toString()   // "http://example.co
 
 The guide covers the full comparison, the accessor differences to watch for, IPv6 zone identifiers, and IRI
 conversion: [Two models, one engine](docs/GUIDE.md#two-models-one-engine).
+
+## Features
+
+**Immutable builders.** Values are immutable. `newBuilder()` returns a builder pre-populated from an existing
+value, so a parse → modify → build round-trip mutates nothing. `build()` validates and throws on an
+invalid combination; `buildOrNull()` returns `null` instead.
+
+```kotlin
+Url.parseOrThrow("https://example.com/v1/users?page=1")
+    .newBuilder()
+    .addPathSegment("42")
+    .setQueryParameter("page", "2")
+    .build()                                  // https://example.com/v1/users/42?page=2
+```
+
+**Non-throwing parse.** `parse` returns a sealed `ParseResult<T>` (`Ok`/`Err`) — errors are values, and the
+`Err` branch carries a structured `UriParseError`. `parseOrNull`, `parseOrThrow`, and `canParse` cover the
+`null`, exception, and boolean cases.
+
+```kotlin
+when (val r = Url.parse(input)) {
+    is ParseResult.Ok  -> r.value.hostName
+    is ParseResult.Err -> r.error.message     // structured reason, not a bare exception
+}
+```
+
+**Structured query editing.** `queryParameters` is a duplicate-preserving, iterable view; the builder edits
+follow `URLSearchParams` semantics, and `split(name, delimiter)` flattens repeated pairs and delimited lists
+into one list.
+
+```kotlin
+val q = Url.parseOrThrow("https://h/?id=1,2&id=3").queryParameters
+q.split("id", ',').map(String::toInt)         // [1, 2, 3]
+```
+
+**Kotlin operator DSL.** The optional `org.dexpace.kuri.ktx` package overloads `/` to append a
+percent-encoded path segment and `+` to add a query parameter, and adds `buildUrl { }` / `edit { }` builder
+lambdas. Nothing here is visible to Java.
+
+```kotlin
+val api = Url.parseOrThrow("https://api.example.com/v1")
+api / "users" / "42" + ("page" to "2")        // https://api.example.com/v1/users/42?page=2
+```
+
+**RFC 6570 URI templates.** `UriTemplate` compiles a template once and expands it against a variable map.
+All four RFC levels are supported, including the `?` `&` `#` `.` `/` `;` `+` operators and the prefix (`:n`)
+and explode (`*`) modifiers.
+
+```kotlin
+UriTemplate.parse("https://api.example.com/users/{id}{?fields*}")
+    .expand(mapOf("id" to 42, "fields" to listOf("name", "email")))
+// https://api.example.com/users/42?fields=name&fields=email
+```
+
+**Annotation binding (`kuri-bind`).** A JVM module that maps an annotated request object onto a `Url`/`Uri`
+builder by reflection: declare the mapping with `@Url`/`@Path`/`@Query`/`@PathTemplate`, then bind any
+instance onto a base URL.
+
+```kotlin
+@Url @PathTemplate("/repos/{owner}/{repo}/issues")
+data class Issues(
+    @Path("owner")  val owner: String,
+    @Path("repo")   val repo: String,
+    @Query("state") val state: String,
+)
+
+val apiBase = Url.parseOrThrow("https://api.example.com")
+KuriBind.bindInto(apiBase.newBuilder(), Issues("dexpace", "kuri", "open")).build()
+// https://api.example.com/repos/dexpace/kuri/issues?state=open
+```
+
+**kotlinx.serialization bridge (`kuri-serde-kotlinx`).** `QueryParametersFormat` decodes a query string into
+a flat `@Serializable` class and encodes it back; `UrlSerializer` / `UriSerializer` serialize values as their
+string form in any kotlinx format.
+
+```kotlin
+@Serializable
+data class Search(val q: String, val page: Int = 1, val tags: List<String> = emptyList())
+
+QueryParametersFormat.decodeFromQueryString<Search>("q=kotlin&page=2&tags=a&tags=b")
+// Search(q = "kotlin", page = 2, tags = ["a", "b"])
+```
+
+Beyond these: UTS-46 IDNA host processing, `redact()` for credential-safe logging, `resolve` / `relativize`
+against a base, and configurable parse resource limits. The [user guide](docs/GUIDE.md) documents each in full.
 
 ## Documentation
 
