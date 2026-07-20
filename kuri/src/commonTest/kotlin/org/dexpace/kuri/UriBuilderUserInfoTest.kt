@@ -108,12 +108,11 @@ class UriBuilderUserInfoTest {
     }
 
     @Test
-    fun `a trailing colon in raw userInfo is unaffected by the split-mode addition`() {
-        // Uri.userInfo collapses an empty password to no colon regardless of which mode produced
-        // it (Uri.reconstructUserInfo / SerializeShared.serializeUserinfo, both pre-existing and
-        // untouched by this change) — so "user:" reads back as "user". The point of this case is
-        // that verbatim mode still recomposes and re-parses to that same pre-existing value; split
-        // mode was never engaged for it to regress.
+    fun `a trailing colon in raw userInfo is preserved as an empty-but-present password`() {
+        // The empty password after the trailing ':' is a present-but-empty field, distinct from no
+        // password at all (Uri.reconstructUserInfo / SerializeShared.preservedCredentialsPrefix), so
+        // "user:" reads back as "user:" — the point of this case is that verbatim mode recomposes
+        // and re-parses to that same value rather than collapsing the trailing colon away.
         val uri =
             Uri
                 .Builder()
@@ -122,7 +121,7 @@ class UriBuilderUserInfoTest {
                 .encodedPath("/p")
                 .build()
 
-        assertEquals("user", uri.userInfo)
+        assertEquals("user:", uri.userInfo)
     }
 
     @Test

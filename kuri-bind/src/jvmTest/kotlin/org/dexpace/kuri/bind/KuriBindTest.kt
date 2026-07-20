@@ -85,7 +85,7 @@ class KuriBindTest {
     @Test
     fun `toUrl throws when the root lacks the url marker`() {
         val failure = assertFailsWith<KuriBindException> { KuriBind.toUrl(NoRootMarker("x")) }
-        assertEquals(true, failure.message?.contains("@url"))
+        assertEquals(true, failure.message?.contains("@Url"))
     }
 
     @Test
@@ -98,7 +98,7 @@ class KuriBindTest {
     @Test
     fun `toUri throws when a url root is bound through the uri entry point`() {
         val failure = assertFailsWith<KuriBindException> { KuriBind.toUri(Absolute(host = "example.com")) }
-        assertEquals(true, failure.message?.contains("@uri"))
+        assertEquals(true, failure.message?.contains("@Uri"))
     }
 
     @Test

@@ -323,13 +323,18 @@ internal object UrlParserStates {
         return UrlTransition.Reconsume(UrlState.PATH)
     }
 
-    /** Copies the base's username/password/host/port into [state]. */
+    /**
+     * Copies the base's username/password/host/port into [state].
+     *
+     * As [UrlParserState]'s seed constructor, the `?:` guard on username/password is total-only:
+     * a `Url`-profile base never actually carries a null credential (`NORM-30`).
+     */
     private fun copyBaseAuthority(
         state: UrlParserState,
         base: ParsedComponents,
     ) {
-        state.username = base.username
-        state.password = base.password
+        state.username = base.username ?: ""
+        state.password = base.password ?: ""
         state.host = base.host
         state.port = base.port
     }

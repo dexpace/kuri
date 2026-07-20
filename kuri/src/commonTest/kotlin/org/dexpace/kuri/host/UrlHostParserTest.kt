@@ -109,7 +109,7 @@ class UrlHostParserTest {
     @Test
     fun `parse rejects an NBSP-mapped special domain`() {
         // U+00A0 maps to U+0020 SPACE under UTS-46, which the re-scan then forbids ([HOST-30]).
-        val result = UrlHostParser.parse("www .", isSpecial = true)
+        val result = UrlHostParser.parse("www" + Char(0x00A0) + ".", isSpecial = true)
 
         assertIs<ParseResult.Err>(result)
     }

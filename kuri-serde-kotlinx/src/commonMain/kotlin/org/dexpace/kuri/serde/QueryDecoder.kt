@@ -21,7 +21,9 @@ import org.dexpace.kuri.query.QueryParameters
  * (so their declared default applies); an absent required element fails. A list element delegates to
  * [QueryListDecoder], reading every repeated value for the name via `getAll`. A map element delegates
  * to [QueryMapDecoder], reading its `<name>.key` / `<name>.value` repeated parameters and zipping them
- * back into entries positionally — the mirror of how [QueryMapEncoder] emits them.
+ * back into entries positionally — the mirror of how [QueryMapEncoder] emits them. A list property
+ * present but empty carries no repeated values of its own, so it is recognized instead via
+ * [emptyListMarkerName] — see [isPresentEmptyList].
  */
 @Suppress("TooManyFunctions") // One decode method per primitive kind, mandated by the AbstractDecoder contract.
 internal class QueryDecoder(
@@ -32,15 +34,19 @@ internal class QueryDecoder(
     private var index = -1
     private var currentName: String = ""
     private var currentIsMap = false
+    private var currentIsEmptyListMarker: Boolean = false
     private var entered = false
 
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         while (++index < descriptor.elementsCount) {
             val name = descriptor.getElementName(index)
             val isMap = descriptor.getElementDescriptor(index).kind == StructureKind.MAP
-            if (hasValueFor(name, isMap) || !descriptor.isElementOptional(index)) {
+            val emptyListMarker = isPresentEmptyList(descriptor, index, name)
+            val present = hasValueFor(name, isMap) || emptyListMarker
+            if (present || !descriptor.isElementOptional(index)) {
                 currentName = name
                 currentIsMap = isMap
+                currentIsEmptyListMarker = emptyListMarker && !hasValueFor(name, isMap)
                 return index
             }
         }
@@ -63,6 +69,24 @@ internal class QueryDecoder(
             params.has(name)
         }
 
+    /**
+     * True when the element at [index] is a list property and its [emptyListMarkerName] marker is
+     * present, i.e. it was explicitly encoded as present-but-empty rather than omitted. Scoped to list
+     * elements only, so a foreign query string that happens to contain a `<scalarField>[]` pair cannot
+     * spuriously mark a scalar property present. [decodeElementIndex] also uses this (via
+     * [currentIsEmptyListMarker]) to make [decodeNotNullMark] report a marker-only match as not-null, so
+     * a nullable list property reaches [beginStructure] instead of `NullableSerializer` short-circuiting
+     * it to `null`.
+     */
+    private fun isPresentEmptyList(
+        descriptor: SerialDescriptor,
+        index: Int,
+        name: String,
+    ): Boolean {
+        val isList = descriptor.getElementDescriptor(index).kind == StructureKind.LIST
+        return isList && params.has(emptyListMarkerName(name))
+    }
+
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder =
         when (descriptor.kind) {
             StructureKind.LIST -> QueryListDecoder(params.getAll(currentName))
@@ -72,7 +96,7 @@ internal class QueryDecoder(
 
     /** Enters the (single, top-level) flat class structure, rejecting a second nested attempt. */
     private fun enterTopLevelStructure(): CompositeDecoder {
-        if (entered) throw SerializationException("nested objects are not supported by the query format")
+        if (entered) throw SerializationException(NESTED_OBJECTS_REJECTED_MESSAGE)
         entered = true
         return this
     }
@@ -96,26 +120,39 @@ internal class QueryDecoder(
         return QueryMapDecoder(keys, values)
     }
 
-    override fun decodeNotNullMark(): Boolean = hasValueFor(currentName, currentIsMap)
+    /**
+     * `false` only when the current element is genuinely absent. A list property present solely via its
+     * [emptyListMarkerName] marker (no `name=value` pairs of its own) still counts as not-null: without
+     * this, `kotlinx.serialization`'s `NullableSerializer` would short-circuit a nullable list straight
+     * to `null` on seeing `params.has(currentName)` fail, never reaching [beginStructure] to decode the
+     * empty [QueryListDecoder] the marker represents.
+     */
+    override fun decodeNotNullMark(): Boolean = hasValueFor(currentName, currentIsMap) || currentIsEmptyListMarker
 
     override fun decodeString(): String =
         params[currentName] ?: throw SerializationException("missing query parameter '$currentName'")
 
-    override fun decodeBoolean(): Boolean = decodeString().toBoolean()
+    override fun decodeBoolean(): Boolean = parseStrictBoolean(decodeString())
 
-    override fun decodeInt(): Int = decodeString().toInt()
+    override fun decodeInt(): Int = scalarOrFail("Int", decodeString(), "value for '$currentName'", String::toIntOrNull)
 
-    override fun decodeLong(): Long = decodeString().toLong()
+    override fun decodeLong(): Long =
+        scalarOrFail("Long", decodeString(), "value for '$currentName'", String::toLongOrNull)
 
-    override fun decodeShort(): Short = decodeString().toShort()
+    override fun decodeShort(): Short =
+        scalarOrFail("Short", decodeString(), "value for '$currentName'", String::toShortOrNull)
 
-    override fun decodeByte(): Byte = decodeString().toByte()
+    override fun decodeByte(): Byte =
+        scalarOrFail("Byte", decodeString(), "value for '$currentName'", String::toByteOrNull)
 
-    override fun decodeDouble(): Double = decodeString().toDouble()
+    override fun decodeDouble(): Double =
+        scalarOrFail("Double", decodeString(), "value for '$currentName'", String::toDoubleOrNull)
 
-    override fun decodeFloat(): Float = decodeString().toFloat()
+    override fun decodeFloat(): Float =
+        scalarOrFail("Float", decodeString(), "value for '$currentName'", String::toFloatOrNull)
 
-    override fun decodeChar(): Char = decodeString().single()
+    override fun decodeChar(): Char =
+        scalarOrFail("Char", decodeString(), "value for '$currentName'") { it.singleOrNull() }
 
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = enumIndex(enumDescriptor, decodeString())
 }
@@ -136,25 +173,33 @@ internal class QueryListDecoder(
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int =
         if (cursor < values.size) cursor else CompositeDecoder.DECODE_DONE
 
+    /**
+     * A list element is always a scalar/enum in this format's scope, so any call here — a nested
+     * `@Serializable` object or a nested list — is out of scope and rejected, mirroring
+     * [QueryDecoder.beginStructure]'s top-level guard.
+     */
+    override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder =
+        throw SerializationException(NESTED_OBJECTS_REJECTED_MESSAGE)
+
     private fun next(): String = values[cursor++] ?: throw SerializationException("null list element")
 
     override fun decodeString(): String = next()
 
-    override fun decodeBoolean(): Boolean = next().toBoolean()
+    override fun decodeBoolean(): Boolean = parseStrictBoolean(next())
 
-    override fun decodeInt(): Int = next().toInt()
+    override fun decodeInt(): Int = scalarOrFail("Int", next(), "list element", String::toIntOrNull)
 
-    override fun decodeLong(): Long = next().toLong()
+    override fun decodeLong(): Long = scalarOrFail("Long", next(), "list element", String::toLongOrNull)
 
-    override fun decodeShort(): Short = next().toShort()
+    override fun decodeShort(): Short = scalarOrFail("Short", next(), "list element", String::toShortOrNull)
 
-    override fun decodeByte(): Byte = next().toByte()
+    override fun decodeByte(): Byte = scalarOrFail("Byte", next(), "list element", String::toByteOrNull)
 
-    override fun decodeDouble(): Double = next().toDouble()
+    override fun decodeDouble(): Double = scalarOrFail("Double", next(), "list element", String::toDoubleOrNull)
 
-    override fun decodeFloat(): Float = next().toFloat()
+    override fun decodeFloat(): Float = scalarOrFail("Float", next(), "list element", String::toFloatOrNull)
 
-    override fun decodeChar(): Char = next().single()
+    override fun decodeChar(): Char = scalarOrFail("Char", next(), "list element") { it.singleOrNull() }
 
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = enumIndex(enumDescriptor, next())
 }
@@ -188,7 +233,7 @@ internal class QueryMapDecoder(
      * rejected, mirroring [QueryDecoder.beginStructure]'s top-level guard.
      */
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder =
-        throw SerializationException("nested objects are not supported by the query format")
+        throw SerializationException(NESTED_OBJECTS_REJECTED_MESSAGE)
 
     /** Reads the next key (even cursor position) or value (odd), advancing the cursor. */
     private fun next(): String {
@@ -219,6 +264,31 @@ internal class QueryMapDecoder(
 
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = enumIndex(enumDescriptor, next())
 }
+
+/** The nesting-rejection message shared by [QueryDecoder.beginStructure] and [QueryListDecoder.beginStructure]. */
+private const val NESTED_OBJECTS_REJECTED_MESSAGE: String = "nested objects are not supported by the query format"
+
+/** Converts [raw] with [convert], failing with a [SerializationException] describing [kind] and [context] on error. */
+private fun <T : Any> scalarOrFail(
+    kind: String,
+    raw: String,
+    context: String,
+    convert: (String) -> T?,
+): T = convert(raw) ?: throw SerializationException("invalid $kind $context: '$raw'")
+
+/**
+ * Parses a query value as a boolean, accepting only `"true"`/`"false"` case-insensitively.
+ *
+ * Kotlin's [String.toBoolean] treats every non-`"true"` value (including typos like `"ture"` or
+ * numeric flags like `"1"`) as `false` without ever failing, which would silently corrupt untrusted
+ * query input. This mirrors how the enum and numeric decoders reject unrecognized values instead.
+ */
+private fun parseStrictBoolean(value: String): Boolean =
+    when {
+        value.equals("true", ignoreCase = true) -> true
+        value.equals("false", ignoreCase = true) -> false
+        else -> throw SerializationException("invalid boolean value '$value', expected 'true' or 'false'")
+    }
 
 /** Resolves an enum constant name to its index, failing on an unknown value. */
 private fun enumIndex(

@@ -267,6 +267,35 @@ class UriTest {
     }
 
     @Test
+    fun `an empty-but-present userinfo round-trips the at-sign and compares unequal to no userinfo`() {
+        // Regression for #104: username/password used to collapse "absent" and "present-but-empty"
+        // into the same "" value before serialization, so the "@" was silently dropped on re-serialize
+        // and the two forms compared equal — violating the PRESERVE-profile equality contract.
+        val withEmptyUserinfo = parseOk("http://@h/")
+        val withoutUserinfo = parseOk("http://h/")
+
+        assertEquals("http://@h/", withEmptyUserinfo.uriString)
+        assertEquals("http://h/", withoutUserinfo.uriString)
+        assertEquals("", withEmptyUserinfo.userInfo)
+        assertNull(withoutUserinfo.userInfo)
+        assertFalse(withEmptyUserinfo == withoutUserinfo)
+    }
+
+    @Test
+    fun `an empty-but-present password round-trips the trailing colon and compares unequal to no password`() {
+        // Regression for #104: the second reported repro case — a trailing ':' with an empty
+        // password used to collapse to the same value as no password at all.
+        val withEmptyPassword = parseOk("http://u:@h/")
+        val withoutPassword = parseOk("http://u@h/")
+
+        assertEquals("http://u:@h/", withEmptyPassword.uriString)
+        assertEquals("http://u@h/", withoutPassword.uriString)
+        assertEquals("u:", withEmptyPassword.userInfo)
+        assertEquals("u", withoutPassword.userInfo)
+        assertFalse(withEmptyPassword == withoutPassword)
+    }
+
+    @Test
     fun `is usable as a hash set element`() {
         val set = hashSetOf(parseOk("foo://h/p"))
 

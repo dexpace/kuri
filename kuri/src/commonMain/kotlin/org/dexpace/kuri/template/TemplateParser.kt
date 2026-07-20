@@ -82,8 +82,18 @@ private fun parsePlainOrPrefixedVarspec(
     }
     val name = spec.substring(0, colon)
     validateName(name, at)
-    val prefix = spec.substring(colon + 1).toIntOrNull()
-    if (prefix == null || prefix !in 1..MAX_PREFIX) throw UriTemplateException("invalid prefix in '$spec'", at)
+    val rawPrefix = spec.substring(colon + 1)
+    // RFC 6570 §2.4.1: max-length = %x31-39 0*3DIGIT — the first character must be a digit
+    // 1-9 and any remaining characters must be digits, which rules out a leading '+'/'-' sign
+    // and leading zeros that `String.toIntOrNull()` would otherwise accept silently.
+    val hasValidShape =
+        rawPrefix.isNotEmpty() &&
+            rawPrefix[0] in '1'..'9' &&
+            (1 until rawPrefix.length).all { rawPrefix[it] in '0'..'9' }
+    val prefix = if (hasValidShape) rawPrefix.toIntOrNull() else null
+    if (prefix == null || prefix !in 1..MAX_PREFIX) {
+        throw UriTemplateException("invalid prefix in '$spec'", at)
+    }
     return Varspec(name, explode = false, prefix = prefix)
 }
 
@@ -133,7 +143,7 @@ private fun validatePercentEncodedTriplet(
     return PERCENT_TRIPLET_LENGTH
 }
 
-/** RFC 6570 prefix modifier upper bound (`max-length = 1*4DIGIT`, i.e. up to 9999). */
+/** RFC 6570 prefix modifier upper bound (`max-length = %x31-39 0*3DIGIT`, i.e. up to 9999). */
 private const val MAX_PREFIX: Int = 9999
 
 /** Length of a percent-encoded triplet, `%XX`. */
