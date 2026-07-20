@@ -7,8 +7,11 @@ one-time setup a maintainer needs, and the day-to-day flow of cutting a release.
 ## How it works
 
 - **Versioning.** The version lives in `gradle.properties` and is owned by release-please, which
-  derives the next version from Conventional Commit history. kuri is currently on an **alpha
-  prerelease series** (`0.1.0-alpha.1` → `0.1.0-alpha.2` → …).
+  derives the next version from Conventional Commit history. kuri is in the **`0.x` series**: while
+  the major version is `0`, release-please bumps the minor for breaking changes and the patch for
+  everything else, so the major digit never moves on its own (`bump-minor-pre-major` /
+  `bump-patch-for-minor-pre-major` in `release-please-config.json`). Graduating to `1.0.0` is a
+  deliberate manual step (see below), not something the automation does for you.
 - **Pipeline.** On every push to `main`, release-please maintains a *release PR* that rolls the
   landed commits into the next version bump and the `CHANGELOG.md`. Merging that PR tags the release
   and creates a GitHub Release, which triggers the publish job. Publishing runs on a **macOS** runner
@@ -95,33 +98,38 @@ the user/password pair.
 
 ### Which commits trigger a release
 
-release-please cuts a release only for `feat` (minor), `fix` (patch), and breaking changes
-(`!` / `BREAKING CHANGE`, which bump within the alpha series). No other type triggers a release.
-Housekeeping types — `ci`, `chore`, `docs`, `test`, `style`, `refactor`, `build` — are also hidden
-from the changelog; `perf` and `revert` don't trigger a release either, but do appear in it (under
-*Performance* and *Reverted*).
+release-please cuts a release only for `feat`, `fix`, and breaking changes
+(`!` / `BREAKING CHANGE`). No other type triggers a release. Housekeeping types — `ci`, `chore`,
+`docs`, `test`, `style`, `refactor`, `build` — are also hidden from the changelog; `perf` and
+`revert` don't trigger a release either, but do appear in it (under *Performance* and *Reverted*).
 
-### Prerelease cadence and graduation
+### Version cadence and graduating to `1.0.0`
 
-While on the alpha series, `feat` and `fix` both advance the prerelease counter
-(`0.1.0-alpha.N` → `0.1.0-alpha.N+1`). To graduate to a stable `0.1.0` (or move to a new series such
-as `0.2.0-alpha.1`), either add a `Release-As: 0.1.0` footer to a commit, or drop the
-`"versioning": "prerelease"` / `"prerelease"` settings in `release-please-config.json`.
+While the major version is `0`, the pre-major settings in `release-please-config.json` keep the
+major digit pinned: `bump-minor-pre-major` routes breaking changes to a **minor** bump
+(`0.1.0` → `0.2.0`) instead of `1.0.0`, and `bump-patch-for-minor-pre-major` routes both `feat` and
+`fix` to a **patch** bump (`0.1.0` → `0.1.1`). So automated releases stay within `0.y.z` no matter
+what lands. When the API is ready to freeze, cut `1.0.0` deliberately by adding a `Release-As: 1.0.0`
+footer to a commit (or by opening a release PR with that version); the automation will not cross to
+`1.0.0` on its own.
 
-## Publishing the initial `0.1.0-alpha.1`
+## Bootstrapping publishing for a version with no prior tag
 
-`.release-please-manifest.json` records `0.1.0-alpha.1` as the *current* version, so release-please's
-first *automated* release will be `0.1.0-alpha.2`. To put `0.1.0-alpha.1` itself on Maven Central,
-publish it manually once (after the secrets above are configured):
+release-please's publish job runs off a GitHub Release, so it can only build a version that already
+has one. The first time the pipeline runs for a version — the initial `0.1.0`, or after resetting
+`.release-please-manifest.json` to start a new line — there is no prior tag for it to build from, so
+the version currently recorded in `gradle.properties` has to be published manually once (after the
+secrets above are configured):
 
-- **Actions → Publish → Run workflow**, on `main` (where `gradle.properties` reads
-  `version=0.1.0-alpha.1`). Leave the `ref` input blank to publish the branch as-is.
+- **Actions → Publish → Run workflow**, on `main`. Leave the `ref` input blank to publish the
+  branch as-is, using whatever version `gradle.properties` currently declares.
 
-This manual `workflow_dispatch` run automatically creates the `v0.1.0-alpha.1` git tag and GitHub
-Release — you no longer have to tag it by hand — and the same run attaches the artifacts zip to that
-Release.
+This manual `workflow_dispatch` run automatically creates the matching `v<version>` git tag and
+GitHub Release — you don't have to tag it by hand — and the same run attaches the artifacts zip to
+that Release.
 
-From then on, merging release-please's release PRs publishes automatically.
+From then on, merging release-please's release PRs publishes automatically; this manual step is only
+needed again if a future version starts from a point with no existing tag.
 
 ## Manual / re-publish
 

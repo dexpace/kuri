@@ -16,7 +16,7 @@ package org.dexpace.kuri
  */
 public object Kuri {
     /**
-     * The kuri library version, for example `0.1.0-alpha.1`.
+     * The kuri library version, for example `0.1.0`.
      *
      * Generated at build time from the project's `version` (the single source in `gradle.properties`,
      * owned by release automation), so it always matches the published Maven coordinate and can never

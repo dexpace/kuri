@@ -5,9 +5,6 @@
   "bootstrap-sha": "38204f042bc6a31aa565a94d598fedd3b130b6cb",
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true,
-  "prerelease": true,
-  "prerelease-type": "alpha",
-  "versioning": "prerelease",
   "changelog-sections": [
     { "type": "feat", "section": "Added" },
     { "type": "fix", "section": "Fixed" },
