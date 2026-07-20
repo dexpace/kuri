@@ -448,6 +448,16 @@ class SerdeTest {
     }
 
     @Test
+    fun `decoding a list with both real values and its empty-collection marker throws`() {
+        // A hand-edited or otherwise malformed query string carrying both `tags=x` and `tags[]` is
+        // self-contradictory: fail fast instead of silently preferring the real values and ignoring
+        // the marker.
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Foo>("tags=x&tags[]")
+        }
+    }
+
+    @Test
     fun `decoding a malformed Int value throws a serialization exception`() {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.decodeFromQueryString<Search>("q=x&page=abc")
@@ -591,15 +601,14 @@ class SerdeTest {
     }
 
     @Test
-    fun `an empty map property round-trips through the query format`() {
-        // Metadata.meta has no default, so beginCollection always runs for it regardless of value; the
-        // empty-collection marker is therefore present even though the property is required. That's
-        // harmless noise rather than a decode necessity (a required element is never skipped on decode
-        // either way), but beginCollection has no way to see "this element is required" — it isn't
-        // passed the containing class's descriptor/index, only the collection's own descriptor.
+    fun `an empty required map property round-trips without an empty-collection marker`() {
+        // Metadata.meta has no default, so it is required: a required element is always visited on
+        // decode regardless of presence (decodeElementIndex's isElementOptional bypass), so it needs
+        // no marker to disambiguate "present but empty" from "absent" the way an optional/nullable
+        // empty collection does. Encoding it should therefore produce no pairs at all.
         val original = Metadata(meta = emptyMap())
         val query = QueryParametersFormat.encodeToQueryString(original)
-        assertEquals("meta[]", query)
+        assertEquals("", query)
         assertEquals(original, QueryParametersFormat.decodeFromQueryString<Metadata>(query))
     }
 
@@ -641,6 +650,16 @@ class SerdeTest {
     fun `a map with mismatched key and value counts fails to decode`() {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.decodeFromQueryString<Metadata>("meta.key=a&meta.key=b&meta.value=1")
+        }
+    }
+
+    @Test
+    fun `decoding a map with both real values and its empty-collection marker throws`() {
+        // A hand-edited or otherwise malformed query string carrying both real entries and `meta[]`
+        // is self-contradictory: fail fast instead of silently preferring the real entries and
+        // ignoring the marker.
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Metadata>("meta.key=a&meta.value=1&meta[]")
         }
     }
 

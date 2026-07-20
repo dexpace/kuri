@@ -81,7 +81,7 @@ internal class QueryDecoder(
 
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder =
         when (descriptor.kind) {
-            StructureKind.LIST -> QueryListDecoder(params.getAll(currentName))
+            StructureKind.LIST -> listDecoderFor(currentName)
             StructureKind.MAP -> mapDecoderFor(currentName)
             else -> enterTopLevelStructure()
         }
@@ -94,22 +94,60 @@ internal class QueryDecoder(
     }
 
     /**
+     * Reads the repeated values captured for a list element under [name] into a [QueryListDecoder].
+     *
+     * @throws SerializationException when the query also carries [name]'s empty-collection marker
+     *   alongside those real values — see [rejectConflictingEmptyMarker].
+     */
+    private fun listDecoderFor(name: String): QueryListDecoder {
+        val values = params.getAll(name)
+        rejectConflictingEmptyMarker(name, hasRealValues = values.isNotEmpty())
+        return QueryListDecoder(values)
+    }
+
+    /**
      * Reads the `<name>.key` / `<name>.value` repeated parameters captured for a map element and
      * pairs them positionally into a [QueryMapDecoder].
      *
-     * @throws SerializationException when the two repeated sequences differ in length, which can
-     *   only happen from a hand-edited or otherwise malformed query string — [QueryMapEncoder]
-     *   always emits one key and one value per entry.
+     * @throws SerializationException when the query also carries [name]'s empty-collection marker
+     *   alongside real key/value pairs (see [rejectConflictingEmptyMarker]), or when the two repeated
+     *   sequences differ in length, which can only happen from a hand-edited or otherwise malformed
+     *   query string — [QueryMapEncoder] always emits one key and one value per entry.
      */
     private fun mapDecoderFor(name: String): QueryMapDecoder {
         val keys = params.getAll("$name.$MAP_KEY_SUFFIX")
         val values = params.getAll("$name.$MAP_VALUE_SUFFIX")
+        rejectConflictingEmptyMarker(name, hasRealValues = keys.isNotEmpty() || values.isNotEmpty())
         if (keys.size != values.size) {
             throw SerializationException(
                 "map '$name' has ${keys.size} key(s) but ${values.size} value(s)",
             )
         }
         return QueryMapDecoder(keys, values)
+    }
+
+    /**
+     * Rejects a self-contradictory query string that carries both real values for [name] (per
+     * [hasRealValues]) and [name]'s [emptyCollectionMarkerName] marker. That shape can only come
+     * from a hand-edited or otherwise foreign/malformed query string — [QueryEncoder] never emits
+     * both for the same property — so it is treated the same way this format treats any other
+     * malformed wire shape (an unparsable scalar, a key/value count mismatch): rejected outright
+     * rather than silently resolved by preferring the real values and ignoring the marker. Applies
+     * regardless of whether the element is required or optional, since this is a wire-shape validity
+     * problem rather than a presence/absence one.
+     *
+     * @throws SerializationException when both are present.
+     */
+    private fun rejectConflictingEmptyMarker(
+        name: String,
+        hasRealValues: Boolean,
+    ) {
+        val markerName = emptyCollectionMarkerName(name)
+        if (hasRealValues && params.has(markerName)) {
+            throw SerializationException(
+                "parameter '$name' has both a value and an empty-collection marker '$markerName'",
+            )
+        }
     }
 
     /**

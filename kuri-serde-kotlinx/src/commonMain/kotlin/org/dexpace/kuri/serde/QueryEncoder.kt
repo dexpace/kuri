@@ -35,6 +35,7 @@ internal class QueryEncoder : AbstractEncoder() {
 
     private val builder = QueryParametersBuilder()
     private var currentName: String? = null
+    private var currentIsOptional = false
     private var entered = false
 
     fun build(): QueryParameters = builder.build()
@@ -60,16 +61,20 @@ internal class QueryEncoder : AbstractEncoder() {
         index: Int,
     ): Boolean {
         currentName = descriptor.getElementName(index)
+        currentIsOptional = descriptor.isElementOptional(index)
         return true
     }
 
     /**
      * Starts a list or map property. A non-empty collection is carried entirely by its repeated
      * `name=value` pairs (list) or `name.key` / `name.value` pairs (map), so no marker is needed. An
-     * empty collection has no elements to repeat, which would otherwise make it indistinguishable on
-     * the wire from the property being absent altogether (see [emptyCollectionMarkerName]) — so this
-     * adds that marker up front, before [QueryListEncoder]/[QueryMapEncoder] contributes zero further
-     * pairs.
+     * empty *optional* collection has no elements to repeat, which would otherwise make it
+     * indistinguishable on the wire from the property being absent altogether (see
+     * [emptyCollectionMarkerName]) — so this adds that marker up front, before
+     * [QueryListEncoder]/[QueryMapEncoder] contributes zero further pairs. A *required* element is
+     * always visited on decode regardless of presence (see `QueryDecoder.decodeElementIndex`'s
+     * `isElementOptional` bypass), so an empty required collection needs no marker to disambiguate
+     * anything — emitting one there would only be redundant noise on the wire.
      */
     override fun beginCollection(
         descriptor: SerialDescriptor,
@@ -78,7 +83,9 @@ internal class QueryEncoder : AbstractEncoder() {
         val name = requireName()
         val isMap = descriptor.kind == StructureKind.MAP
         val isCollectionKind = isMap || descriptor.kind == StructureKind.LIST
-        if (collectionSize == 0 && isCollectionKind) builder.add(emptyCollectionMarkerName(name), null)
+        if (collectionSize == 0 && currentIsOptional && isCollectionKind) {
+            builder.add(emptyCollectionMarkerName(name), null)
+        }
         return if (isMap) QueryMapEncoder(name, builder) else QueryListEncoder(name, builder)
     }
 
