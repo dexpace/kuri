@@ -2,6 +2,8 @@ public final class org/dexpace/kuri/Iri {
 	public static final field INSTANCE Lorg/dexpace/kuri/Iri;
 	public static final fun toUnicode (Lorg/dexpace/kuri/Uri;)Ljava/lang/String;
 	public static final fun toUri (Ljava/lang/String;)Lorg/dexpace/kuri/error/ParseResult;
+	public static final fun toUri (Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;)Lorg/dexpace/kuri/error/ParseResult;
+	public static synthetic fun toUri$default (Ljava/lang/String;Lorg/dexpace/kuri/ParseOptions;ILjava/lang/Object;)Lorg/dexpace/kuri/error/ParseResult;
 }
 
 public final class org/dexpace/kuri/JavaNetInteropKt {
@@ -23,7 +25,7 @@ public final class org/dexpace/kuri/Kuri {
 public final class org/dexpace/kuri/ParseOptions {
 	public static final field Companion Lorg/dexpace/kuri/ParseOptions$Companion;
 	public static final field DEFAULT Lorg/dexpace/kuri/ParseOptions;
-	public synthetic fun <init> (ZILjava/lang/Integer;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (ZIIIILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun allowIpv6ZoneId ()Z
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getExpandedLength ()I
@@ -305,7 +307,7 @@ public final class org/dexpace/kuri/error/ResourceLimit : java/lang/Enum {
 	public static final field PathSegments Lorg/dexpace/kuri/error/ResourceLimit;
 	public static final field PortMax Lorg/dexpace/kuri/error/ResourceLimit;
 	public static final field ResolutionDepth Lorg/dexpace/kuri/error/ResourceLimit;
-	public final fun getDefaultMax ()J
+	public final fun getDefaultMax ()I
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lorg/dexpace/kuri/error/ResourceLimit;
 	public static fun values ()[Lorg/dexpace/kuri/error/ResourceLimit;
@@ -436,17 +438,17 @@ public final class org/dexpace/kuri/error/UriParseError$IriInvalidCodePoint : or
 }
 
 public final class org/dexpace/kuri/error/UriParseError$LimitExceeded : org/dexpace/kuri/error/UriParseError {
-	public fun <init> (Lorg/dexpace/kuri/error/ResourceLimit;JJ)V
+	public fun <init> (Lorg/dexpace/kuri/error/ResourceLimit;II)V
 	public final fun component1 ()Lorg/dexpace/kuri/error/ResourceLimit;
-	public final fun component2 ()J
-	public final fun component3 ()J
-	public final fun copy (Lorg/dexpace/kuri/error/ResourceLimit;JJ)Lorg/dexpace/kuri/error/UriParseError$LimitExceeded;
-	public static synthetic fun copy$default (Lorg/dexpace/kuri/error/UriParseError$LimitExceeded;Lorg/dexpace/kuri/error/ResourceLimit;JJILjava/lang/Object;)Lorg/dexpace/kuri/error/UriParseError$LimitExceeded;
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun copy (Lorg/dexpace/kuri/error/ResourceLimit;II)Lorg/dexpace/kuri/error/UriParseError$LimitExceeded;
+	public static synthetic fun copy$default (Lorg/dexpace/kuri/error/UriParseError$LimitExceeded;Lorg/dexpace/kuri/error/ResourceLimit;IIILjava/lang/Object;)Lorg/dexpace/kuri/error/UriParseError$LimitExceeded;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getLimit ()Lorg/dexpace/kuri/error/ResourceLimit;
-	public final fun getMax ()J
+	public final fun getMax ()I
 	public fun getMessage ()Ljava/lang/String;
-	public final fun getObserved ()J
+	public final fun getObserved ()I
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

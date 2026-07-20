@@ -6,6 +6,7 @@ package org.dexpace.kuri
 
 import org.dexpace.kuri.error.HostError
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.ResourceLimit
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.error.UriSyntaxException
 import org.dexpace.kuri.host.Host
@@ -254,7 +255,7 @@ class UriTest {
     }
 
     @Test
-    fun `a value parsed under raised limits round-trips through newBuilder, resolve, and relativize`() {
+    fun `a value parsed under raised limits round-trips through newBuilder and resolve and relativize`() {
         // ParseOptions is stored on the Uri, so every follow-on operation reuses the raised limits
         // rather than silently reverting to the default 64 KiB and rejecting the value it produced.
         val options =
@@ -291,6 +292,22 @@ class UriTest {
 
         val err = assertIs<ParseResult.Err>(result)
         assertIs<UriParseError.InputTooLong>(err.error)
+    }
+
+    @Test
+    fun `resolve applies the pathSegments limit to the resolved result`() {
+        // Each input is within the limit on its own -- the base path is 3 segments and the reference
+        // is 2 -- but the merged, resolved path is 4 segments, so the limit must be enforced on the
+        // resolve RESULT, not only on the parsed inputs.
+        val options = ParseOptions.Builder().pathSegments(3).build()
+        val base = Uri.parse("http://h/a/b/c", options).getOrThrow()
+
+        val result = base.resolve("d/e")
+
+        val err = assertIs<ParseResult.Err>(result)
+        val limit = assertIs<UriParseError.LimitExceeded>(err.error)
+        assertEquals(ResourceLimit.PathSegments, limit.limit)
+        assertEquals(3, limit.max)
     }
 
     @Test

@@ -33,7 +33,7 @@ final enum class org.dexpace.kuri.error/ResourceLimit : kotlin/Enum<org.dexpace.
     enum entry ResolutionDepth // org.dexpace.kuri.error/ResourceLimit.ResolutionDepth|null[0]
 
     final val defaultMax // org.dexpace.kuri.error/ResourceLimit.defaultMax|{}defaultMax[0]
-        final fun <get-defaultMax>(): kotlin/Long // org.dexpace.kuri.error/ResourceLimit.defaultMax.<get-defaultMax>|<get-defaultMax>(){}[0]
+        final fun <get-defaultMax>(): kotlin/Int // org.dexpace.kuri.error/ResourceLimit.defaultMax.<get-defaultMax>|<get-defaultMax>(){}[0]
     final val entries // org.dexpace.kuri.error/ResourceLimit.entries|#static{}entries[0]
         final fun <get-entries>(): kotlin.enums/EnumEntries<org.dexpace.kuri.error/ResourceLimit> // org.dexpace.kuri.error/ResourceLimit.entries.<get-entries>|<get-entries>#static(){}[0]
 
@@ -213,19 +213,19 @@ sealed interface org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.erro
     }
 
     final class LimitExceeded : org.dexpace.kuri.error/UriParseError { // org.dexpace.kuri.error/UriParseError.LimitExceeded|null[0]
-        constructor <init>(org.dexpace.kuri.error/ResourceLimit, kotlin/Long, kotlin/Long) // org.dexpace.kuri.error/UriParseError.LimitExceeded.<init>|<init>(org.dexpace.kuri.error.ResourceLimit;kotlin.Long;kotlin.Long){}[0]
+        constructor <init>(org.dexpace.kuri.error/ResourceLimit, kotlin/Int, kotlin/Int) // org.dexpace.kuri.error/UriParseError.LimitExceeded.<init>|<init>(org.dexpace.kuri.error.ResourceLimit;kotlin.Int;kotlin.Int){}[0]
 
         final val limit // org.dexpace.kuri.error/UriParseError.LimitExceeded.limit|{}limit[0]
             final fun <get-limit>(): org.dexpace.kuri.error/ResourceLimit // org.dexpace.kuri.error/UriParseError.LimitExceeded.limit.<get-limit>|<get-limit>(){}[0]
         final val max // org.dexpace.kuri.error/UriParseError.LimitExceeded.max|{}max[0]
-            final fun <get-max>(): kotlin/Long // org.dexpace.kuri.error/UriParseError.LimitExceeded.max.<get-max>|<get-max>(){}[0]
+            final fun <get-max>(): kotlin/Int // org.dexpace.kuri.error/UriParseError.LimitExceeded.max.<get-max>|<get-max>(){}[0]
         final val observed // org.dexpace.kuri.error/UriParseError.LimitExceeded.observed|{}observed[0]
-            final fun <get-observed>(): kotlin/Long // org.dexpace.kuri.error/UriParseError.LimitExceeded.observed.<get-observed>|<get-observed>(){}[0]
+            final fun <get-observed>(): kotlin/Int // org.dexpace.kuri.error/UriParseError.LimitExceeded.observed.<get-observed>|<get-observed>(){}[0]
 
         final fun component1(): org.dexpace.kuri.error/ResourceLimit // org.dexpace.kuri.error/UriParseError.LimitExceeded.component1|component1(){}[0]
-        final fun component2(): kotlin/Long // org.dexpace.kuri.error/UriParseError.LimitExceeded.component2|component2(){}[0]
-        final fun component3(): kotlin/Long // org.dexpace.kuri.error/UriParseError.LimitExceeded.component3|component3(){}[0]
-        final fun copy(org.dexpace.kuri.error/ResourceLimit = ..., kotlin/Long = ..., kotlin/Long = ...): org.dexpace.kuri.error/UriParseError.LimitExceeded // org.dexpace.kuri.error/UriParseError.LimitExceeded.copy|copy(org.dexpace.kuri.error.ResourceLimit;kotlin.Long;kotlin.Long){}[0]
+        final fun component2(): kotlin/Int // org.dexpace.kuri.error/UriParseError.LimitExceeded.component2|component2(){}[0]
+        final fun component3(): kotlin/Int // org.dexpace.kuri.error/UriParseError.LimitExceeded.component3|component3(){}[0]
+        final fun copy(org.dexpace.kuri.error/ResourceLimit = ..., kotlin/Int = ..., kotlin/Int = ...): org.dexpace.kuri.error/UriParseError.LimitExceeded // org.dexpace.kuri.error/UriParseError.LimitExceeded.copy|copy(org.dexpace.kuri.error.ResourceLimit;kotlin.Int;kotlin.Int){}[0]
         final fun equals(kotlin/Any?): kotlin/Boolean // org.dexpace.kuri.error/UriParseError.LimitExceeded.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // org.dexpace.kuri.error/UriParseError.LimitExceeded.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // org.dexpace.kuri.error/UriParseError.LimitExceeded.toString|toString(){}[0]
@@ -686,7 +686,7 @@ final object org.dexpace.kuri.scheme/Schemes { // org.dexpace.kuri.scheme/Scheme
 
 final object org.dexpace.kuri/Iri { // org.dexpace.kuri/Iri|null[0]
     final fun toUnicode(org.dexpace.kuri/Uri): kotlin/String // org.dexpace.kuri/Iri.toUnicode|toUnicode(org.dexpace.kuri.Uri){}[0]
-    final fun toUri(kotlin/String): org.dexpace.kuri.error/ParseResult<org.dexpace.kuri/Uri> // org.dexpace.kuri/Iri.toUri|toUri(kotlin.String){}[0]
+    final fun toUri(kotlin/String, org.dexpace.kuri/ParseOptions = ...): org.dexpace.kuri.error/ParseResult<org.dexpace.kuri/Uri> // org.dexpace.kuri/Iri.toUri|toUri(kotlin.String;org.dexpace.kuri.ParseOptions){}[0]
 }
 
 final object org.dexpace.kuri/Kuri { // org.dexpace.kuri/Kuri|null[0]

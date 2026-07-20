@@ -199,6 +199,19 @@ internal class ResolverTest {
     }
 
     @Test
+    fun `resolve accepts a scheme-bearing reference path exactly at the expandedLength bound`() {
+        // The reference carries its own scheme, so its path goes straight through
+        // boundedRemoveDotSegments; a path length exactly equal to expandedLength is accepted, since
+        // the gate rejects only length strictly greater than the bound (boundary success).
+        val options = ParseOptions.Builder().expandedLength(5).build()
+
+        val result = Resolver.resolve("http://a/b", "http:aaaaa", options)
+
+        val resolved = assertIs<ParseResult.Ok<String>>(result)
+        assertEquals("http:aaaaa", resolved.value)
+    }
+
+    @Test
     fun `resolve rejects a reference whose dot-segment collapse exceeds a lowered resolutionDepth`() {
         // A reference with many dot-segments takes many §5.2.4 iterations. A resolutionDepth(1)
         // override caps that work at one iteration, so the collapse is rejected with
