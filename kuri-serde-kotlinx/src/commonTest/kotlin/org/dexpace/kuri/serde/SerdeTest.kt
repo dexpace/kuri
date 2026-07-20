@@ -113,6 +113,11 @@ private data class NullableMetadata(
 )
 
 @Serializable
+private data class MapWithDefault(
+    val meta: Map<String, String> = mapOf("default" to "value"),
+)
+
+@Serializable
 private data class Holder(
     val friends: List<Contact>,
 )
@@ -577,9 +582,14 @@ class SerdeTest {
 
     @Test
     fun `an empty map property round-trips through the query format`() {
+        // Metadata.meta has no default, so beginCollection always runs for it regardless of value; the
+        // empty-collection marker is therefore present even though the property is required. That's
+        // harmless noise rather than a decode necessity (a required element is never skipped on decode
+        // either way), but beginCollection has no way to see "this element is required" — it isn't
+        // passed the containing class's descriptor/index, only the collection's own descriptor.
         val original = Metadata(meta = emptyMap())
         val query = QueryParametersFormat.encodeToQueryString(original)
-        assertEquals("", query)
+        assertEquals("meta[]", query)
         assertEquals(original, QueryParametersFormat.decodeFromQueryString<Metadata>(query))
     }
 
@@ -662,5 +672,32 @@ class SerdeTest {
     @Test
     fun `an absent nullable map property decodes to null`() {
         assertEquals(NullableMetadata(meta = null), QueryParametersFormat.decodeFromQueryString<NullableMetadata>(""))
+    }
+
+    @Test
+    fun `an explicitly-empty optional map round-trips to an empty map rather than the declared default`() {
+        // Regression for the map counterpart of #86 (see `an explicitly-empty list round-trips...`
+        // above): encoding MapWithDefault(meta = emptyMap()) against a non-empty default
+        // (mapOf("default" to "value")) must not be indistinguishable from meta being absent
+        // altogether. OptionalMetadata can't demonstrate this on its own since its declared default
+        // already is emptyMap(), so an explicitly-empty value there is (correctly) omitted entirely.
+        val encoded = QueryParametersFormat.encodeToQueryString(MapWithDefault(meta = emptyMap()))
+        assertEquals("meta[]", encoded)
+        assertEquals(
+            MapWithDefault(meta = emptyMap()),
+            QueryParametersFormat.decodeFromQueryString<MapWithDefault>(encoded),
+        )
+    }
+
+    @Test
+    fun `an explicitly-empty nullable map round-trips to an empty map rather than null`() {
+        // Regression for the map counterpart of #86: NullableSerializer calls decodeNotNullMark()
+        // before ever reaching QueryMapDecoder. With only the empty-collection marker on the wire (no
+        // meta.key/meta.value pairs), a marker-blind decodeNotNullMark() would short-circuit straight
+        // to null instead of decoding an empty map.
+        val encoded = QueryParametersFormat.encodeToQueryString(NullableMetadata(meta = emptyMap()))
+        assertEquals("meta[]", encoded)
+        val decoded = QueryParametersFormat.decodeFromQueryString<NullableMetadata>(encoded)
+        assertEquals(NullableMetadata(meta = emptyMap()), decoded)
     }
 }

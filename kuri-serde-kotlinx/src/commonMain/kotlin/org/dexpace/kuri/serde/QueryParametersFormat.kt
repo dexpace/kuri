@@ -41,10 +41,10 @@ import org.dexpace.kuri.query.QueryParameters
  * [kotlinx.serialization.SerializationException]. Nested `@Serializable` objects (including as a map's
  * value type) are rejected — model them at the call site or bind them separately.
  *
- * A list property that differs from its default by being explicitly empty has no element pairs to
- * repeat, which would otherwise read back as simply absent and fall to the default instead of decoding
- * to an empty list. That case is carried by a `name[]` marker pair (e.g. `tags[]`) instead — see
- * `emptyListMarkerName` — so "present but empty" and "absent" stay distinguishable on the wire.
+ * A list or map property that differs from its default by being explicitly empty has no element pairs to
+ * repeat, which would otherwise read back as simply absent and fall to the default instead of decoding to
+ * an empty collection. That case is carried by a `name[]` marker pair (e.g. `tags[]`) instead — see
+ * `emptyCollectionMarkerName` — so "present but empty" and "absent" stay distinguishable on the wire.
  */
 public object QueryParametersFormat {
     /**

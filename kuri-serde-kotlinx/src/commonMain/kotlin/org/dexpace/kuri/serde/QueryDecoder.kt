@@ -21,9 +21,9 @@ import org.dexpace.kuri.query.QueryParameters
  * (so their declared default applies); an absent required element fails. A list element delegates to
  * [QueryListDecoder], reading every repeated value for the name via `getAll`. A map element delegates
  * to [QueryMapDecoder], reading its `<name>.key` / `<name>.value` repeated parameters and zipping them
- * back into entries positionally — the mirror of how [QueryMapEncoder] emits them. A list property
- * present but empty carries no repeated values of its own, so it is recognized instead via
- * [emptyListMarkerName] — see [isPresentEmptyList].
+ * back into entries positionally — the mirror of how [QueryMapEncoder] emits them. A list or map
+ * property present but explicitly empty carries none of those repeated values, so it is recognized
+ * instead via [emptyCollectionMarkerName] — see [hasValueFor].
  */
 @Suppress("TooManyFunctions") // One decode method per primitive kind, mandated by the AbstractDecoder contract.
 internal class QueryDecoder(
@@ -34,19 +34,19 @@ internal class QueryDecoder(
     private var index = -1
     private var currentName: String = ""
     private var currentIsMap = false
-    private var currentIsEmptyListMarker: Boolean = false
+    private var currentIsList = false
     private var entered = false
 
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         while (++index < descriptor.elementsCount) {
             val name = descriptor.getElementName(index)
-            val isMap = descriptor.getElementDescriptor(index).kind == StructureKind.MAP
-            val emptyListMarker = isPresentEmptyList(descriptor, index, name)
-            val present = hasValueFor(name, isMap) || emptyListMarker
-            if (present || !descriptor.isElementOptional(index)) {
+            val kind = descriptor.getElementDescriptor(index).kind
+            val isMap = kind == StructureKind.MAP
+            val isList = kind == StructureKind.LIST
+            if (hasValueFor(name, isMap, isList) || !descriptor.isElementOptional(index)) {
                 currentName = name
                 currentIsMap = isMap
-                currentIsEmptyListMarker = emptyListMarker && !hasValueFor(name, isMap)
+                currentIsList = isList
                 return index
             }
         }
@@ -54,38 +54,30 @@ internal class QueryDecoder(
     }
 
     /**
-     * Whether the query carries a value for an element. A map element is stored under its derived
-     * `<name>.key` / `<name>.value` parameters, never under the bare property name, so its presence
-     * has to be probed there — otherwise an *optional* or *nullable* map whose data is actually
-     * present would be wrongly treated as absent and fall back to its default (or to `null`).
+     * Whether the query carries a value for an element.
+     *
+     * A map element is stored under its derived `<name>.key` / `<name>.value` parameters, never under
+     * the bare property name, so its presence has to be probed there — otherwise an *optional* or
+     * *nullable* map whose data is actually present would be wrongly treated as absent and fall back to
+     * its default (or to `null`). A list or map property present but explicitly empty carries none of
+     * those repeated pairs either, which is indistinguishable from the property being entirely absent —
+     * that case is instead signaled by [emptyCollectionMarkerName]. Scoped to list/map elements only, so
+     * a foreign query string that happens to contain a `<scalarField>[]` pair cannot spuriously mark a
+     * scalar property present.
      */
     private fun hasValueFor(
         name: String,
         isMap: Boolean,
+        isList: Boolean,
     ): Boolean =
-        if (isMap) {
-            params.has("$name.$MAP_KEY_SUFFIX") || params.has("$name.$MAP_VALUE_SUFFIX")
-        } else {
-            params.has(name)
+        when {
+            isMap ->
+                params.has("$name.$MAP_KEY_SUFFIX") ||
+                    params.has("$name.$MAP_VALUE_SUFFIX") ||
+                    params.has(emptyCollectionMarkerName(name))
+            isList -> params.has(name) || params.has(emptyCollectionMarkerName(name))
+            else -> params.has(name)
         }
-
-    /**
-     * True when the element at [index] is a list property and its [emptyListMarkerName] marker is
-     * present, i.e. it was explicitly encoded as present-but-empty rather than omitted. Scoped to list
-     * elements only, so a foreign query string that happens to contain a `<scalarField>[]` pair cannot
-     * spuriously mark a scalar property present. [decodeElementIndex] also uses this (via
-     * [currentIsEmptyListMarker]) to make [decodeNotNullMark] report a marker-only match as not-null, so
-     * a nullable list property reaches [beginStructure] instead of `NullableSerializer` short-circuiting
-     * it to `null`.
-     */
-    private fun isPresentEmptyList(
-        descriptor: SerialDescriptor,
-        index: Int,
-        name: String,
-    ): Boolean {
-        val isList = descriptor.getElementDescriptor(index).kind == StructureKind.LIST
-        return isList && params.has(emptyListMarkerName(name))
-    }
 
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder =
         when (descriptor.kind) {
@@ -121,13 +113,13 @@ internal class QueryDecoder(
     }
 
     /**
-     * `false` only when the current element is genuinely absent. A list property present solely via its
-     * [emptyListMarkerName] marker (no `name=value` pairs of its own) still counts as not-null: without
-     * this, `kotlinx.serialization`'s `NullableSerializer` would short-circuit a nullable list straight
-     * to `null` on seeing `params.has(currentName)` fail, never reaching [beginStructure] to decode the
-     * empty [QueryListDecoder] the marker represents.
+     * `false` only when the current element is genuinely absent. A list or map property present solely
+     * via its [emptyCollectionMarkerName] marker (no repeated pairs of its own) still counts as
+     * not-null: without this, `kotlinx.serialization`'s `NullableSerializer` would short-circuit a
+     * nullable collection straight to `null` on seeing no repeated pairs, never reaching [beginStructure]
+     * to decode the empty [QueryListDecoder]/[QueryMapDecoder] the marker represents.
      */
-    override fun decodeNotNullMark(): Boolean = hasValueFor(currentName, currentIsMap) || currentIsEmptyListMarker
+    override fun decodeNotNullMark(): Boolean = hasValueFor(currentName, currentIsMap, currentIsList)
 
     override fun decodeString(): String =
         params[currentName] ?: throw SerializationException("missing query parameter '$currentName'")

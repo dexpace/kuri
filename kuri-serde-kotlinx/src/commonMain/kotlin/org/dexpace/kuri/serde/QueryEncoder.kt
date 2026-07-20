@@ -64,25 +64,22 @@ internal class QueryEncoder : AbstractEncoder() {
     }
 
     /**
-     * Starts a list or map property. A non-empty list is carried entirely by its repeated `name=value`
-     * pairs, so no marker is needed. An empty list has no elements to repeat, which would otherwise
-     * make it indistinguishable on the wire from the property being absent altogether (see
-     * [emptyListMarkerName]) — so this adds that marker up front, before [QueryListEncoder] contributes
-     * zero further pairs. Scoped to [StructureKind.LIST] to mirror the decode side's
-     * `isPresentEmptyList`, which only recognizes the marker for list elements; an empty map currently
-     * encodes to zero pairs with no marker of its own.
+     * Starts a list or map property. A non-empty collection is carried entirely by its repeated
+     * `name=value` pairs (list) or `name.key` / `name.value` pairs (map), so no marker is needed. An
+     * empty collection has no elements to repeat, which would otherwise make it indistinguishable on
+     * the wire from the property being absent altogether (see [emptyCollectionMarkerName]) — so this
+     * adds that marker up front, before [QueryListEncoder]/[QueryMapEncoder] contributes zero further
+     * pairs.
      */
     override fun beginCollection(
         descriptor: SerialDescriptor,
         collectionSize: Int,
     ): CompositeEncoder {
         val name = requireName()
-        if (collectionSize == 0 && descriptor.kind == StructureKind.LIST) builder.add(emptyListMarkerName(name), null)
-        return if (descriptor.kind == StructureKind.MAP) {
-            QueryMapEncoder(name, builder)
-        } else {
-            QueryListEncoder(name, builder)
-        }
+        val isMap = descriptor.kind == StructureKind.MAP
+        val isCollectionKind = isMap || descriptor.kind == StructureKind.LIST
+        if (collectionSize == 0 && isCollectionKind) builder.add(emptyCollectionMarkerName(name), null)
+        return if (isMap) QueryMapEncoder(name, builder) else QueryListEncoder(name, builder)
     }
 
     override fun encodeValue(value: Any) {
@@ -186,25 +183,26 @@ internal class QueryMapEncoder(
 private const val NESTED_OBJECTS_REJECTED_MESSAGE: String = "nested objects are not supported by the query format"
 
 /**
- * Suffix marking the wire-level "present but empty" sentinel for a list property, appended to its
- * declared name (e.g. `tags` -> `tags[]`). `[`/`]` are never percent-encoded by the query name encode
- * set, so the marker stays literal in the encoded string. A Kotlin property name cannot itself contain
- * `[`/`]`, so the marker cannot collide with a declared property's default serial name; a property whose
- * serial name is deliberately overridden via `@SerialName` to end in `[]` could still collide — not a
- * supported/tested shape.
+ * Suffix marking the wire-level "present but empty" sentinel for a list or map property, appended
+ * to its declared name (e.g. `tags` -> `tags[]`). `[`/`]` are never percent-encoded by the query name
+ * encode set, so the marker stays literal in the encoded string. A Kotlin property name cannot itself
+ * contain `[`/`]`, so the marker cannot collide with a declared property's default serial name; a
+ * property whose serial name is deliberately overridden via `@SerialName` to end in `[]` could still
+ * collide — not a supported/tested shape.
  */
-private const val EMPTY_LIST_MARKER_SUFFIX: String = "[]"
+private const val EMPTY_COLLECTION_MARKER_SUFFIX: String = "[]"
 
 /**
- * The wire name of the empty-collection marker for a list property declared as [name].
+ * The wire name of the empty-collection marker for a list or map property declared as [name].
  *
- * A list property's non-empty state is fully carried by its repeated `name=value` pairs; an empty list
- * has none, which is indistinguishable from the property being entirely absent (and would therefore
- * fall back to its declared default on decode instead of decoding to an empty list). [QueryEncoder]
- * emits this marker as a bare (no `=`) pair when a list encodes to zero elements, and [QueryDecoder]
+ * A list property's non-empty state is fully carried by its repeated `name=value` pairs, and a map
+ * property's by its repeated `name.key` / `name.value` pairs; an empty collection has none of those,
+ * which is indistinguishable from the property being entirely absent (and would therefore fall back
+ * to its declared default on decode instead of decoding to an empty collection). [QueryEncoder] emits
+ * this marker as a bare (no `=`) pair when a list or map encodes to zero elements, and [QueryDecoder]
  * treats its presence as "present, zero elements" without contributing any element itself.
  *
- * @param name the list property's declared (unsuffixed) name.
- * @return [name] with [EMPTY_LIST_MARKER_SUFFIX] appended.
+ * @param name the property's declared (unsuffixed) name.
+ * @return [name] with [EMPTY_COLLECTION_MARKER_SUFFIX] appended.
  */
-internal fun emptyListMarkerName(name: String): String = name + EMPTY_LIST_MARKER_SUFFIX
+internal fun emptyCollectionMarkerName(name: String): String = name + EMPTY_COLLECTION_MARKER_SUFFIX
