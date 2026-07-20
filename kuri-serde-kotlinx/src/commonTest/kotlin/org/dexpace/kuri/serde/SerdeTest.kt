@@ -14,6 +14,7 @@ import org.dexpace.kuri.Url
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 @Serializable
 private data class Config(
@@ -110,6 +111,16 @@ private data class AllMapValues(
 @Serializable
 private data class NestedMapValue(
     val entries: Map<String, Search>,
+)
+
+@Serializable
+private data class NestedMapList(
+    val entries: Map<String, List<Int>>,
+)
+
+@Serializable
+private data class NullableMapValues(
+    val scores: Map<String, Int?>,
 )
 
 @Serializable
@@ -710,6 +721,29 @@ class SerdeTest {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.encodeToQueryParameters(NestedMapValue(mapOf("x" to Search(q = "y"))))
         }
+    }
+
+    @Test
+    fun `decoding a list nested as a map value is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<NestedMapList>("entries.key=a&entries.value=1")
+        }
+    }
+
+    @Test
+    fun `encoding a list nested as a map value is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.encodeToQueryParameters(NestedMapList(entries = mapOf("a" to listOf(1, 2))))
+        }
+    }
+
+    @Test
+    fun `encoding a null map value throws instead of desyncing the key-value pairing`() {
+        val exception =
+            assertFailsWith<SerializationException> {
+                QueryParametersFormat.encodeToQueryParameters(NullableMapValues(scores = mapOf("a" to null)))
+            }
+        assertTrue(exception.message.orEmpty().contains("null map"))
     }
 
     @Test

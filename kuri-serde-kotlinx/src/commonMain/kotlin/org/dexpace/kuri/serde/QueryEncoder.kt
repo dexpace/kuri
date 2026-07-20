@@ -182,6 +182,17 @@ internal class QueryMapEncoder(
         builder.add(paramName(), enumDescriptor.getElementName(index))
     }
 
+    /**
+     * A `null` map key or value is out of this format's scope (see [QueryParametersFormat]'s scope
+     * KDoc): writing only the key (or only the value) of an entry would desync the "one key per one
+     * value" invariant [QueryMapDecoder] depends on, and that mismatch would only surface later as a
+     * confusing key/value-count-mismatch decode failure that gives no hint the real cause was a null
+     * entry here. Failing fast with a dedicated message covers both cases, since [encodeElement]'s
+     * parity check applies identically to a null key and a null value.
+     */
+    override fun encodeNull(): Unit =
+        throw SerializationException("the query format does not support a null map key or value")
+
     /** The parameter name for the element currently being encoded: `<name>.key` or `<name>.value`. */
     private fun paramName(): String = "$name.${if (encodingKey) MAP_KEY_SUFFIX else MAP_VALUE_SUFFIX}"
 }

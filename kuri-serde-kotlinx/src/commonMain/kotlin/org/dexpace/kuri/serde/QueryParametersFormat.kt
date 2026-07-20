@@ -39,7 +39,10 @@ import org.dexpace.kuri.query.QueryParameters
  * default, and — the other direction — a property still at its declared default is omitted from the
  * encoded output, keeping the query string minimal; an absent required property raises a
  * [kotlinx.serialization.SerializationException]. Nested `@Serializable` objects (including as a map's
- * value type) are rejected — model them at the call site or bind them separately.
+ * value type) are rejected — model them at the call site or bind them separately. A map's key or value
+ * type must not itself be nullable: encoding a `null` map key or value raises a
+ * [kotlinx.serialization.SerializationException] instead of writing a lone key or value that would desync
+ * the "one key per one value" invariant a map's `<name>.key` / `<name>.value` wire shape depends on.
  *
  * A list or map property that differs from its default by being explicitly empty has no element pairs to
  * repeat, which would otherwise read back as simply absent and fall to the default instead of decoding to
