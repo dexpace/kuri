@@ -122,6 +122,63 @@ Url.parseOrThrow("HTTP://Example.com/a/../b").toString()   // "http://example.co
 The guide covers the full comparison, the accessor differences to watch for, IPv6 zone identifiers, and IRI
 conversion: [Two models, one engine](docs/GUIDE.md#two-models-one-engine).
 
+## Highlights
+
+**Parse, edit, rebuild.** Values are immutable; a builder pre-filled by `newBuilder()` round-trips cleanly.
+
+```kotlin
+Url.parseOrThrow("https://example.com/v1/users?page=1")
+    .newBuilder()
+    .addPathSegment("42")
+    .setQueryParameter("page", "2")
+    .build()                                  // https://example.com/v1/users/42?page=2
+```
+
+**A Kotlin DSL when you want it.** The optional `ktx` package adds operators and builder lambdas — `/`
+appends a path segment, `+` adds a query parameter.
+
+```kotlin
+val api = Url.parseOrThrow("https://api.example.com/v1")
+api / "users" / "42" + ("page" to "2")        // https://api.example.com/v1/users/42?page=2
+```
+
+**RFC 6570 URI templates.** Parse a template once, expand it against variables — with the full operator and
+modifier set.
+
+```kotlin
+UriTemplate.parse("https://api.example.com/users/{id}{?fields*}")
+    .expand(mapOf("id" to 42, "fields" to listOf("name", "email")))
+// https://api.example.com/users/42?fields=name&fields=email
+```
+
+**Annotation binding** — with `kuri-bind`, turn a request object straight into a URL.
+
+```kotlin
+@Url @PathTemplate("/repos/{owner}/{repo}/issues")
+data class Issues(
+    @Path("owner")  val owner: String,
+    @Path("repo")   val repo: String,
+    @Query("state") val state: String,
+)
+
+val apiBase = Url.parseOrThrow("https://api.example.com")
+KuriBind.bindInto(apiBase.newBuilder(), Issues("dexpace", "kuri", "open")).build()
+// https://api.example.com/repos/dexpace/kuri/issues?state=open
+```
+
+**Type-safe query strings** — with `kuri-serde-kotlinx`, decode a query into a `@Serializable` class and back.
+
+```kotlin
+@Serializable
+data class Search(val q: String, val page: Int = 1, val tags: List<String> = emptyList())
+
+QueryParametersFormat.decodeFromQueryString<Search>("q=kotlin&page=2&tags=a&tags=b")
+// Search(q = "kotlin", page = 2, tags = ["a", "b"])
+```
+
+There's more — non-throwing `ParseResult`, `URLSearchParams`-style query editing, IDNA hosts, `redact()` for
+safe logging, and configurable resource limits. The [user guide](docs/GUIDE.md) has it all.
+
 ## Documentation
 
 - **[User guide](docs/GUIDE.md)** — the complete usage reference:
