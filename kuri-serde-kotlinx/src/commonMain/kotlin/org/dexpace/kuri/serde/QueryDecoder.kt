@@ -157,7 +157,7 @@ internal class QueryListDecoder(
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = enumIndex(enumDescriptor, next())
 }
 
-/** Shared by [QueryDecoder.beginStructure] and [QueryListDecoder.beginStructure]'s nesting rejection. */
+/** The nesting-rejection message shared by [QueryDecoder.beginStructure] and [QueryListDecoder.beginStructure]. */
 private const val NESTED_OBJECTS_REJECTED_MESSAGE: String = "nested objects are not supported by the query format"
 
 /** Converts [raw] with [convert], failing with a [SerializationException] describing [kind] and [context] on error. */

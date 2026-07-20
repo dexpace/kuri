@@ -312,6 +312,14 @@ class SerdeTest {
     }
 
     @Test
+    fun `a required nullable property present but empty round-trips through encode and decode`() {
+        val original = Profile(handle = "ada", bio = "")
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("handle=ada&bio=", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<Profile>(query))
+    }
+
+    @Test
     fun `decoding an unrecognized enum value throws`() {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.decodeFromQueryString<Search>("q=x&sort=SIDEWAYS")

@@ -118,7 +118,7 @@ internal class QueryListEncoder(
     }
 }
 
-/** Shared by [QueryEncoder.beginStructure] and [QueryListEncoder.beginStructure]'s nesting rejection. */
+/** The nesting-rejection message shared by [QueryEncoder.beginStructure] and [QueryListEncoder.beginStructure]. */
 private const val NESTED_OBJECTS_REJECTED_MESSAGE: String = "nested objects are not supported by the query format"
 
 /**
