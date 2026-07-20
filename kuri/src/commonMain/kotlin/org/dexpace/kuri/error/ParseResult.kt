@@ -146,6 +146,20 @@ public fun <T, R> ParseResult<T>.map(transform: (T) -> R): ParseResult<R> =
     }
 
 /**
+ * Chains a further fallible step onto the success value through [transform], threading an
+ * [ParseResult.Err] unchanged — the monadic bind [map] cannot express when the next step is itself
+ * a [ParseResult] (it would otherwise nest as `ParseResult<ParseResult<R>>`).
+ *
+ * @param transform applied only to the value of an [ParseResult.Ok]; its own failure is forwarded.
+ * @return [transform]'s result for an [ParseResult.Ok], or this [ParseResult.Err] unchanged.
+ */
+internal fun <T, R> ParseResult<T>.flatMap(transform: (T) -> ParseResult<R>): ParseResult<R> =
+    when (this) {
+        is ParseResult.Ok -> transform(value)
+        is ParseResult.Err -> this
+    }
+
+/**
  * Folds this result into a single [R] by applying [onOk] to a success or [onErr] to a failure.
  *
  * Exactly one of the two functions is invoked, so the call is total over the sealed [ParseResult]

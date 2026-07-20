@@ -213,6 +213,24 @@ internal class ResolverTest {
     }
 
     @Test
+    fun `resolve returns InputTooLong instead of throwing when an empty-path reference keeps an over-long base path`() {
+        // The reference has an empty path, so §5.2.2 keeps the base path verbatim. base.path is
+        // bounded by inputLength, not expandedLength; with a lowered expandedLength the kept base
+        // path exceeds it, and the resolver must fold that to a ParseResult.Err rather than let
+        // recompose's length assertion throw. Covers the empty-path, query-only, and fragment-only
+        // reference forms that all take the empty-path branch.
+        val opts = ParseOptions.Builder().expandedLength(1_000).build()
+        val base = "https://example.com/" + "a".repeat(2_000)
+
+        for (reference in listOf("", "?q", "#f")) {
+            val result = Resolver.resolve(base, reference, opts)
+
+            val err = assertIs<ParseResult.Err>(result, "resolve(base, \"$reference\")")
+            assertIs<UriParseError.InputTooLong>(err.error, "resolve(base, \"$reference\")")
+        }
+    }
+
+    @Test
     fun `resolve merges a relative reference onto an empty-authority base path`() {
         // base authority present with an empty base path: §5.2.3 prepends a single "/" to the ref.
         val result = Resolver.resolve("http://a", "g").getOrThrow()

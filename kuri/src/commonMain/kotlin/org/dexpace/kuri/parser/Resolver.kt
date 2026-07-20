@@ -9,6 +9,7 @@ import org.dexpace.kuri.ZONE_ID_ENABLED
 import org.dexpace.kuri.carriesZoneId
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
+import org.dexpace.kuri.error.flatMap
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.serializeHost
 import org.dexpace.kuri.scheme.Scheme
@@ -146,7 +147,7 @@ internal object Resolver {
         val options = structuredOptions(base, reference)
         return when (val target = transformReferences(partsOf(base), partsOf(reference), options)) {
             is ParseResult.Err -> target
-            is ParseResult.Ok -> UriParser.parse(recompose(target.value, options), options)
+            is ParseResult.Ok -> UriParser.parse(recompose(target.value), options)
         }
     }
 
@@ -211,10 +212,30 @@ internal object Resolver {
         options: ParseOptions,
     ): ParseResult<Pair<String, String?>> =
         when {
-            ref.path.isEmpty() -> ParseResult.Ok(Pair(base.path, ref.query ?: base.query))
+            ref.path.isEmpty() -> keepBasePath(base, ref, options)
             ref.path.startsWith(SLASH) ->
                 boundedRemoveDotSegments(ref.path, options).map { Pair(it, ref.query) }
-            else -> mergedPath(base, ref.path, options).map { Pair(removeDotSegments(it, options), ref.query) }
+            else ->
+                mergedPath(base, ref.path, options)
+                    .flatMap { boundedRemoveDotSegments(it, options) }
+                    .map { Pair(it, ref.query) }
+        }
+
+    /**
+     * §5.2.2 empty-reference-path case: the base path is kept verbatim. [base.path] is bounded only
+     * by the parser's [ParseOptions.inputLength], so with a lowered [ParseOptions.expandedLength] the
+     * kept path can exceed the recompose bound; guarding it here folds that to a returning
+     * [UriParseError.InputTooLong] ([ERR-31]) rather than letting [recompose]'s invariant throw.
+     */
+    private fun keepBasePath(
+        base: UriParts,
+        ref: UriParts,
+        options: ParseOptions,
+    ): ParseResult<Pair<String, String?>> =
+        if (base.path.length <= options.expandedLength) {
+            ParseResult.Ok(Pair(base.path, ref.query ?: base.query))
+        } else {
+            ParseResult.Err(UriParseError.InputTooLong(base.path.length, options.expandedLength))
         }
 
     // --- §5.2.3 Merge Paths -----------------------------------------------------------------------
@@ -331,17 +352,14 @@ internal object Resolver {
     /**
      * §5.3: assembles the five resolved components back into a URI-reference string, applying the
      * §3.3 `/.`-guard so an authority-less path produced by dot-segment removal never re-parses as
-     * fabricating an authority (RFC 3986 §3.3/§5.2.2). The length invariant is a postcondition, not a
-     * precondition: by the time [transformReferences] returns [ParseResult.Ok], its path is already
-     * known to fit (the one path that can exceed [ParseOptions.expandedLength] — [merge]'s
-     * concatenation — is caught earlier, in [mergedPath]), so a violation here means this class's own
-     * invariant broke.
+     * fabricating an authority (RFC 3986 §3.3/§5.2.2).
+     *
+     * Total by construction: every path reaching here has already been bounded by a returning call
+     * site ([keepBasePath] for the empty-reference case, [boundedRemoveDotSegments] for every
+     * dot-segment-collapsed path, [mergedPath] for the §5.2.3 concatenation), so no length check is
+     * needed and this can never throw on a length overflow.
      */
-    private fun recompose(
-        parts: UriParts,
-        options: ParseOptions,
-    ): String {
-        check(parts.path.length <= options.expandedLength) { "resolved path exceeds the supported length bound" }
+    private fun recompose(parts: UriParts): String {
         val sb = StringBuilder()
         if (parts.scheme != null) sb.append(parts.scheme).append(':')
         if (parts.authority != null) sb.append(DOUBLE_SLASH).append(parts.authority)
@@ -379,7 +397,7 @@ internal object Resolver {
         require(baseParts.scheme != null) { "an absolute base must carry a scheme" }
         return transformReferences(baseParts, splitUri(reference), options).map { target ->
             check(target.scheme != null) { "the resolved target must be absolute" }
-            recompose(target, options)
+            recompose(target)
         }
     }
 

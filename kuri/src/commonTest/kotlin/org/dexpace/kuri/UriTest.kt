@@ -253,6 +253,20 @@ class UriTest {
     }
 
     @Test
+    fun `resolve returns an error instead of throwing for an empty reference against an over-long base path`() {
+        // Public-API mirror of the Resolver empty-path guard: a fragment-only reference keeps the
+        // base path, which under a lowered expandedLength exceeds the bound. Uri.resolve must report
+        // ParseResult.Err(InputTooLong), never let an IllegalStateException escape.
+        val opts = ParseOptions.Builder().expandedLength(1_000).build()
+        val base = Uri.parse("https://example.com/" + "a".repeat(2_000), opts).getOrThrow()
+
+        val result = base.resolve("#section", opts)
+
+        val err = assertIs<ParseResult.Err>(result)
+        assertIs<UriParseError.InputTooLong>(err.error)
+    }
+
+    @Test
     fun `normalizedEquals folds case-only differences`() {
         assertTrue(parseOk("HTTP://H/").normalizedEquals(parseOk("http://h/")))
     }
