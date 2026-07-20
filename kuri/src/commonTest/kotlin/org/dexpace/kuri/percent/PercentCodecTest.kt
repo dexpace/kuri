@@ -14,6 +14,7 @@ import kotlin.test.assertEquals
 class PercentCodecTest {
     private val nul = Char(0x00).toString()
     private val replacement = Char(0xFFFD).toString()
+    private val aWithDiaeresis = Char(0x00E4).toString()
 
     @Test
     fun `decode reproduces the single octet of each triplet per CONF-87`() {
@@ -200,5 +201,47 @@ class PercentCodecTest {
         // Literal "aa" between two runs bounds each run; both snowmen decode on their own.
         val snowman = Char(0x2603).toString()
         assertEquals(snowman + "aa" + snowman, PercentCodec.decode("%E2%98%83aa%E2%98%83"))
+    }
+
+    @Test
+    fun `decodeTrackingSource attributes a second triplet run to its own start rather than the first run's end`() {
+        // Two non-adjacent runs decode to the same character; the second run's source offset (7) must
+        // come from where it starts, not leak forward from the first run's end (6).
+        val result = PercentCodec.decodeTrackingSource("%C3%A4x%C3%A4.^")
+        assertEquals(aWithDiaeresis + "x" + aWithDiaeresis + ".^", result.text)
+        assertEquals(0, result.sourceOffsetOf(0))
+        assertEquals(6, result.sourceOffsetOf(1))
+        assertEquals(7, result.sourceOffsetOf(2))
+        assertEquals(13, result.sourceOffsetOf(3))
+        assertEquals(14, result.sourceOffsetOf(4))
+    }
+
+    @Test
+    fun `decodeTrackingSource shares one source offset across both units of a decoded surrogate pair`() {
+        // U+1F600 decodes from a four-octet run to a surrogate pair; both UTF-16 units must carry the
+        // run's start offset (0), and the literal tail keeps its own per-unit offsets.
+        val emoji = charArrayOf(Char(0xD83D), Char(0xDE00)).concatToString() // U+1F600
+        val result = PercentCodec.decodeTrackingSource("%F0%9F%98%80^b")
+        assertEquals(emoji + "^b", result.text)
+        assertEquals(0, result.sourceOffsetOf(0))
+        assertEquals(0, result.sourceOffsetOf(1))
+        assertEquals(12, result.sourceOffsetOf(2))
+        assertEquals(13, result.sourceOffsetOf(3))
+    }
+
+    @Test
+    fun `decodeTrackingSource maps an all-literal input to each unit's own position`() {
+        val result = PercentCodec.decodeTrackingSource("abc")
+        assertEquals("abc", result.text)
+        assertEquals(0, result.sourceOffsetOf(0))
+        assertEquals(1, result.sourceOffsetOf(1))
+        assertEquals(2, result.sourceOffsetOf(2))
+    }
+
+    @Test
+    fun `decodeTrackingSource maps an input that is entirely one triplet run to its run start`() {
+        val result = PercentCodec.decodeTrackingSource("%C3%A4")
+        assertEquals(aWithDiaeresis, result.text)
+        assertEquals(0, result.sourceOffsetOf(0))
     }
 }

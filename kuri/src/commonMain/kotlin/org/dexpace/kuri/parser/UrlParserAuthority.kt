@@ -203,15 +203,42 @@ internal object UrlParserAuthority {
         hostSlice: String,
         idx: Int,
         isColon: Boolean,
-    ): UrlTransition =
-        when (val host = resolveHost(state, hostSlice)) {
-            is ParseResult.Err -> UrlTransition.Fail(host.error)
+    ): UrlTransition {
+        // The host slice begins at the current pointer (the Ok branch only advances it afterwards),
+        // so this is the host's start offset used to rebase a host-relative error to full input.
+        val hostStart = state.pos
+        return when (val host = resolveHost(state, hostSlice)) {
+            is ParseResult.Err -> UrlTransition.Fail(rebaseHostError(host.error, hostStart))
             is ParseResult.Ok -> {
                 state.host = host.value
                 state.pos = idx
                 hostTransition(state, isColon)
             }
         }
+    }
+
+    /**
+     * Rebases a host-pipeline error's offset from host-slice-relative to full-input coordinates
+     * ([HOST-37]), the `Url`-profile counterpart of the same rebase `UriParser` applies.
+     *
+     * [UrlHostParser] reports [UriParseError.ForbiddenHostCodePoint.at] relative to the host
+     * substring it was handed — for an opaque host that offset is already in the raw (pre-decode)
+     * slice, and for a special domain [UrlHostParser] has mapped it back through IDNA and
+     * percent-decoding to the same raw-slice coordinates — so adding [hostStart], the slice's own
+     * offset in the pre-processed input, recovers the position [UriParseError.ForbiddenHostCodePoint]
+     * documents. Every other host error carries no offset ([UriParseError.EmptyHost]) or the
+     * offending text verbatim ([UriParseError.InvalidHost]), so no other variant is adjusted.
+     */
+    private fun rebaseHostError(
+        error: UriParseError,
+        hostStart: Int,
+    ): UriParseError {
+        require(hostStart >= 0) { "host start offset must not be negative: $hostStart" }
+        return when (error) {
+            is UriParseError.ForbiddenHostCodePoint -> error.copy(at = hostStart + error.at)
+            else -> error
+        }
+    }
 
     /** Post-host transition, honouring a HOST/HOSTNAME override ([SET-*]; WHATWG host state). */
     private fun hostTransition(
@@ -487,8 +514,11 @@ internal object UrlParserAuthority {
         state: UrlParserState,
         buffer: String,
         end: Int,
-    ): UrlTransition =
-        when (
+    ): UrlTransition {
+        // The file-host buffer begins at the current pointer (the Ok branch only advances it
+        // afterwards), so this is the host start offset used to rebase a host-relative error.
+        val hostStart = state.pos
+        return when (
             val host =
                 UrlHostParser.parse(
                     buffer,
@@ -496,11 +526,12 @@ internal object UrlParserAuthority {
                     isFile = true,
                 )
         ) {
-            is ParseResult.Err -> UrlTransition.Fail(host.error)
+            is ParseResult.Err -> UrlTransition.Fail(rebaseHostError(host.error, hostStart))
             is ParseResult.Ok -> {
                 state.host = if (host.value == Host.RegName(LOCALHOST)) Host.Empty else host.value
                 state.pos = end
                 fileHostTransition(state)
             }
         }
+    }
 }

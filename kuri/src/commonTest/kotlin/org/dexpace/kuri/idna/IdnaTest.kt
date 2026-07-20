@@ -145,6 +145,36 @@ class IdnaTest {
         assertEquals(expected, Idna.domainToAscii(label))
     }
 
+    @Test
+    fun `traceMapping records a Mapped unit whose multi-character replacement mixes a forbidden and safe code point`() {
+        // U+2100 ACCOUNT OF maps to the three-character replacement "a/c"; the '/' inside it is a
+        // forbidden-domain code point ([HOST-37]) that a caller must be able to locate via this single
+        // MappedUnit, not via the two safe ASCII letters that precede it.
+        val accountOf = Char(0x2100)
+        val units = Idna.traceMapping("ab" + accountOf)
+        val expected =
+            listOf(
+                MappedUnit("a", sourceIndex = 0, sourceCodePoint = 'a'.code),
+                MappedUnit("b", sourceIndex = 1, sourceCodePoint = 'b'.code),
+                MappedUnit("a/c", sourceIndex = 2, sourceCodePoint = accountOf.code),
+            )
+        assertEquals(expected, units)
+    }
+
+    @Test
+    fun `traceMapping advances the offset by two UTF-16 units past a supplementary code point`() {
+        // U+10000 is a Valid supplementary code point kept verbatim as a surrogate pair (charCount ==
+        // 2); the following '^' must be attributed to offset 2, not 1.
+        val astral = charArrayOf(Char(0xD800), Char(0xDC00)).concatToString() // U+10000
+        val units = Idna.traceMapping(astral + "^")
+        val expected =
+            listOf(
+                MappedUnit(astral, sourceIndex = 0, sourceCodePoint = 0x10000),
+                MappedUnit("^", sourceIndex = 2, sourceCodePoint = '^'.code),
+            )
+        assertEquals(expected, units)
+    }
+
     private companion object {
         // (0x10000 - 0x80) * (length + 1) exceeds Int.MAX_VALUE, forcing the Punycode overflow path.
         private const val OVERFLOW_LABEL_LENGTH: Int = 34_000
