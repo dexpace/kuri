@@ -68,7 +68,7 @@ internal class QueryDecoder(
 
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder {
         if (descriptor.kind == StructureKind.LIST) return QueryListDecoder(params.getAll(currentName))
-        if (entered) throw SerializationException("nested objects are not supported by the query format")
+        if (entered) throw SerializationException(NESTED_OBJECTS_REJECTED_MESSAGE)
         entered = true
         return this
     }
@@ -126,6 +126,14 @@ internal class QueryListDecoder(
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int =
         if (cursor < values.size) cursor else CompositeDecoder.DECODE_DONE
 
+    /**
+     * A list element is always a scalar/enum in this format's scope, so any call here — a nested
+     * `@Serializable` object or a nested list — is out of scope and rejected, mirroring
+     * [QueryDecoder.beginStructure]'s top-level guard.
+     */
+    override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder =
+        throw SerializationException(NESTED_OBJECTS_REJECTED_MESSAGE)
+
     private fun next(): String = values[cursor++] ?: throw SerializationException("null list element")
 
     override fun decodeString(): String = next()
@@ -148,6 +156,9 @@ internal class QueryListDecoder(
 
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = enumIndex(enumDescriptor, next())
 }
+
+/** The nesting-rejection message shared by [QueryDecoder.beginStructure] and [QueryListDecoder.beginStructure]. */
+private const val NESTED_OBJECTS_REJECTED_MESSAGE: String = "nested objects are not supported by the query format"
 
 /** Converts [raw] with [convert], failing with a [SerializationException] describing [kind] and [context] on error. */
 private fun <T : Any> scalarOrFail(

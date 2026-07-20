@@ -32,7 +32,7 @@ internal class QueryEncoder : AbstractEncoder() {
     fun build(): QueryParameters = builder.build()
 
     override fun beginStructure(descriptor: SerialDescriptor): CompositeEncoder {
-        if (entered) throw SerializationException("nested objects are not supported by the query format")
+        if (entered) throw SerializationException(NESTED_OBJECTS_REJECTED_MESSAGE)
         entered = true
         return this
     }
@@ -98,6 +98,14 @@ internal class QueryListEncoder(
 ) : AbstractEncoder() {
     override val serializersModule: SerializersModule = EmptySerializersModule()
 
+    /**
+     * A list element is always a scalar/enum in this format's scope, so any call here — a nested
+     * `@Serializable` object or a nested list — is out of scope and rejected, mirroring
+     * [QueryEncoder.beginStructure]'s top-level guard.
+     */
+    override fun beginStructure(descriptor: SerialDescriptor): CompositeEncoder =
+        throw SerializationException(NESTED_OBJECTS_REJECTED_MESSAGE)
+
     override fun encodeValue(value: Any) {
         builder.add(name, value.toString())
     }
@@ -109,6 +117,9 @@ internal class QueryListEncoder(
         builder.add(name, enumDescriptor.getElementName(index))
     }
 }
+
+/** The nesting-rejection message shared by [QueryEncoder.beginStructure] and [QueryListEncoder.beginStructure]. */
+private const val NESTED_OBJECTS_REJECTED_MESSAGE: String = "nested objects are not supported by the query format"
 
 /**
  * Suffix marking the wire-level "present but empty" sentinel for a list property, appended to its
