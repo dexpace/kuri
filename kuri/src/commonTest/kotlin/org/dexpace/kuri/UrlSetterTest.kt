@@ -108,6 +108,20 @@ class UrlSetterTest {
     }
 
     @Test
+    fun `withSearch records invalid-url-unit for an out-of-repertoire code point`() {
+        val withRawSpace = url("http://h/").withSearch("?a b")
+        assertEquals("http://h/?a%20b", withRawSpace.href)
+        assertTrue(withRawSpace.validationErrors().any { it.kind == ValidationErrorKind.INVALID_URL_UNIT })
+    }
+
+    @Test
+    fun `withPathname records invalid-url-unit for an out-of-repertoire code point`() {
+        val withRawSpace = url("http://h/").withPathname("/a b")
+        assertEquals("http://h/a%20b", withRawSpace.href)
+        assertTrue(withRawSpace.validationErrors().any { it.kind == ValidationErrorKind.INVALID_URL_UNIT })
+    }
+
+    @Test
     fun `withHash sets the fragment and strips a leading hash`() {
         assertEquals("http://h/#frag", url("http://h/").withHash("#frag").href)
     }
