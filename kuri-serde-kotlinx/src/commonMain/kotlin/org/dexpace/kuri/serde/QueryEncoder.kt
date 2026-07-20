@@ -35,7 +35,7 @@ internal class QueryEncoder : AbstractEncoder() {
 
     private val builder = QueryParametersBuilder()
     private var currentName: String? = null
-    private var currentIsOptional = false
+    private var currentNeedsEmptyMarker = false
     private var entered = false
 
     fun build(): QueryParameters = builder.build()
@@ -61,20 +61,29 @@ internal class QueryEncoder : AbstractEncoder() {
         index: Int,
     ): Boolean {
         currentName = descriptor.getElementName(index)
-        currentIsOptional = descriptor.isElementOptional(index)
+        currentNeedsEmptyMarker =
+            descriptor.isElementOptional(index) ||
+            descriptor.getElementDescriptor(index).isNullable
         return true
     }
 
     /**
      * Starts a list or map property. A non-empty collection is carried entirely by its repeated
      * `name=value` pairs (list) or `name.key` / `name.value` pairs (map), so no marker is needed. An
-     * empty *optional* collection has no elements to repeat, which would otherwise make it
-     * indistinguishable on the wire from the property being absent altogether (see
-     * [emptyCollectionMarkerName]) — so this adds that marker up front, before
-     * [QueryListEncoder]/[QueryMapEncoder] contributes zero further pairs. A *required* element is
-     * always visited on decode regardless of presence (see `QueryDecoder.decodeElementIndex`'s
-     * `isElementOptional` bypass), so an empty required collection needs no marker to disambiguate
-     * anything — emitting one there would only be redundant noise on the wire.
+     * empty collection has no elements to repeat, which would otherwise make it indistinguishable on
+     * the wire from the property being absent altogether (see [emptyCollectionMarkerName]) — so this
+     * adds that marker up front, before [QueryListEncoder]/[QueryMapEncoder] contributes zero further
+     * pairs, whenever that ambiguity is actually possible:
+     * - an *optional* element (has a default) falls back to that default when absent
+     *   (`QueryDecoder.decodeElementIndex`'s `isElementOptional` bypass), so an empty value that
+     *   differs from a non-empty default would silently read back as the default without the marker.
+     * - a *nullable* element — optional or not — decodes via `decodeNotNullMark()`, which reads
+     *   presence off the very same wire signals `beginCollection` would otherwise leave empty, so an
+     *   empty collection there is indistinguishable from `null` without the marker.
+     *
+     * Only a *required, non-nullable* element is exempt: it is always visited on decode regardless of
+     * presence and never funnels through `decodeNotNullMark()`, so an empty collection there needs no
+     * marker to disambiguate anything — emitting one would only be redundant noise on the wire.
      */
     override fun beginCollection(
         descriptor: SerialDescriptor,
@@ -83,7 +92,7 @@ internal class QueryEncoder : AbstractEncoder() {
         val name = requireName()
         val isMap = descriptor.kind == StructureKind.MAP
         val isCollectionKind = isMap || descriptor.kind == StructureKind.LIST
-        if (collectionSize == 0 && currentIsOptional && isCollectionKind) {
+        if (collectionSize == 0 && currentNeedsEmptyMarker && isCollectionKind) {
             builder.add(emptyCollectionMarkerName(name), null)
         }
         return if (isMap) QueryMapEncoder(name, builder) else QueryListEncoder(name, builder)

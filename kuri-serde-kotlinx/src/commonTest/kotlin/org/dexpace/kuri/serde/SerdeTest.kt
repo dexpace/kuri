@@ -174,6 +174,20 @@ private data class NullableTags(
     val tags: List<String>? = null,
 )
 
+// No default: unlike NullableTags/NullableMetadata above, these are *required* (decodeElementIndex's
+// isElementOptional bypass never skips them) but still nullable, so decodeNotNullMark() — not the
+// optional-element bypass — is what would mistake an empty collection for null without the marker.
+
+@Serializable
+private data class RequiredNullableTags(
+    val tags: List<String>?,
+)
+
+@Serializable
+private data class RequiredNullableMeta(
+    val meta: Map<String, String>?,
+)
+
 class SerdeTest {
     @Test
     fun `url serializes as its canonical string in json`() {
@@ -336,6 +350,25 @@ class SerdeTest {
         assertEquals("tags[]", encoded)
         val decoded = QueryParametersFormat.decodeFromQueryString<NullableTags>(encoded)
         assertEquals(NullableTags(tags = emptyList()), decoded)
+    }
+
+    @Test
+    fun `an explicitly-empty required-nullable list round-trips to an empty list rather than null`() {
+        // RequiredNullableTags.tags has no default, so it is required: decodeElementIndex always
+        // visits it regardless of presence. But it is still nullable, so decodeNotNullMark() — called
+        // by NullableSerializer before ever reaching QueryListDecoder — is what needs the marker here,
+        // not the optional-element bypass. Gating the marker on "optional only" would make this encode
+        // indistinguishably from RequiredNullableTags(tags = null).
+        val encoded = QueryParametersFormat.encodeToQueryString(RequiredNullableTags(tags = emptyList()))
+        assertEquals("tags[]", encoded)
+        val decoded = QueryParametersFormat.decodeFromQueryString<RequiredNullableTags>(encoded)
+        assertEquals(RequiredNullableTags(tags = emptyList()), decoded)
+    }
+
+    @Test
+    fun `a required-nullable list absent from the query decodes to null`() {
+        val decoded = QueryParametersFormat.decodeFromQueryString<RequiredNullableTags>("")
+        assertEquals(RequiredNullableTags(tags = null), decoded)
     }
 
     @Test
@@ -797,5 +830,24 @@ class SerdeTest {
         assertEquals("meta[]", encoded)
         val decoded = QueryParametersFormat.decodeFromQueryString<NullableMetadata>(encoded)
         assertEquals(NullableMetadata(meta = emptyMap()), decoded)
+    }
+
+    @Test
+    fun `an explicitly-empty required-nullable map round-trips to an empty map rather than null`() {
+        // RequiredNullableMeta.meta has no default, so it is required: decodeElementIndex always
+        // visits it regardless of presence. But it is still nullable, so decodeNotNullMark() — called
+        // by NullableSerializer before ever reaching QueryMapDecoder — is what needs the marker here,
+        // not the optional-element bypass. Gating the marker on "optional only" would make this encode
+        // indistinguishably from RequiredNullableMeta(meta = null).
+        val encoded = QueryParametersFormat.encodeToQueryString(RequiredNullableMeta(meta = emptyMap()))
+        assertEquals("meta[]", encoded)
+        val decoded = QueryParametersFormat.decodeFromQueryString<RequiredNullableMeta>(encoded)
+        assertEquals(RequiredNullableMeta(meta = emptyMap()), decoded)
+    }
+
+    @Test
+    fun `a required-nullable map absent from the query decodes to null`() {
+        val decoded = QueryParametersFormat.decodeFromQueryString<RequiredNullableMeta>("")
+        assertEquals(RequiredNullableMeta(meta = null), decoded)
     }
 }
