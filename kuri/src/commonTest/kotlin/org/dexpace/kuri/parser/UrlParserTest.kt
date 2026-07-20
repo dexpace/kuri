@@ -351,6 +351,14 @@ class UrlParserTest {
     }
 
     @Test
+    fun `records an invalid-URL-unit error for a raw space in the fragment`() {
+        val url = parsed("http://h/#a b")
+
+        val unitErrors = url.validationErrors.filter { it.kind == ValidationErrorKind.INVALID_URL_UNIT }
+        assertEquals(listOf(11), unitErrors.map { it.at })
+    }
+
+    @Test
     fun `records an invalid-URL-unit error for a raw space in the opaque path`() {
         val url = parsed("mailto:a b")
 
