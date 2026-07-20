@@ -5,22 +5,22 @@
 package org.dexpace.kuri.error
 
 /** [ResourceLimit.InputLength]/[ResourceLimit.ExpandedLength] default: 64 KiB of UTF-16 code units. */
-private const val DEFAULT_INPUT_LENGTH: Long = 65_536L
+private const val DEFAULT_INPUT_LENGTH: Int = 65_536
 
 /** [ResourceLimit.PathSegments] default: a generous cap no well-formed path approaches. */
-private const val DEFAULT_PATH_SEGMENTS: Long = 10_000L
+private const val DEFAULT_PATH_SEGMENTS: Int = 10_000
 
 /** [ResourceLimit.HostLabelLength]: the RFC 5890 domain-label maximum; never configurable. */
-private const val DNS_LABEL_LENGTH: Long = 63L
+private const val DNS_LABEL_LENGTH: Int = 63
 
 /** [ResourceLimit.HostTotalLength]: the DNS total-host-length maximum. */
-private const val DNS_HOST_LENGTH: Long = 253L
+private const val DNS_HOST_LENGTH: Int = 253
 
 /** [ResourceLimit.PortMax]: the largest value a 16-bit TCP/UDP port can hold. */
-private const val MAX_PORT_VALUE: Long = 65_535L
+private const val MAX_PORT_VALUE: Int = 65_535
 
 /** [ResourceLimit.ResolutionDepth] default: bound on reference-resolution / dot-segment work. */
-private const val DEFAULT_RESOLUTION_DEPTH: Long = 256L
+private const val DEFAULT_RESOLUTION_DEPTH: Int = 256
 
 /**
  * The canonical registry of bounded resource dimensions the parser enforces (SPEC §12.6).
@@ -47,7 +47,7 @@ private const val DEFAULT_RESOLUTION_DEPTH: Long = 256L
  *   override it.
  */
 public enum class ResourceLimit(
-    public val defaultMax: Long,
+    public val defaultMax: Int,
 ) {
     /**
      * The maximum length, in UTF-16 code units, of the original input string, checked before

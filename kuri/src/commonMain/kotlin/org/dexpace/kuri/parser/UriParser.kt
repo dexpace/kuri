@@ -409,8 +409,7 @@ internal object UriParser {
         val observed = path.segments.size
         check(observed >= 0) { "a segment list can never report a negative size: $observed" }
         return if (observed > options.pathSegments) {
-            val max = options.pathSegments.toLong()
-            ParseResult.Err(UriParseError.LimitExceeded(ResourceLimit.PathSegments, observed.toLong(), max))
+            ParseResult.Err(UriParseError.LimitExceeded(ResourceLimit.PathSegments, observed, options.pathSegments))
         } else {
             ParseResult.Ok(assemble(sections, authority, path))
         }

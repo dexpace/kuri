@@ -154,8 +154,8 @@ public sealed interface UriParseError {
      */
     public data class LimitExceeded(
         public val limit: ResourceLimit,
-        public val observed: Long,
-        public val max: Long,
+        public val observed: Int,
+        public val max: Int,
     ) : UriParseError
 
     /**

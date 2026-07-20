@@ -46,15 +46,20 @@ internal fun roundTripOptions(host: Host?): ParseOptions =
  * Java) or take the off value from [DEFAULT]; [newBuilder] produces a pre-filled builder for a
  * modified copy.
  *
- * The chosen options are not stored on the produced [Uri]. Any feature they unlock (an RFC 6874
- * zone id, for instance) is preserved verbatim in the value's canonical serialization, so a value
- * produced under one set of options must be re-parsed under the **same** options to round trip
- * through `toString` then `parse`.
+ * Every field is independent: setting one on the [Builder] never shifts another. In particular
+ * [expandedLength] does not track [inputLength] — each defaults to its own [ResourceLimit] bound and
+ * is carried and compared on its own.
+ *
+ * The chosen options are stored on the produced [Uri] so it round-trips through
+ * `newBuilder`/`resolve`/`relativize` under the limits it was parsed with, but they are **not** part
+ * of the value's identity: two `Uri` values compare equal on their serialization alone, regardless
+ * of the options that produced them. Any feature the options unlock (an RFC 6874 zone id, for
+ * instance) is also preserved verbatim in the value's canonical serialization.
  */
 public class ParseOptions private constructor(
     allowIpv6ZoneId: Boolean,
     inputLength: Int,
-    expandedLengthOverride: Int?,
+    expandedLength: Int,
     pathSegments: Int,
     resolutionDepth: Int,
 ) {
@@ -80,18 +85,16 @@ public class ParseOptions private constructor(
      */
     public val inputLength: Int = inputLength
 
-    /** The raw override this value was built with, or `null` if [expandedLength] tracks [inputLength]. */
-    internal val expandedLengthOverride: Int? = expandedLengthOverride
-
     /**
      * The maximum accepted length, in UTF-16 code units, of text derived from the input by an
-     * operation that can lengthen it — percent-decoding, IDNA expansion, or §5.2.3 path merging
-     * during reference resolution ([ResourceLimit.ExpandedLength], SPEC §12.6, [ERR-31]).
+     * operation that can lengthen it — IDNA ToASCII/ToUnicode expansion, IRI→URI percent-encoding,
+     * or §5.2.3 path merging during reference resolution ([ResourceLimit.ExpandedLength], SPEC §12.6,
+     * [ERR-31]).
      *
-     * Defaults to this [ParseOptions]'s effective [inputLength] unless set explicitly on the
-     * [Builder]. Exceeding it is reported as `UriParseError.InputTooLong`.
+     * An independent field defaulting to [ResourceLimit.ExpandedLength]'s documented bound; it does
+     * **not** track [inputLength]. Exceeding it is reported as `UriParseError.InputTooLong`.
      */
-    public val expandedLength: Int = expandedLengthOverride ?: inputLength
+    public val expandedLength: Int = expandedLength
 
     /**
      * The maximum number of `/`-delimited segments a parsed path may carry
@@ -163,10 +166,10 @@ public class ParseOptions private constructor(
      */
     public class Builder {
         private var allowIpv6ZoneId: Boolean = false
-        private var inputLength: Int = ResourceLimit.InputLength.defaultMax.toInt()
-        private var expandedLength: Int? = null
-        private var pathSegments: Int = ResourceLimit.PathSegments.defaultMax.toInt()
-        private var resolutionDepth: Int = ResourceLimit.ResolutionDepth.defaultMax.toInt()
+        private var inputLength: Int = ResourceLimit.InputLength.defaultMax
+        private var expandedLength: Int = ResourceLimit.ExpandedLength.defaultMax
+        private var pathSegments: Int = ResourceLimit.PathSegments.defaultMax
+        private var resolutionDepth: Int = ResourceLimit.ResolutionDepth.defaultMax
 
         /** Creates a builder with every option at its default value ([ResourceLimit] for the limits). */
         public constructor()
@@ -175,7 +178,7 @@ public class ParseOptions private constructor(
         internal constructor(source: ParseOptions) {
             allowIpv6ZoneId = source.allowIpv6ZoneId
             inputLength = source.inputLength
-            expandedLength = source.expandedLengthOverride
+            expandedLength = source.expandedLength
             pathSegments = source.pathSegments
             resolutionDepth = source.resolutionDepth
         }
@@ -206,8 +209,8 @@ public class ParseOptions private constructor(
         }
 
         /**
-         * Overrides [ResourceLimit.ExpandedLength] for this parse; when not called, it tracks
-         * whatever [inputLength] resolves to (default or overridden).
+         * Overrides [ResourceLimit.ExpandedLength] for this parse; defaults to its documented bound
+         * (64 KiB) when not called, independently of [inputLength].
          *
          * @param max the maximum accepted post-expansion length, in UTF-16 code units.
          * @return this builder, for chaining.

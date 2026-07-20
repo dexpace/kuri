@@ -158,8 +158,8 @@ internal class UriParseErrorTest {
         val error = assertIs<ParseResult.Err>(result).error
         val limitExceeded = assertIs<UriParseError.LimitExceeded>(error)
         assertEquals(ResourceLimit.PathSegments, limitExceeded.limit)
-        assertEquals(3L, limitExceeded.observed)
-        assertEquals(2L, limitExceeded.max)
+        assertEquals(3, limitExceeded.observed)
+        assertEquals(2, limitExceeded.max)
     }
 
     @Test

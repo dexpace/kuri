@@ -26,10 +26,16 @@ class ParseOptionsTest {
 
     @Test
     fun `DEFAULT applies every ResourceLimit's documented default`() {
-        assertEquals(ResourceLimit.InputLength.defaultMax.toInt(), ParseOptions.DEFAULT.inputLength)
-        assertEquals(ResourceLimit.ExpandedLength.defaultMax.toInt(), ParseOptions.DEFAULT.expandedLength)
-        assertEquals(ResourceLimit.PathSegments.defaultMax.toInt(), ParseOptions.DEFAULT.pathSegments)
-        assertEquals(ResourceLimit.ResolutionDepth.defaultMax.toInt(), ParseOptions.DEFAULT.resolutionDepth)
+        assertEquals(ResourceLimit.InputLength.defaultMax, ParseOptions.DEFAULT.inputLength)
+        assertEquals(ResourceLimit.ExpandedLength.defaultMax, ParseOptions.DEFAULT.expandedLength)
+        assertEquals(ResourceLimit.PathSegments.defaultMax, ParseOptions.DEFAULT.pathSegments)
+        assertEquals(ResourceLimit.ResolutionDepth.defaultMax, ParseOptions.DEFAULT.resolutionDepth)
+    }
+
+    @Test
+    fun `DEFAULT equals a freshly built options`() {
+        assertEquals(ParseOptions.DEFAULT, ParseOptions.Builder().build())
+        assertEquals(ParseOptions.DEFAULT.hashCode(), ParseOptions.Builder().build().hashCode())
     }
 
     @Test
@@ -53,10 +59,11 @@ class ParseOptionsTest {
     }
 
     @Test
-    fun `expandedLength tracks an overridden inputLength when not itself overridden`() {
+    fun `expandedLength stays at its own default when only inputLength is overridden`() {
         val options = ParseOptions.Builder().inputLength(100).build()
 
-        assertEquals(100, options.expandedLength)
+        assertEquals(100, options.inputLength)
+        assertEquals(ResourceLimit.ExpandedLength.defaultMax, options.expandedLength)
     }
 
     @Test
@@ -147,26 +154,25 @@ class ParseOptionsTest {
     }
 
     @Test
-    fun `expandedLength keeps tracking inputLength after a newBuilder round-trip that only overrides inputLength`() {
-        val tracking =
-            ParseOptions.DEFAULT
+    fun `an options carries no hidden state beyond its five fields`() {
+        // Regression guard against the dropped expandedLength-tracking: a value built directly is
+        // indistinguishable from one reached through a different newBuilder history, as long as the
+        // five observable fields end up equal. Overriding inputLength must not silently drag
+        // expandedLength along, so both of these keep expandedLength at its own default.
+        val direct = ParseOptions.Builder().inputLength(100).build()
+        val viaHistory =
+            ParseOptions
+                .Builder()
+                .inputLength(500)
+                .build()
                 .newBuilder()
                 .inputLength(100)
                 .build()
 
-        assertEquals(100, tracking.expandedLength)
-
-        val frozen =
-            ParseOptions
-                .Builder()
-                .inputLength(50)
-                .expandedLength(200)
-                .build()
-                .newBuilder()
-                .inputLength(999)
-                .build()
-
-        assertEquals(200, frozen.expandedLength)
+        assertEquals(direct, viaHistory)
+        assertEquals(direct.hashCode(), viaHistory.hashCode())
+        assertEquals(ResourceLimit.ExpandedLength.defaultMax, direct.expandedLength)
+        assertEquals(ResourceLimit.ExpandedLength.defaultMax, viaHistory.expandedLength)
     }
 
     @Test
