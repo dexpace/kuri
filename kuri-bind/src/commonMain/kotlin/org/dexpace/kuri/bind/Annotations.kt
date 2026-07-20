@@ -44,6 +44,14 @@ public annotation class Uri
  * A leading `/` is decorative for an authority-less URI: with no authority a segment path roots only
  * under one, so `@PathTemplate("/a/{id}")` renders as `a/7` (not `/a/7`); once an authority is present
  * the path re-roots regardless.
+ *
+ * Matching `net/http.ServeMux`, every hole must occupy a whole `/`-delimited path segment: literal text
+ * sharing a segment with a hole is rejected at parse time rather than silently re-segmented when the path
+ * is composed, so `@PathTemplate("/reports/{id}.json")` and `@PathTemplate("v{version}")` both throw
+ * [KuriBindException] instead of building `/reports/5/.json` or `v/2`. Two holes must also be separated
+ * by a `/`, so `@PathTemplate("{a}{b}")` throws [KuriBindException] too: the composer emits one full
+ * segment per hole, so adjacent holes can never merge into the single shared segment their spelling
+ * implies.
  */
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.CLASS)

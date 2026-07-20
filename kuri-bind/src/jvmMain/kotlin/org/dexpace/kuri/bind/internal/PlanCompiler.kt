@@ -15,7 +15,6 @@ import org.dexpace.kuri.bind.QueryMap
 import org.dexpace.kuri.bind.Scheme
 import org.dexpace.kuri.bind.UserInfo
 import org.dexpace.kuri.bind.Username
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 import kotlin.reflect.full.findAnnotation
 import org.dexpace.kuri.bind.PathTemplate as PathTemplateAnn
@@ -30,13 +29,19 @@ import org.dexpace.kuri.host.Host as KuriHost
  * The cache is profile-agnostic: a plan describes both a `Url` and a `Uri` binding, since the profile
  * only narrows which components project later. One [PlanCompiler] therefore backs every bind through
  * both profiles, and a type compiled for a URL bind is reused verbatim for a URI bind. Concurrent binds
- * are safe: [planFor] memoizes through a [ConcurrentHashMap], and a rare double-compile under a race is
+ * are safe: [planFor] memoizes through a [BoundedCache], and a rare double-compile under a race is
  * harmless because compilation is pure and both racers produce an equal plan.
+ *
+ * The cache is capped at [maxCacheSize] entries (default [DEFAULT_MAX_PLAN_CACHE_SIZE]) rather than
+ * growing without bound: a `KClass` key strongly retains its `ClassLoader`, so an unbounded cache would
+ * pin every distinct type ever compiled — including nested value types routed through
+ * `runtimeValueIsBindable` — for the life of the process (kuri-bind#89).
  */
 internal class PlanCompiler(
     private val scanner: MemberScanner,
+    maxCacheSize: Int = DEFAULT_MAX_PLAN_CACHE_SIZE,
 ) {
-    private val plans = ConcurrentHashMap<KClass<*>, TypePlan>()
+    private val plans = BoundedCache<KClass<*>, TypePlan>(maxCacheSize)
 
     /**
      * The compiled plan for [type], computing and caching it on first use (compile-once per type).
@@ -303,3 +308,8 @@ private fun isCollectionType(type: KClass<*>): Boolean =
     Iterable::class.java.isAssignableFrom(type.java) || type.java.isArray
 
 private fun isMapType(type: KClass<*>): Boolean = Map::class.java.isAssignableFrom(type.java)
+
+// Bounds the plan cache well above the number of distinct root/nested types any realistic caller binds
+// in one process, while still capping the ClassLoader retention an unbounded cache would otherwise cause
+// (kuri-bind#89). A caller with a genuinely larger working set only pays for a cache miss, not a leak.
+private const val DEFAULT_MAX_PLAN_CACHE_SIZE = 2048

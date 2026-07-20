@@ -248,7 +248,12 @@ private fun requireRoot(
             Profile.URI -> target::class.hasAnnotation<UriMarker>()
         }
     if (!marked) {
-        throw KuriBindException("root ${target::class.simpleName} is not annotated @${profile.name.lowercase()}")
+        val markerName =
+            when (profile) {
+                Profile.URL -> "Url"
+                Profile.URI -> "Uri"
+            }
+        throw KuriBindException("root ${target::class.simpleName} is not annotated @$markerName")
     }
 }
 

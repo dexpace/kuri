@@ -4,8 +4,9 @@ name: CodeQL
 # plus CodeQL's reliability/maintainability queries — the query suite is set to security-and-quality
 # in .github/codeql/codeql-config.yml. CodeQL only extracts JVM-bytecode-producing compilation; in
 # this KMP project all production code is common + jvm Kotlin (the whole parsing engine lives in
-# commonMain, and the reflective binder in kuri-bind's jvmMain), which the JVM target compiles, so a
-# single traced JVM build covers commonMain + jvmMain — the entire security-relevant surface. Only
+# commonMain, and the reflective binder in kuri-bind's jvmMain — kuri-serde-kotlinx's jvm {} target is
+# covered the same way), which the JVM target compiles, so a single traced JVM build covers
+# commonMain + jvmMain across all three modules — the entire security-relevant surface. Only
 # platform-specific `actual` bodies (in jsMain/nativeMain/wasmJsMain, if any) fall outside this JVM
 # extraction; CodeQL can't extract those targets, and they are covered by the CI test matrix instead.
 
@@ -71,7 +72,8 @@ jobs:
           config-file: ./.github/codeql/codeql-config.yml
 
       # Manual traced build instead of autobuild: compile only the JVM target of every module
-      # (compileKotlinJvm runs in :kuri and :kuri-bind). Autobuild would run the whole KMP build,
+      # (compileKotlinJvm is unqualified, so Gradle runs it in every module with a jvm {} target:
+      # :kuri, :kuri-bind, and :kuri-serde-kotlinx). Autobuild would run the whole KMP build,
       # including the native/JS/Wasm targets CodeQL can't extract. --no-build-cache forces a real
       # compile (the project has the Gradle build cache on, which would otherwise serve cached
       # classes and leave the tracer nothing to see); --no-daemon keeps compilation in the traced
