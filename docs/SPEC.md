@@ -2,7 +2,7 @@
 
 **Version 0.1.0-draft · 2026-06-28 · Layers 1–2**
 
-`kuri` is a Kotlin/JVM library for parsing, building, manipulating, and serializing Uniform Resource Identifiers (URIs) and Uniform Resource Locators (URLs). It is built on the observation that the two dominant identifier specifications — the IETF RFC 3986/3987 generic-URI syntax and the WHATWG URL Living Standard — describe overlapping but materially incompatible models, and that no single parsing posture can satisfy both audiences. `kuri` therefore exposes two public value types, `Uri` and `Url`, backed by one shared parsing engine configured by a `ParseProfile`. This document is the normative specification for that engine and its public surface: it defines the character repertoire, percent-encoding matrix, host pipeline, parsing algorithm, reference-resolution rules, query model, normalization and equivalence semantics, and error model that a conforming implementation MUST exhibit, for each profile, together with the conformance classes and test corpora against which conformance is measured.
+`kuri` is a Kotlin Multiplatform library for parsing, building, manipulating, and serializing Uniform Resource Identifiers (URIs) and Uniform Resource Locators (URLs). It is built on the observation that the two dominant identifier specifications — the IETF RFC 3986/3987 generic-URI syntax and the WHATWG URL Living Standard — describe overlapping but materially incompatible models, and that no single parsing posture can satisfy both audiences. `kuri` therefore exposes two public value types, `Uri` and `Url`, backed by one shared parsing engine configured by a `ParseProfile`. This document is the normative specification for that engine and its public surface: it defines the character repertoire, percent-encoding matrix, host pipeline, parsing algorithm, reference-resolution rules, query model, normalization and equivalence semantics, and error model that a conforming implementation MUST exhibit, for each profile, together with the conformance classes and test corpora against which conformance is measured.
 
 ---
 
@@ -479,18 +479,18 @@ Host is modelled as a sealed type so that the host *kind* is part of the type, e
 
 ```kotlin
 public sealed interface Host {
-    public data class RegName(val ascii: String) : Host
+    public data class RegName(val value: String) : Host
     public data class Ipv4(val value: Int) : Host
     public data class Ipv6(val pieces: List<Int>, val zoneId: String?) : Host
-    public data class IpFuture(val raw: String) : Host
+    public data class IpFuture(val value: String) : Host
     public data object Empty : Host
-    public data class Opaque(val encoded: String) : Host
+    public data class Opaque(val value: String) : Host
 }
 ```
 
 [MODEL-15] `host == null` denotes **no authority component** (there was no `//`). It MUST be distinct from `Host.Empty`, which denotes an authority component whose host is the empty string (e.g. `file:///path`, where authority is present and host is empty). An implementation MUST NOT conflate these two states.
 
-[MODEL-16] `RegName.ascii` MUST store the host as an already-canonical ASCII registered name: lowercased where applicable, IDNA/UTS-46 ToASCII-processed for the `Url` profile (§7), percent-encoding applied per the host rules of the active profile. It MUST NOT store raw Unicode awaiting later processing; canonicalization happens at production time. (A Unicode/display form is a derived view computed via ToUnicode, not stored authoritative state.)
+[MODEL-16] `RegName.value` MUST store the host as an already-canonical ASCII registered name: lowercased where applicable, IDNA/UTS-46 ToASCII-processed for the `Url` profile (§7), percent-encoding applied per the host rules of the active profile. It MUST NOT store raw Unicode awaiting later processing; canonicalization happens at production time. (A Unicode/display form is a derived view computed via ToUnicode, not stored authoritative state.)
 
 [MODEL-17] `Ipv4.value` MUST store the address as a single 32-bit quantity (held in a Kotlin `Int`, interpreted as unsigned). It MUST NOT store the original textual form (dotted, hex, octal, shorthand). The canonical dotted-decimal serialization is computed from `value` (§7).
 
@@ -500,7 +500,7 @@ public sealed interface Host {
 
 [MODEL-20] `IpFuture` MUST store the `vN.…` literal content (without brackets) and is reachable only in the `Uri` profile. A `Url` value MUST NOT hold an `IpFuture` host.
 
-[MODEL-21] `Opaque.encoded` holds a non-special host that is neither an IP literal nor a domain to be IDNA-processed (WHATWG opaque host for non-special schemes; an RFC reg-name preserved verbatim under PRESERVE). It MUST store the host with only the forbidden-host code-point and C0 percent-encoding applied (§7), and MUST NOT apply domain lowercasing or IDNA. The `Uri` profile uses `Opaque`/`RegName` for registered names per its PRESERVE policy; the `Url` profile uses `Opaque` only for non-special schemes.
+[MODEL-21] `Opaque.value` holds a non-special host that is neither an IP literal nor a domain to be IDNA-processed (WHATWG opaque host for non-special schemes; an RFC reg-name preserved verbatim under PRESERVE). It MUST store the host with only the forbidden-host code-point and C0 percent-encoding applied (§7), and MUST NOT apply domain lowercasing or IDNA. The `Uri` profile uses `Opaque`/`RegName` for registered names per its PRESERVE policy; the `Url` profile uses `Opaque` only for non-special schemes.
 
 [MODEL-22] Public APIs MUST surface the host kind via exhaustive `when` over the sealed `Host` type (no `else` branch, no separate stringly-typed `hostType` enum is required as authoritative state). A convenience kind accessor MAY be derived from the variant.
 
@@ -583,7 +583,7 @@ The leading-slash (absolute vs rootless) distinction MUST be preserved in the `U
 
 [MODEL-45] The public model MUST NOT wrap component `String` values in a `@JvmInline value class` (e.g. a `UriString`/`Scheme`/`Host`-string wrapper) on the public surface, because value-class boxing mangles JVM signatures and degrades Java interop. Public `String`-typed components MUST be exposed as plain `String`/`String?`. `@JvmInline value class` MAY be used for purely-internal, non-public typed quantities (e.g. internal offset or code-point-set indices) where no Java-visible signature is affected.
 
-[MODEL-46] Nullable public accessors that distinguish absence (per §3.2) MUST be annotated such that Java consumers observe the nullability (`scheme` non-null on `Url`, nullable on `Uri`; `host`, `port`, `query`, `fragment`, `user`, `password` nullable on both). The non-null invariants of [MODEL-8]/[MODEL-9] and the always-present `path` of [MODEL-26] MUST be reflected as non-null in the public type so callers get accurate null-safety without defensive checks.
+[MODEL-46] Nullable public accessors that distinguish absence (per §3.2) MUST be annotated such that Java consumers observe the nullability (`scheme` non-null on `Url`, nullable on `Uri`; `host`, `port`, `query`, `fragment` nullable on both). The non-null invariants of [MODEL-8]/[MODEL-9] and the always-present `path` of [MODEL-26] MUST be reflected as non-null in the public type so callers get accurate null-safety without defensive checks.
 
 ## 4. Character Repertoire & Grammar
 
@@ -2111,9 +2111,9 @@ The two public types convert to one another. The conversions are asymmetric beca
 
 **[NORM-29]** `Url.toUri()` MUST be total (it always succeeds) and near-lossless: it produces a `Uri` whose stored components are exactly the canonical components of the `Url` (scheme, userinfo, host, port, path, query, fragment), so that `url.toUri()` serializes to the same string as `url`. The resulting `Uri` is in preserve mode: it carries the already-canonical component values but applies no further `Uri` normalization, and its structural equality (§11.3) is over that canonical serialization. The only permitted difference is representational, never textual: a `Host` variant that exists only in one profile (e.g. an `Opaque` host) MUST be carried across unchanged so the serialization is identical.
 
-**[NORM-30]** `Uri.toUrl()` MUST be fallible and MUST return `ParseResult<Url>` (`Ok`/`Err` with `UriParseError`), never a throwing or null-punning API on the failure path. The conversion MUST apply the full `Url` profile (special-scheme detection §6, the host pipeline §7 including IDNA, eager canonicalization §11.1). It MUST return `Err` when the `Uri` cannot be a valid `Url`, including at least: a null/relative `scheme` (a `Url` always has a scheme); a host that fails the `Url` host pipeline (e.g. a reg-name that is not a valid IDNA/forbidden-host-code-point–free host, or an `IpFuture` host, which the `Url` model does not admit); a special scheme with a missing or empty required host where the `Url` model forbids it; or a port outside the permitted range. On success it returns `Ok(url)` where `url` is fully canonical per §11.1.
+**[NORM-33]** `Uri.toUrl()` MUST be fallible and MUST return `ParseResult<Url>` (`Ok`/`Err` with `UriParseError`), never a throwing or null-punning API on the failure path. The conversion MUST apply the full `Url` profile (special-scheme detection §6, the host pipeline §7 including IDNA, eager canonicalization §11.1). It MUST return `Err` when the `Uri` cannot be a valid `Url`, including at least: a null/relative `scheme` (a `Url` always has a scheme); a host that fails the `Url` host pipeline (e.g. a reg-name that is not a valid IDNA/forbidden-host-code-point–free host, or an `IpFuture` host, which the `Url` model does not admit); a special scheme with a missing or empty required host where the `Url` model forbids it; or a port outside the permitted range. On success it returns `Ok(url)` where `url` is fully canonical per §11.1.
 
-**[NORM-31]** Bridge consistency. For any `Url` value `u`, `u.toUri().toUrl()` MUST return `Ok(u')` with `serialize(u') == serialize(u)` (the round trip through `Uri` is value-preserving for anything that originated as a `Url`). The reverse round trip `someUri.toUrl()` followed by `.toUri()` is NOT required to reproduce the original `Uri` byte-for-byte, because `toUrl()` canonicalizes; an implementation MUST document that `Uri → Url → Uri` is canonicalizing, not preserving.
+**[NORM-34]** Bridge consistency. For any `Url` value `u`, `u.toUri().toUrl()` MUST return `Ok(u')` with `serialize(u') == serialize(u)` (the round trip through `Uri` is value-preserving for anything that originated as a `Url`). The reverse round trip `someUri.toUrl()` followed by `.toUri()` is NOT required to reproduce the original `Uri` byte-for-byte, because `toUrl()` canonicalizes; an implementation MUST document that `Uri → Url → Uri` is canonicalizing, not preserving.
 
 Beyond the two type-to-type bridges above, the `Uri` profile also exposes an RFC 3987 dialect bridge — the `Iri` conversion facility — so internationalized input has an explicit home without weakening strict `Uri` parsing (§1.1, [PCT-2]):
 
@@ -2180,14 +2180,15 @@ A fatal error aborts production of a value. Every variant carries enough context
 public sealed interface UriParseError {
     public data class InvalidScheme(val at: Int, val detail: String) : UriParseError
     public data object MissingScheme : UriParseError
-    public data class InvalidAuthority(val at: Int, val detail: String) : UriParseError
+    public data class InvalidPercentEncoding(val at: Int) : UriParseError
+    public data class InvalidPort(val text: String) : UriParseError
+    public data object EmptyHost : UriParseError
     public data class InvalidHost(val host: String, val reason: HostError) : UriParseError
     public data class ForbiddenHostCodePoint(val codePoint: Int, val at: Int) : UriParseError
-    public data class EmptyHost(val at: Int) : UriParseError
-    public data class InvalidPort(val text: String, val at: Int) : UriParseError
-    public data class InvalidPercentEncoding(val at: Int) : UriParseError
-    public data class InputTooLong(val length: Long, val max: Long) : UriParseError
-    public data class LimitExceeded(val limit: ResourceLimit, val observed: Long, val max: Long) : UriParseError
+    public data class InputTooLong(val length: Int, val max: Int) : UriParseError
+    public data class LimitExceeded(val limit: ResourceLimit, val observed: Int, val max: Int) : UriParseError
+    public data class IriInvalidCodePoint(val codePoint: Int, val at: Int) : UriParseError
+    public data class IriBidiFormattingCharacter(val codePoint: Int, val at: Int) : UriParseError
 }
 
 public enum class HostError {
@@ -2206,7 +2207,7 @@ public enum class HostError {
 
 **[ERR-9]** `InvalidScheme` MUST be produced when a scheme component is present but ill-formed (first character not ALPHA, or a subsequent character outside `ALPHA / DIGIT / "+" / "-" / "."`). `detail` MUST identify the offending condition. In the `Uri` profile a missing scheme on input that is not a valid relative reference MUST be reported as `MissingScheme`. In the `Url` profile, `Url.parse` with no scheme and no usable base MUST be reported as `MissingScheme`.
 
-**[ERR-10]** `InvalidAuthority` MUST be produced for an authority that cannot be decomposed (e.g. an unterminated IPv6 literal `[` with no `]`, or userinfo/host structure that no profile rule accepts). Host-specific failures MUST instead be reported as `InvalidHost`.
+**[ERR-10]** There is no dedicated `InvalidAuthority` variant: an authority that cannot be decomposed is reported through the host-specific variants below rather than through a separate authority-level error. In particular, an unterminated IPv6 literal (a `[` with no matching `]`) MUST surface as `InvalidHost` with `reason = HostError.Ipv6Malformed`, not as a distinct authority error.
 
 **[ERR-11]** `InvalidHost` MUST carry the host substring as seen (post-strip, pre-IDNA) and a `HostError` discriminating the cause. The host pipeline failures enumerated in §7 (HOST) MUST map onto `HostError` as named above; an implementation MUST NOT collapse distinct causes into a single opaque value.
 
@@ -2222,7 +2223,7 @@ public enum class HostError {
 
 **[ERR-17]** `LimitExceeded` MUST be produced when a configured resource bound other than total input length is exceeded (e.g. path-segment count). It carries which `ResourceLimit` was hit, the `observed` count, and the configured `max`. (`InputTooLong` is retained as a dedicated variant for the headline length bound; all other bounds use `LimitExceeded`.)
 
-**[ERR-18]** The `UriParseError` hierarchy MUST be `sealed` and exhaustively matchable without an `else`. Adding a variant is a breaking API change governed by binary-compatibility-validation.
+**[ERR-18]** The `UriParseError` hierarchy MUST be `sealed` and exhaustively matchable without an `else`. Adding a variant is a breaking API change governed by binary-compatibility-validation. Two shipped variants are produced only by the RFC 3987 IRI-conversion facility (`Iri.toUri`, §11.5) rather than by ordinary `Uri`/`Url` parsing: `IriInvalidCodePoint`, for a non-ASCII code point outside the RFC 3987 §2.2 repertoire the component permits, and `IriBidiFormattingCharacter`, for one of the seven bidirectional formatting characters RFC 3987 §4.1 forbids anywhere in an IRI. Both carry the offending `codePoint` and its `at` offset.
 
 ### 12.3 `ValidationError` — non-fatal anomalies
 
@@ -2293,7 +2294,7 @@ For each listed condition, the table gives the mandated behaviour. "strip"/"trim
 
 | # | Condition | `Url` (WHATWG) | `Uri` default (lenient-preserve) | `Uri` strict |
 |---|---|---|---|---|
-| a | Embedded tab/LF/CR | strip (record `TabOrNewlineRemoved`) | reject (`InvalidAuthority`/component error; RFC admits no control) | reject |
+| a | Embedded tab/LF/CR | strip (record `TabOrNewlineRemoved`) | reject (`InvalidPercentEncoding`, or `ForbiddenHostCodePoint` within a host; RFC admits no control) | reject |
 | b | Leading/trailing C0+space | trim (record) | preserve as part of component, percent-encode where the component set requires | reject |
 | c | Backslash in special scheme | `\` → `/` (record `BackslashAsSlash`) | encode as `%5C` (not a delimiter) | reject (not in grammar slot) |
 | d | IPv4 numeric/octet overflow (`192.168.0.257`, width-aware) | reject `InvalidHost(Ipv4Overflow)` | treat host as reg-name (no shorthand IPv4 in `Uri`) | reject `InvalidHost(Ipv4Overflow)` if it parses as an IPv4 literal, else reg-name validation |
@@ -2533,7 +2534,6 @@ Each requirement below is a single testable behaviour with its example input and
 - **[CONF-101]** A query value containing special characters (`` !$(),/:;?@[]\^`{|}~ ``) MUST be fully percent-encoded by the encoding setter path.
 - **[CONF-102]** Form serialization MUST map space → `+`, `+` → `%2B`, `&` → `%26`, `=` → `%3D`, and UTF-8 accents (`été` → `%C3%A9t%C3%A9`); empty pairs MUST round-trip (`a=&=&=b`).
 - **[CONF-103]** `sort()` MUST be stable and ordered by raw UTF-16 code unit, not Unicode code point (i.e. not surrogate-aware — see [QUERY-18]), falling back to raw-byte ordering for truncated or invalid UTF-8.
-- **[CONF-104]** A query parse pair-count limit MUST be enforced as a DoS bound (see §12), beyond which parsing yields `Err` or truncates per the defined policy.
 - **[CONF-105]** A `=` inside an empty-key pair MUST be left literal so `?===3===` round-trips, while `=` inside a non-empty-key pair is encoded.
 
 #### L. Fragment
@@ -2693,7 +2693,6 @@ This appendix lists every numbered, testable requirement tag **[ABBR-N]** define
 | **[CONF-101]** | §13 | A query value containing special characters ( !$(),/:;?@[]\^{ }~ ) MUST be … |
 | **[CONF-102]** | §13 | Form serialization MUST map space → +, + → %2B, & → … |
 | **[CONF-103]** | §13 | sort() MUST be stable and ordered by raw UTF-16 code unit, not Unicode code … |
-| **[CONF-104]** | §13 | A query parse pair-count limit MUST be enforced as a DoS bound … |
 | **[CONF-105]** | §13 | A = inside an empty-key pair MUST be left literal so ?===3=== … |
 | **[CONF-106]** | §13 | Most code points, including non-ASCII, MUST pass through the fragment with identity … |
 | **[CONF-107]** | §13 | The fragment encode set MUST encode space, ", <, >, and . |
@@ -2730,7 +2729,7 @@ This appendix lists every numbered, testable requirement tag **[ABBR-N]** define
 | **[ERR-7]** | §12 | Exceptions MUST NOT be used as normal control flow inside the parser. |
 | **[ERR-8]** | §12 | Every UriParseError variant that denotes a position in the input MUST carry … |
 | **[ERR-9]** | §12 | InvalidScheme MUST be produced when a scheme component is present but ill-formed … |
-| **[ERR-10]** | §12 | InvalidAuthority MUST be produced for an authority that cannot be decomposed (e.g. |
+| **[ERR-10]** | §12 | There is no dedicated InvalidAuthority variant; an unterminated IPv6 literal … |
 | **[ERR-11]** | §12 | InvalidHost MUST carry the host substring as seen (post-strip, pre-IDNA) and a … |
 | **[ERR-12]** | §12 | ForbiddenHostCodePoint MUST be produced when a forbidden host code point (or, for … |
 | **[ERR-13]** | §12 | EmptyHost MUST be produced when a host is empty in a context … |
@@ -2860,12 +2859,12 @@ This appendix lists every numbered, testable requirement tag **[ABBR-N]** define
 | **[MODEL-13]** | §3 | A non-null password with a null user is not a representable state … |
 | **[MODEL-14]** | §3 | The host component MUST be modelled as Host?, where Host is a … |
 | **[MODEL-15]** | §3 | host == null denotes no authority component (there was no //). |
-| **[MODEL-16]** | §3 | RegName.ascii MUST store the host as an already-canonical ASCII registered name: lowercased … |
+| **[MODEL-16]** | §3 | RegName.value MUST store the host as an already-canonical ASCII registered name: lowercased … |
 | **[MODEL-17]** | §3 | Ipv4.value MUST store the address as a single 32-bit quantity (held in … |
 | **[MODEL-18]** | §3 | Ipv6.pieces MUST store the eight 16-bit groups of the address as fixed-length … |
 | **[MODEL-19]** | §3 | Ipv6.zoneId MUST be modelled as String?, default null (no zone id). |
 | **[MODEL-20]** | §3 | IpFuture MUST store the vN.… literal content (without brackets) and is reachable … |
-| **[MODEL-21]** | §3 | Opaque.encoded holds a non-special host that is neither an IP literal nor … |
+| **[MODEL-21]** | §3 | Opaque.value holds a non-special host that is neither an IP literal nor … |
 | **[MODEL-22]** | §3 | Public APIs MUST surface the host kind via exhaustive when over the … |
 | **[MODEL-23]** | §3 | port MUST be modelled as Int?. |
 | **[MODEL-24]** | §3 | A companion derived accessor effectivePort: Int MUST be provided. |
@@ -2925,9 +2924,9 @@ This appendix lists every numbered, testable requirement tag **[ABBR-N]** define
 | **[NORM-29]** | §11 | Url.toUri() MUST be total (it always succeeds) and near-lossless: it produces a … |
 | **[NORM-30]** | §11 | In the Url profile, userinfo serialization MUST follow the WHATWG serializer: credentials emitted only when the URL includes credentials; the password colon emitted only when the password is non-empty. |
 | **[NORM-31]** | §11 | The serializer SHOULD accept an optional excludeFragment boolean (default false) that skips the fragment step, mirroring the WHATWG exclude-fragment parameter. |
-| **[NORM-30]** | §11 | Uri.toUrl() MUST be fallible and MUST return ParseResult<Url> (Ok/Err with UriParseError), never … |
-| **[NORM-31]** | §11 | Bridge consistency. For any Url value u, u.toUri().toUrl() MUST return Ok(u') with … |
 | **[NORM-32]** | §11.6 | In the Url profile, origin returns the ASCII serialization of the WHATWG origin: a tuple scheme://host[:port] for a special scheme other than file (port only when non-null, no userinfo); for blob, the origin of the URL parsed from the path when its inner scheme is http/https/file, else opaque; file and every non-special scheme are opaque; an opaque origin serializes as "null". A derived projection ([MODEL-34]), not stored, not guaranteed to round-trip. |
+| **[NORM-33]** | §11 | Uri.toUrl() MUST be fallible and MUST return ParseResult<Url> (Ok/Err with UriParseError), never … |
+| **[NORM-34]** | §11 | Bridge consistency. For any Url value u, u.toUri().toUrl() MUST return Ok(u') with … |
 | **[PARSE-1]** | §8 | The parser MUST enforce a fixed maximum input length (the configured limit … |
 | **[PARSE-2]** | §8 | After the state loop completes, if normalization (percent-encoding, IDNA, default-port elision, dot-segment … |
 | **[PARSE-3]** | §8 | In the Url profile, before any other processing, the parser MUST remove … |
