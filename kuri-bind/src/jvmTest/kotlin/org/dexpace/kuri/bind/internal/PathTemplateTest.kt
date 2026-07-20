@@ -52,9 +52,10 @@ class PathTemplateTest {
     }
 
     @Test
-    fun `parses adjacent holes with no literal between them`() {
-        val t = PathTemplate.parse("/{a}{b}")
-        assertEquals(listOf("a", "b"), t.holes.map { it.name })
+    fun `rejects adjacent holes with no literal between them`() {
+        // The composer emits one full segment per hole regardless of adjacency, so "/{a}{b}" would
+        // compose identically to "/{a}/{b}" despite its spelling implying a single merged segment.
+        assertFailsWith<KuriBindException> { PathTemplate.parse("/{a}{b}") }
     }
 
     @Test
@@ -74,5 +75,54 @@ class PathTemplateTest {
         // The inner '{' is swallowed into the hole body (indexOf stops at the first '}'), so the
         // parsed hole name "a{b" carries a stray brace and must be rejected.
         assertFailsWith<KuriBindException> { PathTemplate.parse("/{a{b}") }
+    }
+
+    @Test
+    fun `rejects a hole followed by a literal suffix in the same segment`() {
+        // Issue #82: "/reports/{id}.json" would otherwise re-segment to ["reports", "5", ".json"].
+        assertFailsWith<KuriBindException> { PathTemplate.parse("/reports/{id}.json") }
+    }
+
+    @Test
+    fun `rejects a literal prefix followed by a hole in the same segment`() {
+        // Issue #82: "v{version}" would otherwise re-segment to ["v", "2"] instead of one "v2" segment.
+        assertFailsWith<KuriBindException> { PathTemplate.parse("v{version}") }
+    }
+
+    @Test
+    fun `rejects a catch-all hole sharing a segment with a literal prefix`() {
+        assertFailsWith<KuriBindException> { PathTemplate.parse("/files{path...}") }
+    }
+
+    @Test
+    fun `rejects a hole with an unbounded literal on both sides at once`() {
+        // "/a{id}b/c" fails the check twice over: "a" doesn't end in '/' and "b" doesn't start with '/'.
+        assertFailsWith<KuriBindException> { PathTemplate.parse("/a{id}b/c") }
+    }
+
+    @Test
+    fun `parses a hole immediately followed by a slash-rooted literal`() {
+        val t = PathTemplate.parse("/reports/{id}/detail")
+        assertEquals(
+            listOf(
+                PathToken.Literal("/reports/"),
+                PathToken.Hole("id", catchAll = false),
+                PathToken.Literal("/detail"),
+            ),
+            t.tokens,
+        )
+    }
+
+    @Test
+    fun `parses a hole at the very start of the template with no leading literal`() {
+        val t = PathTemplate.parse("{id}/detail")
+        // Mirrors the template-end boundary (already covered by the catch-all test) but for the start.
+        assertEquals(
+            listOf(
+                PathToken.Hole("id", catchAll = false),
+                PathToken.Literal("/detail"),
+            ),
+            t.tokens,
+        )
     }
 }

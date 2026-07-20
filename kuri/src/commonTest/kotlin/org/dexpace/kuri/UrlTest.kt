@@ -226,6 +226,22 @@ class UrlTest {
     }
 
     @Test
+    fun `effectivePort is null rather than a sentinel when the scheme has no default port`() {
+        // Neither a non-special scheme (foo) nor file (special, but portless) registers a default
+        // port ([SCH-18]), so effectivePort must report "no port" as null rather than the java.net -1
+        // sentinel SPEC.md's MODEL-23 forbids.
+        assertNull(parseOk("foo://host/").effectivePort)
+        assertNull(parseOk("file://host/").effectivePort)
+    }
+
+    @Test
+    fun `effectivePort returns the literal zero port rather than falling back to the scheme default`() {
+        // 0 is a real, distinct port value — SPEC.md's MODEL-23 forbids treating it as a sentinel for
+        // "unspecified", so effectivePort must not fall through to http's default of 80.
+        assertEquals(0, parseOk("http://host:0/").effectivePort)
+    }
+
+    @Test
     fun `origin omits the port when it equals the scheme default`() {
         assertEquals("https://example.com", parseOk("https://example.com:443/").origin)
     }

@@ -8,9 +8,12 @@ import org.dexpace.kuri.bind.Host;
 import org.dexpace.kuri.bind.Scheme;
 
 /**
- * A plain Java bean used to verify that {@code KotlinReflectMemberScanner} discovers annotated
- * getter functions ({@code get*}/{@code is*}) for types that do not expose properties via
- * Kotlin's {@code memberProperties}. The annotations live on the getters, not on the fields.
+ * A plain Java bean used to verify that {@code KotlinReflectMemberScanner} merges getter-level
+ * annotations onto the corresponding {@code memberProperties} entry. Kotlin-reflect exposes a
+ * {@code scheme}/{@code host} property for this bean, but with an empty annotation list — the
+ * {@code @Scheme}/{@code @Host} annotations live only on the getter functions — so discovery of them
+ * exercises the getter-to-property annotation-merge branch rather than reading annotations straight
+ * off the property.
  */
 public final class JavaBean {
     private final String scheme;

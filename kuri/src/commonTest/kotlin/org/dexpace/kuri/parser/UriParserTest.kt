@@ -285,6 +285,34 @@ class UriParserTest {
     }
 
     @Test
+    fun `parse leaves username and password null when no at-sign is present`() {
+        val components = parsed("http://h/p")
+
+        assertNull(components.username)
+        assertNull(components.password)
+    }
+
+    @Test
+    fun `parse distinguishes an empty-but-present userinfo from no userinfo`() {
+        // Regression for #104: an at-sign with nothing before it is a present, empty userinfo
+        // (username == ""), distinct from no at-sign at all (username == null).
+        val components = parsed("http://@h/")
+
+        assertEquals("", components.username)
+        assertNull(components.password)
+    }
+
+    @Test
+    fun `parse distinguishes an empty-but-present password from no password`() {
+        // Regression for #104: a colon with nothing after it is a present, empty password
+        // (password == ""), distinct from no colon at all (password == null).
+        val components = parsed("http://u:@h/")
+
+        assertEquals("u", components.username)
+        assertEquals("", components.password)
+    }
+
+    @Test
     fun `parse rejects a DEL code point in the path`() {
         val result = UriParser.parse("http://h/p\u007Fq")
 

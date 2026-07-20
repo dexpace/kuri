@@ -21,4 +21,9 @@ class BindOptionsTest {
         assertFailsWith<IllegalArgumentException> { BindOptions(maxDepth = 0) }
         assertFailsWith<IllegalArgumentException> { BindOptions(maxDepth = 513) }
     }
+
+    @Test
+    fun `accepts a maxDepth of exactly 512`() {
+        assertEquals(512, BindOptions(maxDepth = 512).maxDepth)
+    }
 }
