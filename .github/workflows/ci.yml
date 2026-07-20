@@ -83,7 +83,9 @@ jobs:
           key: ${{ runner.os }}-configcache-gate-${{ hashFiles('**/*.gradle.kts', 'gradle.properties', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-configcache-gate-
       - name: ktlint, detekt, and JVM coverage floor
-        # koverVerify pulls in jvmTest and enforces the 80% line-coverage rule. Piped through
+        # koverVerify pulls in jvmTest and enforces each module's line/branch floors: kuri and
+        # kuri-bind at 99% line / 85% and 88% branch respectively, kuri-serde-kotlinx at 90%
+        # line / 80% branch (see each module's build.gradle.kts kover block). Piped through
         # tee/grep (pipefail is on by default for `shell: bash`, so a gradlew failure still
         # fails the step) to surface Gradle's own configuration-cache hit/miss line in the job
         # summary — otherwise confirming the cache above is doing anything means digging
