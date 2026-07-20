@@ -21,6 +21,36 @@ Standard, and UTS #46 for internationalized hosts. Parsing returns a result inst
 immutable, and the whole API reads naturally from both Kotlin and Java. It runs everywhere Kotlin does — JVM,
 Android, JS, Wasm, and native.
 
+## Why kuri?
+
+URL parsing looks trivial and almost never is. RFC 3986 (generic URIs) and the WHATWG URL Standard (web URLs)
+are separate specifications with genuinely different rules for validity, host handling, and normalization —
+and the details that ad-hoc parsers gloss over are exactly the hard ones: percent-encoding, IDNA/UTS-46 host
+processing, dot-segment resolution, default-port elision, IPv4 shorthand. When two components in a system
+disagree about what a URL means, the result is interop breakage and a well-known class of security bugs —
+origin confusion, SSRF filter bypasses, cache-key mismatches. A regex or a `split('/')` will not get this
+right, and neither will a parser that quietly picks one interpretation for you.
+
+The platform primitives don't close the gap. `java.net.URI` follows the older RFC 2396 and is lenient about
+validation; `java.net.URL` predates the WHATWG model and carries surprising behavior (its `equals` can make a
+DNS query); and neither exists off the JVM. Kotlin Multiplatform had no standards-faithful, dependency-free
+URL library that behaves identically across JVM, Android, JS, Wasm, and native — so a shared-code project
+could not parse a URL the same way on every target.
+
+kuri is built to be that library. Its priorities, in order:
+
+- **Correctness, measured.** Behavior is verified against the standards' own conformance corpora — WHATWG
+  `urltestdata.json`, Unicode `IdnaTestV2`, `NormalizationTest.txt` — with a ratcheting baseline so a passing
+  case can never silently regress.
+- **The right semantics, chosen explicitly.** Two models — `Uri` (RFC 3986, preserve-and-normalize) and
+  `Url` (WHATWG, canonicalize-eagerly) — so you opt into the rules you want instead of trusting one type to
+  guess which specification applies.
+- **Safe on untrusted input.** Parsing yields errors as values rather than exceptions, and every parse is
+  bounded by configurable resource limits, so hostile input fails cleanly instead of exhausting memory or the
+  stack.
+- **One API, every target.** The full surface lives in common Kotlin, reads idiomatically from Java, and adds
+  no runtime dependencies beyond the standard library.
+
 ## Installation
 
 ```kotlin
