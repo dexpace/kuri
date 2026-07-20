@@ -152,8 +152,8 @@ internal fun startsWithWindowsDrive(value: String): Boolean {
 }
 
 /**
- * Records [ValidationErrorKind.INVALID_URL_UNIT] for each code point in [text] that is neither a
- * URL code point (SPEC §4.2.5) nor `%` (SPEC [PARSE-59] case (a); the WHATWG *invalid-URL-unit*
+ * The [ValidationErrorKind.INVALID_URL_UNIT] errors for each code point in [text] that is neither
+ * a URL code point (SPEC §4.2.5) nor `%` (SPEC [PARSE-59] case (a); the WHATWG *invalid-URL-unit*
  * validation error's code-point case). [textOffset] is where [text]'s first code unit sits in the
  * coordinate space [ValidationError.at] uses, so every recorded offset is `textOffset` plus the
  * local index of the offending code point.
@@ -161,20 +161,37 @@ internal fun startsWithWindowsDrive(value: String): Boolean {
  * A malformed `%` escape (SPEC [PARSE-59] case (b)) is deliberately not recorded here: every `%`
  * is skipped regardless of what follows it, since [PercentCodec] always leaves a malformed one
  * literal ([PCT-23]) and flagging that case is a separate, unimplemented anomaly.
+ *
+ * A free function (rather than a [UrlParserState] method) so `Url`'s setters that encode a
+ * component outside the state machine — [org.dexpace.kuri.Url.withHash], which has no
+ * `StateOverride` to re-enter the engine through — can reuse the exact same scan.
+ */
+internal fun invalidUrlCodePointErrors(
+    text: String,
+    textOffset: Int,
+): List<ValidationError> {
+    require(textOffset >= 0) { "text offset must be non-negative: $textOffset" }
+    val errors = mutableListOf<ValidationError>()
+    var i = 0
+    while (i < text.length) {
+        val pair = isSurrogatePairAt(text, i)
+        val codePoint = if (pair) toCodePoint(text[i], text[i + 1]) else text[i].code
+        if (codePoint != PERCENT_CODE_POINT && !isUrlCodePoint(codePoint)) {
+            errors.add(ValidationError(ValidationErrorKind.INVALID_URL_UNIT, at = textOffset + i))
+        }
+        i += if (pair) 2 else 1
+    }
+    return errors
+}
+
+/**
+ * Records [invalidUrlCodePointErrors] for [text] directly into [state]'s error sink; the
+ * state-machine-facing counterpart used by every full/override parse path.
  */
 internal fun recordInvalidUrlCodePoints(
     state: UrlParserState,
     text: String,
     textOffset: Int,
 ) {
-    require(textOffset >= 0) { "text offset must be non-negative: $textOffset" }
-    var i = 0
-    while (i < text.length) {
-        val pair = isSurrogatePairAt(text, i)
-        val codePoint = if (pair) toCodePoint(text[i], text[i + 1]) else text[i].code
-        if (codePoint != PERCENT_CODE_POINT && !isUrlCodePoint(codePoint)) {
-            state.errors.add(ValidationError(ValidationErrorKind.INVALID_URL_UNIT, at = textOffset + i))
-        }
-        i += if (pair) 2 else 1
-    }
+    state.errors.addAll(invalidUrlCodePointErrors(text, textOffset))
 }
