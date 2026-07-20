@@ -125,7 +125,7 @@ class UrlSetterTest {
     }
 
     @Test
-    fun `withHash validation errors reflect only the new fragment, not the base url's`() {
+    fun `withHash validation errors reflect only the new fragment rather than the base url's`() {
         val base = url("http://h/?a b")
         assertTrue(base.validationErrors().any { it.kind == ValidationErrorKind.INVALID_URL_UNIT })
         val hashed = base.withHash("#frag")
