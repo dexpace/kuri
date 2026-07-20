@@ -780,6 +780,14 @@ class SerdeTest {
     }
 
     @Test
+    fun `a nullable map value type with present values round-trips through the query format`() {
+        val original = NullableMapValues(scores = mapOf("a" to 1, "b" to 2))
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("scores.key=a&scores.value=1&scores.key=b&scores.value=2", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<NullableMapValues>(query))
+    }
+
+    @Test
     fun `an optional map property with data present round-trips instead of falling back to its default`() {
         val original = OptionalMetadata(meta = mapOf("a" to "1", "b" to "2"))
         val query = QueryParametersFormat.encodeToQueryString(original)

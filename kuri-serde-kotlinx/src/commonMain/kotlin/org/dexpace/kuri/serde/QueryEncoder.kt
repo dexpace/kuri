@@ -17,10 +17,23 @@ import kotlinx.serialization.modules.SerializersModule
 import org.dexpace.kuri.query.QueryParameters
 import org.dexpace.kuri.query.QueryParametersBuilder
 
-/** Suffix appended to a map property's name for its per-entry key parameter (e.g. `meta.key`). */
+/**
+ * Suffix appended to a map property's name for its per-entry key parameter (e.g. `meta.key`).
+ *
+ * A Kotlin property's default serial name (its identifier) cannot itself contain `.`, so this suffix
+ * cannot collide with another property's default name; a property whose serial name is deliberately
+ * overridden via `@SerialName` to literally equal `<mapName>.key` could still collide with a map
+ * property's per-entry key parameter — not a supported/tested shape.
+ */
 internal const val MAP_KEY_SUFFIX: String = "key"
 
-/** Suffix appended to a map property's name for its per-entry value parameter (e.g. `meta.value`). */
+/**
+ * Suffix appended to a map property's name for its per-entry value parameter (e.g. `meta.value`).
+ *
+ * Same collision caveat as [MAP_KEY_SUFFIX]: a property whose serial name is deliberately overridden
+ * via `@SerialName` to literally equal `<mapName>.value` could still collide with a map property's
+ * per-entry value parameter — not a supported/tested shape.
+ */
 internal const val MAP_VALUE_SUFFIX: String = "value"
 
 /**
