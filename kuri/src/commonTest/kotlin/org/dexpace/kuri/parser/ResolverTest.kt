@@ -134,6 +134,58 @@ internal class ResolverTest {
     }
 
     @Test
+    fun `resolve rejects an empty base as MissingScheme without throwing`() {
+        // An empty base serializes to a scheme-less relative reference; it must reach the same
+        // MissingScheme outcome as any other scheme-less base rather than tripping a precondition.
+        // Covers the empty, query-only, and fragment-only references that take the empty-path branch.
+        for (reference in listOf("#s", "", "?q")) {
+            val result = Resolver.resolve("", reference)
+
+            val err = assertIs<ParseResult.Err>(result, "resolve(\"\", \"$reference\")")
+            assertEquals(UriParseError.MissingScheme, err.error, "resolve(\"\", \"$reference\")")
+        }
+    }
+
+    @Test
+    fun `resolve rejects a non-empty scheme-less base as MissingScheme`() {
+        // Regression guard: a non-empty relative base already resolved to MissingScheme, and the
+        // empty base must behave identically -- neither should throw.
+        val result = Resolver.resolve("a/b/c", "g")
+
+        val err = assertIs<ParseResult.Err>(result)
+        assertEquals(UriParseError.MissingScheme, err.error)
+    }
+
+    @Test
+    fun `resolve accepts a flat base with far more segments than the default resolutionDepth`() {
+        // A flat path has zero dot-segments, so it consumes zero resolution depth even though its 300
+        // segments far exceed the default ResolutionDepth (256): ResolutionDepth bounds dot-segment
+        // work, not the total segment count (which is PathSegments' concern).
+        val base = "http://h/" + "s/".repeat(FLAT_SEGMENT_COUNT)
+
+        val result = Resolver.resolve(base, "x")
+
+        assertIs<ParseResult.Ok<String>>(result)
+    }
+
+    @Test
+    fun `resolutionDepth counts one unit per dot-segment removal`() {
+        // Five leading "../" removals cost five resolution-depth units: resolutionDepth(4) rejects
+        // with observed == 5, while resolutionDepth(5) admits it (equality is not "exceeded").
+        val reference = "../".repeat(5) + "g"
+
+        val rejected = Resolver.resolve(BASE, reference, ParseOptions.Builder().resolutionDepth(4).build())
+        val err = assertIs<ParseResult.Err>(rejected)
+        val limit = assertIs<UriParseError.LimitExceeded>(err.error)
+        assertEquals(ResourceLimit.ResolutionDepth, limit.limit)
+        assertEquals(5, limit.observed)
+        assertEquals(4, limit.max)
+
+        val accepted = Resolver.resolve(BASE, reference, ParseOptions.Builder().resolutionDepth(5).build())
+        assertIs<ParseResult.Ok<String>>(accepted)
+    }
+
+    @Test
     fun `resolve guards a dot-segment-collapsed authority-less two-slash path`() {
         // RFC 3986 §3.3: an authority-less path cannot begin with "//" (it would re-read as an
         // authority). "/.//g" resolved against a no-authority base collapses via §5.2.4 case B to
@@ -409,9 +461,14 @@ internal class ResolverTest {
 
         /**
          * Well more than one dot-segment, yet comfortably under the default [ResourceLimit.ResolutionDepth]
-         * (256) collapse-iteration bound — so a `resolutionDepth(1)` override rejects it while the
-         * default accepts it.
+         * (256) removal bound — so a `resolutionDepth(1)` override rejects it while the default accepts it.
          */
         const val MANY_DOT_SEGMENT_COUNT: Int = 50
+
+        /**
+         * Far more ordinary path segments than the default [ResourceLimit.ResolutionDepth] (256), to
+         * prove a flat (dot-segment-free) path consumes zero resolution depth and still resolves.
+         */
+        const val FLAT_SEGMENT_COUNT: Int = 300
     }
 }

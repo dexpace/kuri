@@ -90,30 +90,35 @@ internal object Resolver {
     internal fun removeDotSegments(path: String): String = collapseDotSegments(path).output
 
     /**
-     * The pure §5.2.4 collapse of [path], returning the cleaned path and the number of loop
-     * iterations it took — the measure [boundedRemoveDotSegments] gates against
-     * [ParseOptions.resolutionDepth].
+     * The pure §5.2.4 collapse of [path], returning the cleaned path and the number of *dot-segment*
+     * removals it performed — the measure [boundedRemoveDotSegments] gates against
+     * [ParseOptions.resolutionDepth]. Moving an ordinary segment (§5.2.4 case E) is not counted, so a
+     * flat path with no `.`/`..` consumes zero depth; only the `.`/`..`/`./`/`../`/`/./`/`/../`
+     * removals (cases A–D) advance the counter.
      */
     private fun collapseDotSegments(path: String): DotSegmentCollapse {
         val output = StringBuilder(path.length)
         var pos = 0
-        var iterations = 0
+        var dotSegments = 0
         while (pos < path.length) {
-            val next = step(path, pos, output)
-            check(next > pos) { "remove_dot_segments made no progress at $pos" }
-            pos = next
-            iterations++
+            val stepped = step(path, pos, output)
+            check(stepped.next > pos) { "remove_dot_segments made no progress at $pos" }
+            pos = stepped.next
+            if (stepped.dotSegment) dotSegments++
         }
         check(pos == path.length) { "remove_dot_segments overran the input to $pos" }
-        return DotSegmentCollapse(output.toString(), iterations)
+        check(dotSegments <= path.length) { "dot-segment count $dotSegments exceeds the input length" }
+        return DotSegmentCollapse(output.toString(), dotSegments)
     }
 
     /**
      * Resolves [reference] against the absolute [baseUri] (§5.2), returning the target URI string.
      *
      * Both inputs are parsed with [UriParser] so the resolution inherits the parser's validation; an
-     * unparsable base or reference is forwarded as [ParseResult.Err], and a base without a scheme is
-     * rejected with [UriParseError.MissingScheme] since §5.2 requires an absolute base.
+     * unparsable base or reference is forwarded as [ParseResult.Err], and a base without a scheme —
+     * including the empty base, whose serialization parses to a scheme-less relative reference — is
+     * rejected with [UriParseError.MissingScheme] since §5.2 requires an absolute base. The operation
+     * is total: it never throws for a non-absolute base.
      *
      * @param baseUri the absolute base URI the reference is interpreted against.
      * @param reference the (possibly relative) URI reference to resolve.
@@ -128,10 +133,17 @@ internal object Resolver {
         reference: String,
         options: ParseOptions = ParseOptions.DEFAULT,
     ): ParseResult<String> {
-        require(baseUri.isNotEmpty()) { "an absolute base URI is required for resolution" }
         val base = UriParser.parse(baseUri, options)
         val ref = UriParser.parse(reference, options)
-        return resolveOutcome(baseUri, reference, base, ref, options)
+        val outcome = resolveOutcome(baseUri, reference, base, ref, options)
+        // Totality (§5.2 absolute base): an unparseable base is forwarded as an error, and a
+        // parseable-but-scheme-less base (the empty serialization included) yields MissingScheme --
+        // never a resolved target, and never a thrown precondition.
+        check(base !is ParseResult.Err || outcome is ParseResult.Err) { "an unparseable base must not resolve" }
+        check(base !is ParseResult.Ok || base.value.scheme != null || outcome is ParseResult.Err) {
+            "a scheme-less base must not resolve to a target"
+        }
+        return outcome
     }
 
     /**
@@ -303,10 +315,11 @@ internal object Resolver {
     /**
      * The bounded §5.2.4 entry every resolve path routes through: it enforces both
      * [ParseOptions.expandedLength] (a path longer than the bound → [UriParseError.InputTooLong],
-     * [ERR-31]) and [ParseOptions.resolutionDepth] (more collapse iterations than the bound →
+     * [ERR-31]) and [ParseOptions.resolutionDepth] (more *dot-segment* removals than the bound →
      * [UriParseError.LimitExceeded] carrying [ResourceLimit.ResolutionDepth], [ERR-33]) before
-     * returning the cleaned path. The pure [removeDotSegments] carries neither gate, so no reachable
-     * resolve call can exceed a limit unnoticed nor throw on one.
+     * returning the cleaned path. Ordinary segment moves do not count, so a flat path never trips the
+     * depth gate. The pure [removeDotSegments] carries neither gate, so no reachable resolve call can
+     * exceed a limit unnoticed nor throw on one.
      */
     private fun boundedRemoveDotSegments(
         refPath: String,
@@ -316,10 +329,10 @@ internal object Resolver {
             return ParseResult.Err(UriParseError.InputTooLong(refPath.length, options.expandedLength))
         }
         val collapsed = collapseDotSegments(refPath)
-        check(collapsed.iterations <= refPath.length + 1) { "iteration count exceeds the structural bound" }
+        check(collapsed.dotSegments <= refPath.length) { "dot-segment count exceeds the structural bound" }
         val depth = options.resolutionDepth
-        return if (collapsed.iterations > depth) {
-            ParseResult.Err(UriParseError.LimitExceeded(ResourceLimit.ResolutionDepth, collapsed.iterations, depth))
+        return if (collapsed.dotSegments > depth) {
+            ParseResult.Err(UriParseError.LimitExceeded(ResourceLimit.ResolutionDepth, collapsed.dotSegments, depth))
         } else {
             ParseResult.Ok(collapsed.output)
         }
@@ -329,7 +342,9 @@ internal object Resolver {
 
     /**
      * One §5.2.4 loop iteration over the cursor: matches cases A–E on [path] starting at [pos],
-     * appends at most one segment to [output], and returns the advanced cursor (always `> pos`).
+     * appends at most one segment to [output], and returns the advanced cursor (always `> pos`) plus
+     * whether the match was a dot-segment removal (cases A–D) rather than an ordinary segment move
+     * (case E) — only the former counts against [ParseOptions.resolutionDepth].
      *
      * Cases B/C rewrite the buffer to a leading `/`; over an index cursor that `/` is simply the
      * last matched code unit left unconsumed (`pos + 2`/`pos + 3`), so no prefix is materialized —
@@ -340,19 +355,29 @@ internal object Resolver {
         path: String,
         pos: Int,
         output: StringBuilder,
-    ): Int {
+    ): Step {
         require(pos in path.indices) { "cursor out of range: $pos" }
         return when {
-            path.startsWith(PREFIX_DOTDOT_SLASH, pos) -> pos + PREFIX_DOTDOT_SLASH.length
-            path.startsWith(PREFIX_DOT_SLASH, pos) -> pos + PREFIX_DOT_SLASH.length
-            path.startsWith(PREFIX_SLASH_DOT_SLASH, pos) -> pos + SEGMENT_SLASH_DOT.length
-            isTerminal(path, pos, SEGMENT_SLASH_DOT) -> appendSlashTerminal(output, path.length)
-            path.startsWith(PREFIX_SLASH_DOTDOT_SLASH, pos) -> popSegment(output, pos + SEGMENT_SLASH_DOTDOT.length)
-            isTerminal(path, pos, SEGMENT_SLASH_DOTDOT) -> popThenSlashTerminal(output, path.length)
-            isTerminal(path, pos, SEGMENT_DOT) || isTerminal(path, pos, SEGMENT_DOTDOT) -> path.length
-            else -> moveSegment(path, pos, output)
+            path.startsWith(PREFIX_DOTDOT_SLASH, pos) -> dot(pos + PREFIX_DOTDOT_SLASH.length)
+            path.startsWith(PREFIX_DOT_SLASH, pos) -> dot(pos + PREFIX_DOT_SLASH.length)
+            path.startsWith(PREFIX_SLASH_DOT_SLASH, pos) -> dot(pos + SEGMENT_SLASH_DOT.length)
+            isTerminal(path, pos, SEGMENT_SLASH_DOT) -> dot(appendSlashTerminal(output, path.length))
+            path.startsWith(PREFIX_SLASH_DOTDOT_SLASH, pos) ->
+                dot(popSegment(output, pos + SEGMENT_SLASH_DOTDOT.length))
+            isTerminal(path, pos, SEGMENT_SLASH_DOTDOT) -> dot(popThenSlashTerminal(output, path.length))
+            isTerminal(path, pos, SEGMENT_DOT) || isTerminal(path, pos, SEGMENT_DOTDOT) -> dot(path.length)
+            else -> Step(moveSegment(path, pos, output), dotSegment = false)
         }
     }
+
+    /** A [step] that removed a §5.2.4 dot-segment (cases A–D), advancing the cursor to [next]. */
+    private fun dot(next: Int): Step = Step(next, dotSegment = true)
+
+    /** The result of one [step]: the advanced cursor and whether it removed a dot-segment (cases A–D). */
+    private data class Step(
+        val next: Int,
+        val dotSegment: Boolean,
+    )
 
     /** True when the whole remaining input of [path] from [pos] equals [segment] (a §5.2.4 terminal). */
     private fun isTerminal(
@@ -415,10 +440,10 @@ internal object Resolver {
         output.setLength(cut)
     }
 
-    /** The cleaned path produced by [collapseDotSegments] and the iteration count that produced it. */
+    /** The cleaned path produced by [collapseDotSegments] and the number of dot-segment removals it made. */
     private data class DotSegmentCollapse(
         val output: String,
-        val iterations: Int,
+        val dotSegments: Int,
     )
 
     // --- §5.3 Component Recomposition -------------------------------------------------------------

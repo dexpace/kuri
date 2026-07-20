@@ -295,6 +295,22 @@ class UriTest {
     }
 
     @Test
+    fun `resolving against an empty base is total and reports MissingScheme`() {
+        // Uri.parseOrThrow("") is a scheme-less relative reference; resolving against it must be
+        // total -- Err(MissingScheme)/null/UriSyntaxException -- never a raw IllegalArgumentException.
+        val emptyBase = Uri.parseOrThrow("")
+
+        for (reference in listOf("#s", "", "?q")) {
+            val result = emptyBase.resolve(reference)
+            val err = assertIs<ParseResult.Err>(result, "resolve(\"$reference\")")
+            assertEquals(UriParseError.MissingScheme, err.error, "resolve(\"$reference\")")
+            assertNull(emptyBase.resolveOrNull(reference), "resolveOrNull(\"$reference\")")
+            val thrown = assertFailsWith<UriSyntaxException> { emptyBase.resolveOrThrow(reference) }
+            assertEquals(UriParseError.MissingScheme, thrown.error, "resolveOrThrow(\"$reference\")")
+        }
+    }
+
+    @Test
     fun `resolve applies the pathSegments limit to the resolved result`() {
         // Each input is within the limit on its own -- the base path is 3 segments and the reference
         // is 2 -- but the merged, resolved path is 4 segments, so the limit must be enforced on the
