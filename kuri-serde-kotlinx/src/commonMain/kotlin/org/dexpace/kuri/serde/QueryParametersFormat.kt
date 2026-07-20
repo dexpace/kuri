@@ -22,13 +22,32 @@ import org.dexpace.kuri.query.QueryParameters
  * // "q=kotlin&page=2&tags=a&tags=b"
  * ```
  *
- * Scope: a single, flat class whose properties are `String`, a primitive, an enum, or a `List` of those.
- * Each scalar property is one parameter; a list property repeats the parameter (duplicate-preserving,
- * matching `QueryParameters`). Decoding and encoding are symmetric about defaults: an absent optional
- * property decodes to its declared default, and — the other direction — a property still at its declared
- * default is omitted from the encoded output, keeping the query string minimal; an absent required
- * property raises a [kotlinx.serialization.SerializationException]. Nested `@Serializable` objects are
- * rejected — model them at the call site or bind them separately.
+ * Scope: a single, flat class whose properties are `String`, a primitive, an enum, a `List` of those, or
+ * a `Map` of those. Each scalar property is one parameter; a list property repeats the parameter
+ * (duplicate-preserving, matching `QueryParameters`); a map property repeats two parameters — `<name>.key`
+ * and `<name>.value` — once per entry, in iteration order, so a decoder can zip them back into entries
+ * positionally without flattening a key and its value together indistinguishably:
+ *
+ * ```
+ * @Serializable data class Filter(val labels: Map<String, String>)
+ *
+ * QueryParametersFormat.encodeToQueryString(Filter(mapOf("env" to "prod", "tier" to "1")))
+ * // "labels.key=env&labels.value=prod&labels.key=tier&labels.value=1"
+ * ```
+ *
+ * Decoding and encoding are symmetric about defaults: an absent optional property decodes to its declared
+ * default, and — the other direction — a property still at its declared default is omitted from the
+ * encoded output, keeping the query string minimal; an absent required property raises a
+ * [kotlinx.serialization.SerializationException]. Nested `@Serializable` objects (including as a map's
+ * value type) are rejected — model them at the call site or bind them separately. A map's key or value
+ * type must not itself be nullable: encoding a `null` map key or value raises a
+ * [kotlinx.serialization.SerializationException] instead of writing a lone key or value that would desync
+ * the "one key per one value" invariant a map's `<name>.key` / `<name>.value` wire shape depends on.
+ *
+ * A list or map property that differs from its default by being explicitly empty has no element pairs to
+ * repeat, which would otherwise read back as simply absent and fall to the default instead of decoding to
+ * an empty collection. That case is carried by a `name[]` marker pair (e.g. `tags[]`) instead — see
+ * `emptyCollectionMarkerName` — so "present but empty" and "absent" stay distinguishable on the wire.
  */
 public object QueryParametersFormat {
     /**

@@ -12,6 +12,7 @@ import org.dexpace.kuri.serialize.UriSerializer
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 
 /**
  * RFC 3986 §5 reference-resolution tests: the §5.2.4 remove_dot_segments unit cases and the full
@@ -226,14 +227,15 @@ internal class ResolverTest {
     @Test
     fun `structured resolve inherits a base username-only userinfo`() {
         // Pins the userinfoPrefix username-only branch: a base with a username but no password is
-        // inherited by a relative reference that supplies neither scheme nor authority.
+        // inherited by a relative reference that supplies neither scheme nor authority. No ':' was
+        // present, so the resolved password stays absent (null), not merely empty.
         val base = UriParser.parse("http://user@host/a/b").getOrThrow()
         val reference = UriParser.parse("x").getOrThrow()
 
         val resolved = Resolver.resolve(base, reference).getOrThrow()
 
         assertEquals("user", resolved.username)
-        assertEquals("", resolved.password)
+        assertNull(resolved.password)
         assertEquals("http://user@host/a/x", UriSerializer.serialize(resolved))
     }
 

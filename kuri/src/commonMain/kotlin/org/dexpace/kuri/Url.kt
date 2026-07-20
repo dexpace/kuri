@@ -7,6 +7,7 @@ package org.dexpace.kuri
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriSyntaxException
 import org.dexpace.kuri.error.ValidationError
+import org.dexpace.kuri.error.ValidationErrorKind
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.parser.BuilderPath
@@ -17,6 +18,8 @@ import org.dexpace.kuri.parser.UrlParser
 import org.dexpace.kuri.parser.decodedSegments
 import org.dexpace.kuri.parser.fileExtensionOf
 import org.dexpace.kuri.parser.fileNameOf
+import org.dexpace.kuri.parser.invalidUrlCodePointErrors
+import org.dexpace.kuri.parser.isDirectoryPath
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSet
 import org.dexpace.kuri.percent.PercentEncodeSets
@@ -28,12 +31,10 @@ import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.serialize.UrlSerializer
 import org.dexpace.kuri.serialize.serializeAuthority
 import org.dexpace.kuri.serialize.serializeUrlPath
+import org.dexpace.kuri.text.hasPercentHexPairAt
 import kotlin.jvm.JvmName
 import kotlin.jvm.JvmOverloads
 import kotlin.jvm.JvmStatic
-
-/** The sentinel [Url.effectivePort] returns when a port is neither stated nor defaulted by the scheme. */
-private const val NO_DEFAULT_PORT: Int = -1
 
 /** Inclusive upper bound of a WHATWG URL port (`0..65535`); a larger value is a parse failure. */
 private const val MAX_PORT: Int = 65535
@@ -60,6 +61,44 @@ private const val FILE_SCHEME: String = "file"
 
 /** The inner schemes whose origin a `blob:` URL adopts; any other inner scheme is opaque. */
 private val BLOB_INNER_ORIGIN_SCHEMES: Set<String> = setOf("http", "https", FILE_SCHEME)
+
+/** The canonical escape for a literal `%`, substituted for a `%` that fails to introduce a triplet. */
+private const val ESCAPED_PERCENT: String = "%25"
+
+/** The net length growth from replacing one malformed `%` with the 3-character [ESCAPED_PERCENT]. */
+private const val PERCENT_ESCAPE_GROWTH: Int = 2
+
+/**
+ * Rewrites every `%` in [input] that fails to introduce a valid `%XX` triplet to the literal
+ * escape [ESCAPED_PERCENT], leaving every already-valid triplet untouched (RFC 3986 §2.1).
+ *
+ * None of the WHATWG percent-encode sets reserve `%` itself (see `PercentEncodeSets`), so a
+ * WHATWG-canonical [Url.href] can carry a bare `%` or a triplet whose next two code units are not
+ * both ASCII hex digits — a value the strict RFC 3986 [Uri] parser rejects outright. [Url.toUri]
+ * runs [input] through this repair first so the profile bridge from [Url] to [Uri] is total.
+ *
+ * @param input the href-derived string to repair before handing it to the [Uri] parser.
+ * @return [input] unchanged when it contains no malformed `%`, otherwise a copy with each
+ *   malformed `%` replaced by [ESCAPED_PERCENT].
+ */
+private fun escapeMalformedPercent(input: String): String {
+    if (input.indexOf('%') < 0) return input
+    val repaired = StringBuilder(input.length)
+    var malformedCount = 0
+    for (index in input.indices) {
+        val c = input[index]
+        if (c == '%' && !hasPercentHexPairAt(input, index)) {
+            repaired.append(ESCAPED_PERCENT)
+            malformedCount++
+        } else {
+            repaired.append(c)
+        }
+    }
+    check(repaired.length == input.length + malformedCount * PERCENT_ESCAPE_GROWTH) {
+        "repair must grow the input by exactly $PERCENT_ESCAPE_GROWTH characters per malformed percent"
+    }
+    return repaired.toString()
+}
 
 /**
  * An immutable, fully-canonical WHATWG URL value (SPEC §3, §11; WHATWG URL Living Standard).
@@ -89,10 +128,16 @@ public class Url internal constructor(
     public val scheme: String
         get() = requireNotNull(components.scheme) { "a parsed Url always carries a scheme" }
 
-    /** The percent-encoded userinfo username, or `""` when no credentials are present. */
+    /**
+     * The percent-encoded userinfo username, or `""` when no credentials are present.
+     *
+     * The `Url` profile has no absent-vs-present-empty distinction ([NORM-30]): [components] never
+     * actually stores a `null` username for a parsed `Url`, but the `?:` guard keeps this accessor
+     * total against the shared, nullable [ParsedComponents] shape.
+     */
     @get:JvmName("username")
     public val username: String
-        get() = components.username
+        get() = components.username ?: ""
 
     /**
      * The decoded userinfo username (percent-decoded [username]), `""` when absent or empty.
@@ -106,10 +151,15 @@ public class Url internal constructor(
     public val decodedUsername: String
         get() = decodedUsernameValue
 
-    /** The percent-encoded userinfo password, or `""` when absent or empty. */
+    /**
+     * The percent-encoded userinfo password, or `""` when absent or empty.
+     *
+     * As [username], the `?:` guard keeps this accessor total; [components] never actually stores
+     * a `null` password for a parsed `Url` ([NORM-30]).
+     */
     @get:JvmName("password")
     public val password: String
-        get() = components.password
+        get() = components.password ?: ""
 
     /**
      * The decoded userinfo password (percent-decoded [password]), `""` when absent or empty.
@@ -151,12 +201,16 @@ public class Url internal constructor(
     /**
      * The port a consumer should connect to: the explicit [port], else the scheme default.
      *
-     * @return the stated or default port, or `-1` when the scheme has no default (a non-special
-     *   scheme, or `file`); `-1` is the only value the caller must treat as "no port".
+     * Falls back to the scheme's registered default port when no [port] is stated, and to `null`
+     * when the port is neither stated nor defaulted — a non-special scheme, or `file` (special, yet
+     * portless), per SPEC §6.4 ([SCH-18]). Matches [Uri.effectivePort]'s sentinel-free contract
+     * rather than the `java.net` `-1` convention [MODEL-23] bans.
+     *
+     * @return the stated or default port, or `null` when the scheme has no default.
      */
     @get:JvmName("effectivePort")
-    public val effectivePort: Int
-        get() = components.port ?: Scheme.defaultPort(scheme) ?: NO_DEFAULT_PORT
+    public val effectivePort: Int?
+        get() = components.port ?: Scheme.defaultPort(scheme)
 
     /** The decoded path segments in order (read-only); an opaque path yields its single decoded value. */
     @get:JvmName("pathSegments")
@@ -283,9 +337,11 @@ public class Url internal constructor(
      *
      * WHATWG parsing is a lenient repair process: it accepts and silently corrects inputs a strict
      * reader would reject (a `\` read as `/`, a missing authority slash, an out-of-set code point),
-     * and records each correction as a [ValidationError] without failing the parse. The list is
-     * ordered by first occurrence and empty for a fully conformant input; it is useful for linting or
-     * telemetry, never for control flow (a validation error never downgrades a successful parse).
+     * and records each correction as a [ValidationError] without failing the parse. Each entry
+     * carries its [ValidationError.kind], the offset [ValidationError.at] it occurred at, and
+     * [ValidationError.isFailure]. The list is ordered by first occurrence and empty for a fully
+     * conformant input; it is useful for linting or telemetry, never for control flow (a validation
+     * error never downgrades a successful parse).
      *
      * @return a read-only, ordered copy of the validation warnings; empty for a clean parse.
      */
@@ -336,14 +392,17 @@ public class Url internal constructor(
     /**
      * Converts this WHATWG URL to a generic RFC 3986 [Uri] (SPEC §11.5; profile bridge).
      *
-     * This is near-lossless and does not fail: a canonical WHATWG [href] is always a valid RFC 3986
-     * URI, so the conversion re-parses [href] under the `Uri` profile and returns the value directly
-     * rather than a [ParseResult]. The resulting [Uri] preserves this URL's canonical form (the
-     * WHATWG canonicalization has already been applied), so it carries a non-null `scheme`.
+     * This is total and does not fail: a canonical WHATWG [href] is always a valid RFC 3986 URI
+     * once one WHATWG/RFC 3986 mismatch is reconciled first. The WHATWG percent-encode sets never
+     * reserve `%` itself, so [href] can carry a bare `%` or a triplet whose next two code units
+     * are not both hex digits — a byte sequence the strict RFC 3986 `Uri` engine would otherwise
+     * reject as a malformed percent-encoding. [escapeMalformedPercent] rewrites exactly that case
+     * to `%25` before the re-parse, so every other byte of [href] — and thus the resulting [Uri]'s
+     * canonical form — is unchanged. The result carries a non-null `scheme`.
      *
      * @return the equivalent generic [Uri].
      */
-    public fun toUri(): Uri = Uri.parse(href).getOrThrow()
+    public fun toUri(): Uri = Uri.parse(escapeMalformedPercent(href)).getOrThrow()
 
     /**
      * Computes a relative reference that [resolve]s back to [target], or `null` when the two share no
@@ -375,7 +434,7 @@ public class Url internal constructor(
      *
      * The special schemes are `http`, `https`, `ws`, `wss`, `ftp`, and `file`; special-ness governs
      * host parsing, the `\`-as-`/` rule, and default-port handling. `file` is special yet portless, so
-     * [effectivePort] can still be `-1` for a special URL.
+     * [effectivePort] can still be `null` for a special URL.
      *
      * @return `true` iff [scheme] is a special scheme.
      */
@@ -481,6 +540,11 @@ public class Url internal constructor(
      * Matches real browsers' `hash` setter in not escaping a literal `%` first, so [value] does
      * not necessarily round-trip through [decodedFragment] — see its KDoc.
      *
+     * Also matches [withPathname]/[withSearch] in recording [ValidationErrorKind.INVALID_URL_UNIT]
+     * for any out-of-repertoire code point in the new fragment (SPEC [PARSE-59]): the fresh
+     * fragment's errors replace [validationErrors] rather than appending to the base URL's, the
+     * same "no cumulative history" convention every override-backed setter follows.
+     *
      * @param value the new fragment text, with or without a leading `#`; `""` removes the fragment.
      * @return the updated [Url].
      */
@@ -492,8 +556,11 @@ public class Url internal constructor(
         // the shared engine (there is no FRAGMENT StateOverride), so it must replicate that step
         // itself rather than percent-encode a literal tab/newline into the fragment.
         val stripped = withoutHash.filterNot { it == '\t' || it == '\n' || it == '\r' }
+        // Likewise replicates finalizeFragment's invalid-URL-unit scan (offsets are 0-based within
+        // `stripped`, the same convention parseWithOverride uses for its own override-local text).
+        val newErrors = invalidUrlCodePointErrors(stripped, textOffset = 0)
         val encoded = PercentCodec.encode(stripped, PercentEncodeSets.FRAGMENT)
-        return withComponents(components.copy(fragment = encoded))
+        return withComponents(components.copy(fragment = encoded, validationErrors = newErrors))
     }
 
     /**
@@ -516,6 +583,50 @@ public class Url internal constructor(
      * @return a new [Url] with no fragment.
      */
     public fun withoutFragment(): Url = withFragment(null)
+
+    /**
+     * Returns a copy of this URL with its userinfo (username and password), query, and fragment
+     * removed, leaving the [scheme], [host], [port], and [encodedPath] intact (SPEC [CONF-120]).
+     *
+     * A convenience for logging or telemetry: it strips exactly the components WHATWG/RFC 3986
+     * treat as sensitive or context-dependent (credentials, the query string, and the fragment)
+     * while every other component — including a credential-less authority — is preserved
+     * verbatim. For an opaque-path URL such as `mailto:user@example.com`, the `user@` text is part
+     * of the opaque path rather than real userinfo (there is no authority at all) and so is left
+     * untouched; only the actual query and fragment are stripped. A URL that already carries none
+     * of the three is returned equal in value (though [newBuilder] always rebuilds, so the result
+     * is not necessarily the same reference).
+     *
+     * @return a new `Url` with no username, password, query, or fragment.
+     */
+    public fun redact(): Url =
+        newBuilder()
+            .username("")
+            .password("")
+            .query(null)
+            .fragment(null)
+            .build()
+
+    /**
+     * Reports whether this URL's path denotes a directory — its [encodedPath] ends in `/` (SPEC
+     * [PATH-3], [CONF-85]).
+     *
+     * True for a trailing-slash path such as `/a/` and for the root path `/` (a single empty
+     * segment) — which every special-scheme URL with an otherwise-empty path canonicalizes to, so
+     * e.g. `https://h` and `https://h/` both report `true`. `false` for a path with content after
+     * its last segment (`/a`). [hasTrailingSlash] is an exact alias, for a call site that prefers
+     * the WHATWG "trailing slash" phrasing over the filesystem-style "directory" term.
+     *
+     * @return `true` iff [encodedPath] ends in `/`.
+     */
+    public fun isDirectory(): Boolean = components.path.isDirectoryPath()
+
+    /**
+     * Alias of [isDirectory] (SPEC [PATH-3], [CONF-85]); both accessors report the same condition.
+     *
+     * @return `true` iff [encodedPath] ends in `/`.
+     */
+    public fun hasTrailingSlash(): Boolean = isDirectory()
 
     /**
      * The WHATWG `protocol` setter (URL §5): returns a copy with [value]'s scheme, or this URL

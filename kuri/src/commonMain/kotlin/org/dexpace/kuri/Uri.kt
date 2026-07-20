@@ -16,6 +16,7 @@ import org.dexpace.kuri.parser.UriParser
 import org.dexpace.kuri.parser.decodedSegments
 import org.dexpace.kuri.parser.fileExtensionOf
 import org.dexpace.kuri.parser.fileNameOf
+import org.dexpace.kuri.parser.isDirectoryPath
 import org.dexpace.kuri.parser.toUriPathString
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSet
@@ -77,8 +78,11 @@ public class Uri internal constructor(
     /**
      * The RFC 3986 `userinfo` component, reconstructed from the parsed credentials and preserved verbatim.
      *
-     * `null` when the URI has no authority or no userinfo; otherwise `user` or `user:password`. An empty
-     * userinfo (e.g. `//@h`) carries no credentials and is therefore reported as absent (`null`).
+     * `null` when the URI has no authority or no userinfo at all — no `@` in the source; otherwise the
+     * verbatim text between the authority's `//` and its `@`: `""` for a present-but-empty userinfo (e.g.
+     * `//@h`), `user` when no `:` was present, or `user:password` (either half possibly empty) when a `:`
+     * was. The absent-vs-present-empty and no-colon-vs-empty-password distinctions are preserved exactly
+     * as parsed ([MODEL-11], [MODEL-12]).
      */
     @get:JvmName("userInfo")
     public val userInfo: String?
@@ -456,9 +460,8 @@ public class Uri internal constructor(
      *
      * Falls back to the scheme's registered default port (e.g. `80` for `http`, `443` for `https`)
      * when no [port] is stated, and to `null` when the port is neither stated nor defaulted — a
-     * scheme-less reference, or a scheme with no default such as `mailto` or `file`. Unlike
-     * [Url.effectivePort] (which returns the sentinel `-1`), the `Uri` profile reports the "no port"
-     * case as `null`.
+     * scheme-less reference, or a scheme with no default such as `mailto` or `file`. [Url.effectivePort]
+     * reports the "no port" case the same way, as `null`.
      *
      * @return the stated port, else the scheme default, else `null` when neither applies.
      */
@@ -499,6 +502,46 @@ public class Uri internal constructor(
      */
     public fun withoutFragment(): Uri = withFragment(null)
 
+    /**
+     * Returns a copy of this URI with its userinfo, query, and fragment removed, leaving the
+     * [scheme], [host], [port], and [path] intact (SPEC [CONF-120]).
+     *
+     * A convenience for logging or telemetry: it strips exactly the three components RFC 3986
+     * treats as sensitive or context-dependent (credentials, the query string, and the fragment)
+     * while every other component — including a userinfo-less authority — is preserved verbatim.
+     * A URI that already carries none of the three is returned equal in value (though [newBuilder]
+     * always rebuilds, so the result is not necessarily the same reference).
+     *
+     * @return a new `Uri` with no userinfo, query, or fragment.
+     */
+    public fun redact(): Uri =
+        newBuilder()
+            .userInfo(null)
+            .query(null)
+            .fragment(null)
+            .build()
+
+    /**
+     * Reports whether this URI's path denotes a directory — its [encodedPath] ends in `/` (SPEC
+     * [PATH-3], [CONF-85]).
+     *
+     * True for a trailing-slash path such as `/a/` and for the root path `/` (a single empty
+     * segment); `false` for a path with content after its last segment (`/a`) and for a wholly
+     * empty path, which has no trailing slash to report. [hasTrailingSlash] is an exact alias, for
+     * a call site that prefers the WHATWG "trailing slash" phrasing over the filesystem-style
+     * "directory" term.
+     *
+     * @return `true` iff [encodedPath] ends in `/`.
+     */
+    public fun isDirectory(): Boolean = components.path.isDirectoryPath()
+
+    /**
+     * Alias of [isDirectory] (SPEC [PATH-3], [CONF-85]); both accessors report the same condition.
+     *
+     * @return `true` iff [encodedPath] ends in `/`.
+     */
+    public fun hasTrailingSlash(): Boolean = isDirectory()
+
     /** The canonical [uriString]; a parsed `Uri` round-trips through `toString` then [parse]. */
     override fun toString(): String = uriString
 
@@ -508,12 +551,19 @@ public class Uri internal constructor(
     /** The hash of the canonical [uriString], consistent with [equals]. */
     override fun hashCode(): Int = uriString.hashCode()
 
-    /** Reconstructs the raw `userinfo` from the decoded credentials, or `null` when none is present. */
+    /**
+     * Reconstructs the raw `userinfo` from the decoded credentials, or `null` when none is present.
+     *
+     * Presence is tracked by nullability, not emptiness ([MODEL-11], [MODEL-12]): a `username` of
+     * `""` (an `@` present with nothing before it) still yields `""`, not `null`, and a `password` of
+     * `""` (a `:` present with nothing after it) still contributes its `:` — so `//@h` and `//u:@h`
+     * round-trip distinctly from `//h` and `//u@h`.
+     */
     private fun reconstructUserInfo(): String? =
         when {
             components.host == null -> null
-            components.username.isEmpty() && components.password.isEmpty() -> null
-            components.password.isEmpty() -> components.username
+            components.username == null -> null
+            components.password == null -> components.username
             else -> "${components.username}:${components.password}"
         }
 
@@ -711,7 +761,12 @@ public class Uri internal constructor(
          * [password] call made alone (without re-setting the other) starts from `""` rather than
          * leaking the value this call just discarded.
          *
-         * @param userInfo the encoded userinfo (e.g. `user` or `user:password`), or `null` to clear it.
+         * `null` and `""` are distinct here: `null` omits the userinfo entirely (no `@`), while `""`
+         * produces a present-but-empty userinfo (e.g. `//@h`) — matching [Uri.userInfo]'s own
+         * absent-vs-present-empty distinction ([MODEL-11]).
+         *
+         * @param userInfo the encoded userinfo (e.g. `user` or `user:password`), `""` for a
+         *   present-but-empty userinfo, or `null` to omit it entirely.
          */
         public fun userInfo(userInfo: String?): Builder {
             this.userInfo = userInfo
@@ -750,6 +805,12 @@ public class Uri internal constructor(
          * As [username], switches this builder to split userinfo mode; see its doc for the
          * priority and combination rules the two setters share, and for the literal-`%` escape
          * this setter also applies.
+         *
+         * Calling this setter alone, without a preceding or following [username] call, still
+         * normalizes the built username to `""` (present-but-empty) rather than leaving it
+         * absent — a non-null password never pairs with a `null` username ([MODEL-13]). For
+         * example, `Uri.Builder().password("pw").host("h").build().userInfo` is `":pw"`, not a
+         * password with no username at all.
          *
          * @param password the decoded password; `""` clears the password.
          * @return this builder, for chaining.
@@ -1124,12 +1185,20 @@ public class Uri internal constructor(
             return sb.toString()
         }
 
-        /** Appends `//[userinfo@]host[:port]` for a present authority (RFC 3986 §3.2). */
+        /**
+         * Appends `//[userinfo@]host[:port]` for a present authority (RFC 3986 §3.2).
+         *
+         * Emits `@` whenever [effectiveUserInfo] is non-`null`, even `""` — a present-but-empty
+         * verbatim [userInfo] (e.g. from `userInfo("")`, or pre-filled by [newBuilder] from a
+         * parsed `//@h`) must still round-trip to `//@host` ([MODEL-11], [NORM-27]). A split-mode
+         * [combinedUserInfo] never yields non-null `""`: [username]/[password] alone cannot express
+         * a present-but-empty userinfo, so this only changes behaviour for verbatim mode.
+         */
         private fun appendAuthority(sb: StringBuilder) {
             val authorityHost = requireNotNull(host) { "authority requires a host" }
             val effectiveUserInfo = if (usesSplitUserInfo) combinedUserInfo() else userInfo
             sb.append(SLASH).append(SLASH)
-            if (!effectiveUserInfo.isNullOrEmpty()) sb.append(effectiveUserInfo).append('@')
+            if (effectiveUserInfo != null) sb.append(effectiveUserInfo).append('@')
             sb.append(authorityHost)
             if (port != null) sb.append(':').append(port)
         }

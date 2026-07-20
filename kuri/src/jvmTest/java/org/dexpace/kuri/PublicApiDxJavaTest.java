@@ -9,6 +9,7 @@ import java.util.List;
 import org.dexpace.kuri.error.ParseResult;
 import org.dexpace.kuri.error.UriParseError;
 import org.dexpace.kuri.error.ValidationError;
+import org.dexpace.kuri.error.ValidationErrorKind;
 import org.dexpace.kuri.host.Host;
 import org.dexpace.kuri.idna.Idn;
 import org.dexpace.kuri.percent.Percent;
@@ -25,10 +26,10 @@ import org.junit.Test;
  * no Kotlin-only constructs and no {@code internal} access, so the build fails the moment a Java
  * call site stops compiling or a documented behaviour drifts.
  *
- * <p>Note the two deliberate typing traps this pins down: {@link Uri#effectivePort()} returns a
- * boxed {@link Integer} (nullable) while {@link Url#effectivePort()} returns a primitive {@code int}
- * ({@code -1} sentinel), and {@link Url#origin()} for an opaque origin returns the four-character
- * String {@code "null"} rather than a {@code null} reference.
+ * <p>Note the deliberate typing trap this pins down: {@link Url#origin()} for an opaque origin
+ * returns the four-character String {@code "null"} rather than a {@code null} reference. Both
+ * {@link Uri#effectivePort()} and {@link Url#effectivePort()} return a boxed {@link Integer}
+ * (nullable), reporting "no default port" as {@code null} rather than a sentinel.
  */
 public final class PublicApiDxJavaTest {
 
@@ -147,6 +148,27 @@ public final class PublicApiDxJavaTest {
     }
 
     @Test
+    public void uriRedactStripsUserinfoQueryAndFragment() {
+        Uri redacted = Uri.parseOrThrow("http://user:pass@h:8080/p?q=1#frag").redact();
+
+        Assert.assertEquals("http://h:8080/p", redacted.uriString());
+        Assert.assertNull(redacted.userInfo());
+        Assert.assertNull(redacted.query());
+        Assert.assertNull(redacted.fragment());
+    }
+
+    @Test
+    public void uriIsDirectoryAndHasTrailingSlashAgree() {
+        Uri directory = Uri.parseOrThrow("http://h/a/");
+        Assert.assertTrue(directory.isDirectory());
+        Assert.assertTrue(directory.hasTrailingSlash());
+
+        Uri file = Uri.parseOrThrow("http://h/a");
+        Assert.assertFalse(file.isDirectory());
+        Assert.assertFalse(file.hasTrailingSlash());
+    }
+
+    @Test
     public void uriResolveAndConvertToUrl() {
         Assert.assertEquals("http://h/x", Uri.parseOrThrow("http://h/a/b").resolveOrThrow("../x").uriString());
 
@@ -172,11 +194,20 @@ public final class PublicApiDxJavaTest {
     public void urlValidationErrorsListReflectsRepairs() {
         Assert.assertTrue(Url.parseOrThrow("https://example.com/a/b").validationErrors().isEmpty());
 
-        // A backslash under a special scheme is repaired to '/', recorded, and the parse still succeeds.
+        // A backslash under a special scheme is repaired to '/', recorded (with its offset), and
+        // the parse still succeeds.
         Url repaired = Url.parseOrThrow("https://example.com/a\\b");
         List<ValidationError> errors = repaired.validationErrors();
         Assert.assertFalse(errors.isEmpty());
-        Assert.assertTrue(errors.contains(ValidationError.BACKSLASH_AS_SOLIDUS));
+        boolean hasBackslashError = false;
+        for (ValidationError error : errors) {
+            if (error.getKind() == ValidationErrorKind.BACKSLASH_AS_SOLIDUS) {
+                hasBackslashError = true;
+                Assert.assertEquals(21, error.getAt());
+                Assert.assertFalse(error.isFailure());
+            }
+        }
+        Assert.assertTrue(hasBackslashError);
         Assert.assertEquals("https://example.com/a/b", repaired.href());
     }
 
@@ -212,13 +243,13 @@ public final class PublicApiDxJavaTest {
     }
 
     @Test
-    public void urlEffectivePortIsAPrimitiveInt() {
-        // Assigning to int proves the primitive return; -1 is the "no default" sentinel.
-        int httpsPort = Url.parseOrThrow("https://h/").effectivePort();
-        Assert.assertEquals(443, httpsPort);
+    public void urlEffectivePortIsABoxedInteger() {
+        // Assigning to Integer proves the boxed, nullable return: no -1 sentinel.
+        Integer httpsPort = Url.parseOrThrow("https://h/").effectivePort();
+        Assert.assertEquals(Integer.valueOf(443), httpsPort);
 
-        int noDefault = Url.parseOrThrow("mailto:a@b.example").effectivePort();
-        Assert.assertEquals(-1, noDefault);
+        Integer noDefault = Url.parseOrThrow("mailto:a@b.example").effectivePort();
+        Assert.assertNull(noDefault);
     }
 
     @Test
@@ -228,6 +259,28 @@ public final class PublicApiDxJavaTest {
         Assert.assertEquals(Integer.valueOf(8443), ported.port());
 
         Assert.assertNull(Url.parseOrThrow("https://h/p#x").withoutFragment().fragment());
+    }
+
+    @Test
+    public void urlRedactStripsUserinfoQueryAndFragment() {
+        Url redacted = Url.parseOrThrow("https://user:pass@h:8443/p?q=1#frag").redact();
+
+        Assert.assertEquals("https://h:8443/p", redacted.href());
+        Assert.assertEquals("", redacted.username());
+        Assert.assertEquals("", redacted.password());
+        Assert.assertNull(redacted.query());
+        Assert.assertNull(redacted.fragment());
+    }
+
+    @Test
+    public void urlIsDirectoryAndHasTrailingSlashAgree() {
+        Url directory = Url.parseOrThrow("https://h/a/");
+        Assert.assertTrue(directory.isDirectory());
+        Assert.assertTrue(directory.hasTrailingSlash());
+
+        Url file = Url.parseOrThrow("https://h/a");
+        Assert.assertFalse(file.isDirectory());
+        Assert.assertFalse(file.hasTrailingSlash());
     }
 
     // --- Query + ParseResult + Host ---

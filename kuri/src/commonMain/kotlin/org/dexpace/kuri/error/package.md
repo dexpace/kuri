@@ -12,8 +12,8 @@ consumption patterns; [getOrThrow] is the bridge to exceptions.
 percent-encoding, invalid port, empty or invalid host, forbidden host code point, input too long),
 each variant carrying enough context — typically an offset into the original input or an explanatory
 sub-value — to locate and explain the problem. A rejected host additionally carries a [HostError]
-discriminating *why* the §7 host pipeline failed. [ValidationError] is the separate, closed
-classification of non-fatal WHATWG anomalies that a lenient parser silently repairs; these are
-observational and never downgrade an [ParseResult.Ok] to an [ParseResult.Err]. For callers that
-prefer exceptions, [UriSyntaxException] is an `IllegalArgumentException` that wraps the same
-structured [UriParseError].
+discriminating *why* the §7 host pipeline failed. [ValidationError] is the record of a single
+non-fatal WHATWG anomaly that a lenient parser silently repairs, pairing a closed [ValidationErrorKind]
+with the offset it occurred at and whether that kind is WHATWG failure-class; these are observational
+and never downgrade an [ParseResult.Ok] to an [ParseResult.Err]. For callers that prefer exceptions,
+[UriSyntaxException] is an `IllegalArgumentException` that wraps the same structured [UriParseError].

@@ -116,7 +116,11 @@ public sealed interface UriParseError {
      * from a generic host failure so a caller can report the exact offending
      * code point and its location.
      *
-     * @property codePoint the offending Unicode scalar value.
+     * @property codePoint the offending Unicode scalar value, exactly as it appears in the original
+     *   input at [at] — for a domain host this is the pre-IDNA code point, which may differ from
+     *   what a WHATWG ToASCII implementation would itself report after mapping (e.g. NBSP maps to
+     *   SPACE): a caller highlighting [at] in the text they were given needs the code point actually
+     *   present there.
      * @property at the offset of the offending code unit in the original input.
      */
     public data class ForbiddenHostCodePoint(

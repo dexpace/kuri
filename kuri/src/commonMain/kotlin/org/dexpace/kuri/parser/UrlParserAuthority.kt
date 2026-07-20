@@ -7,6 +7,7 @@ package org.dexpace.kuri.parser
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.error.ValidationError
+import org.dexpace.kuri.error.ValidationErrorKind
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.host.UrlHostParser
 import org.dexpace.kuri.percent.PercentCodec
@@ -114,6 +115,7 @@ internal object UrlParserAuthority {
         lastAt: Int,
     ) {
         require(start <= lastAt) { "userinfo span is inverted: $start..$lastAt" }
+        recordAtSigns(state, start, lastAt)
         val userinfo = state.input.substring(start, lastAt)
         val colon = userinfo.indexOf(':')
         val rawUser = if (colon >= 0) userinfo.substring(0, colon) else userinfo
@@ -121,7 +123,23 @@ internal object UrlParserAuthority {
         state.password =
             if (colon >= 0) PercentCodec.encode(userinfo.substring(colon + 1), PercentEncodeSets.USERINFO) else ""
         state.atSignSeen = true
-        state.errors.add(ValidationError.INVALID_CREDENTIALS)
+    }
+
+    /**
+     * Records one [ValidationErrorKind.INVALID_CREDENTIALS] per `@` in `[start, lastAt]`
+     * ([PARSE-56]): both a non-final `@` folded into the username and the final delimiter
+     * itself (guaranteed present at [lastAt] by [lastAtSign]'s contract), each at its own offset.
+     */
+    private fun recordAtSigns(
+        state: UrlParserState,
+        start: Int,
+        lastAt: Int,
+    ) {
+        for (i in start..lastAt) {
+            if (state.input[i] == '@') {
+                state.errors.add(ValidationError(ValidationErrorKind.INVALID_CREDENTIALS, at = i))
+            }
+        }
     }
 
     // --- host (§8.3 [PARSE-29]–[PARSE-31]) -------------------------------------------
@@ -203,15 +221,42 @@ internal object UrlParserAuthority {
         hostSlice: String,
         idx: Int,
         isColon: Boolean,
-    ): UrlTransition =
-        when (val host = resolveHost(state, hostSlice)) {
-            is ParseResult.Err -> UrlTransition.Fail(host.error)
+    ): UrlTransition {
+        // The host slice begins at the current pointer (the Ok branch only advances it afterwards),
+        // so this is the host's start offset used to rebase a host-relative error to full input.
+        val hostStart = state.pos
+        return when (val host = resolveHost(state, hostSlice)) {
+            is ParseResult.Err -> UrlTransition.Fail(rebaseHostError(host.error, hostStart))
             is ParseResult.Ok -> {
                 state.host = host.value
                 state.pos = idx
                 hostTransition(state, isColon)
             }
         }
+    }
+
+    /**
+     * Rebases a host-pipeline error's offset from host-slice-relative to full-input coordinates
+     * ([HOST-37]), the `Url`-profile counterpart of the same rebase `UriParser` applies.
+     *
+     * [UrlHostParser] reports [UriParseError.ForbiddenHostCodePoint.at] relative to the host
+     * substring it was handed — for an opaque host that offset is already in the raw (pre-decode)
+     * slice, and for a special domain [UrlHostParser] has mapped it back through IDNA and
+     * percent-decoding to the same raw-slice coordinates — so adding [hostStart], the slice's own
+     * offset in the pre-processed input, recovers the position [UriParseError.ForbiddenHostCodePoint]
+     * documents. Every other host error carries no offset ([UriParseError.EmptyHost]) or the
+     * offending text verbatim ([UriParseError.InvalidHost]), so no other variant is adjusted.
+     */
+    private fun rebaseHostError(
+        error: UriParseError,
+        hostStart: Int,
+    ): UriParseError {
+        require(hostStart >= 0) { "host start offset must not be negative: $hostStart" }
+        return when (error) {
+            is UriParseError.ForbiddenHostCodePoint -> error.copy(at = hostStart + error.at)
+            else -> error
+        }
+    }
 
     /** Post-host transition, honouring a HOST/HOSTNAME override ([SET-*]; WHATWG host state). */
     private fun hostTransition(
@@ -353,7 +398,7 @@ internal object UrlParserAuthority {
         c: Char?,
     ): UrlTransition {
         if (c == '\\') {
-            state.errors.add(ValidationError.BACKSLASH_AS_SOLIDUS)
+            state.errors.add(ValidationError(ValidationErrorKind.BACKSLASH_AS_SOLIDUS, at = state.pos))
         }
         return UrlTransition.Advance(UrlState.FILE_SLASH)
     }
@@ -388,10 +433,14 @@ internal object UrlParserAuthority {
             else -> fileBaseDriveBranch(state)
         }
 
-    /** Shortens the copied path unless the remaining input is a drive letter, then reconsumes PATH. */
+    /**
+     * Shortens the copied path unless the remaining input is a drive letter, then reconsumes PATH.
+     * The drive-letter branch records [PARSE-57] before clearing the path.
+     */
     private fun fileBaseDriveBranch(state: UrlParserState): UrlTransition {
         state.query = null
         if (startsWithWindowsDrive(state.fromCurrent())) {
+            state.errors.add(ValidationError(ValidationErrorKind.FILE_INVALID_WINDOWS_DRIVE_LETTER, at = state.pos))
             state.path.clear()
         } else {
             shortenPath(state)
@@ -408,7 +457,9 @@ internal object UrlParserAuthority {
     internal fun fileSlashState(state: UrlParserState): UrlTransition {
         val c = state.currentChar()
         if (c == '/' || c == '\\') {
-            if (c == '\\') state.errors.add(ValidationError.BACKSLASH_AS_SOLIDUS)
+            if (c == '\\') {
+                state.errors.add(ValidationError(ValidationErrorKind.BACKSLASH_AS_SOLIDUS, at = state.pos))
+            }
             return UrlTransition.Advance(UrlState.FILE_HOST)
         }
         return fileSlashBase(state)
@@ -465,7 +516,7 @@ internal object UrlParserAuthority {
             // WHATWG file-host state 1.1: the drive-letter reinterpretation applies only outside a
             // state override; a `host`/`hostname` setter value that happens to look like a drive
             // letter (e.g. "C:") is instead parsed as an ordinary host in the `else` branch below.
-            state.stateOverride == null && isWindowsDriveLetter(buffer) -> UrlTransition.Reconsume(UrlState.PATH)
+            state.stateOverride == null && isWindowsDriveLetter(buffer) -> driveLetterAsPath(state)
             buffer.isEmpty() -> {
                 state.host = Host.Empty
                 state.pos = end
@@ -473,6 +524,17 @@ internal object UrlParserAuthority {
             }
             else -> parseFileHost(state, buffer, end)
         }
+
+    /**
+     * Records [PARSE-58] and reinterprets a drive-letter file-host buffer as a path; the pointer
+     * is left untouched so PATH re-reads the same buffer it was scanned from.
+     */
+    private fun driveLetterAsPath(state: UrlParserState): UrlTransition {
+        state.errors.add(
+            ValidationError(ValidationErrorKind.FILE_INVALID_WINDOWS_DRIVE_LETTER_HOST, at = state.pos),
+        )
+        return UrlTransition.Reconsume(UrlState.PATH)
+    }
 
     /**
      * Post-file-host transition ([PARSE-37]; WHATWG "if state override is given, then return"): a
@@ -487,8 +549,11 @@ internal object UrlParserAuthority {
         state: UrlParserState,
         buffer: String,
         end: Int,
-    ): UrlTransition =
-        when (
+    ): UrlTransition {
+        // The file-host buffer begins at the current pointer (the Ok branch only advances it
+        // afterwards), so this is the host start offset used to rebase a host-relative error.
+        val hostStart = state.pos
+        return when (
             val host =
                 UrlHostParser.parse(
                     buffer,
@@ -496,11 +561,12 @@ internal object UrlParserAuthority {
                     isFile = true,
                 )
         ) {
-            is ParseResult.Err -> UrlTransition.Fail(host.error)
+            is ParseResult.Err -> UrlTransition.Fail(rebaseHostError(host.error, hostStart))
             is ParseResult.Ok -> {
                 state.host = if (host.value == Host.RegName(LOCALHOST)) Host.Empty else host.value
                 state.pos = end
                 fileHostTransition(state)
             }
         }
+    }
 }

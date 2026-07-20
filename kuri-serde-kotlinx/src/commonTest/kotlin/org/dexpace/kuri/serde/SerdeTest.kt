@@ -14,6 +14,7 @@ import org.dexpace.kuri.Url
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 @Serializable
 private data class Config(
@@ -72,6 +73,119 @@ private data class Contact(
 @Serializable
 private data class Nested(
     val inner: Search,
+)
+
+@Serializable
+private data class Metadata(
+    val meta: Map<String, String>,
+)
+
+@Serializable
+private data class Scores(
+    val scores: Map<String, Int>,
+)
+
+@Serializable
+private data class MapFlags(
+    val flags: Map<String, Boolean>,
+)
+
+@Serializable
+private data class Counts(
+    val counts: Map<Int, Int>,
+)
+
+@Serializable
+private data class AllMapValues(
+    val bytes: Map<String, Byte>,
+    val shorts: Map<String, Short>,
+    val ints: Map<String, Int>,
+    val longs: Map<String, Long>,
+    val floats: Map<String, Float>,
+    val doubles: Map<String, Double>,
+    val chars: Map<String, Char>,
+    val flags: Map<String, Boolean>,
+    val sorts: Map<String, Sort>,
+)
+
+@Serializable
+private data class NestedMapValue(
+    val entries: Map<String, Search>,
+)
+
+@Serializable
+private data class NestedMapList(
+    val entries: Map<String, List<Int>>,
+)
+
+@Serializable
+private data class NullableMapValues(
+    val scores: Map<String, Int?>,
+)
+
+@Serializable
+private data class OptionalMetadata(
+    val meta: Map<String, String> = emptyMap(),
+)
+
+@Serializable
+private data class NullableMetadata(
+    val meta: Map<String, String>? = null,
+)
+
+@Serializable
+private data class MapWithDefault(
+    val meta: Map<String, String> = mapOf("default" to "value"),
+)
+
+@Serializable
+private data class Holder(
+    val friends: List<Contact>,
+)
+
+@Serializable
+private data class Matrix(
+    val rows: List<List<Int>>,
+)
+
+@Serializable
+private data class Profile(
+    val handle: String,
+    val bio: String?,
+)
+
+@Serializable
+private data class Foo(
+    val tags: List<String> = listOf("x"),
+)
+
+@Serializable
+private data class Flag(
+    val flag: Boolean,
+)
+
+@Serializable
+private data class Flags(
+    val flags: List<Boolean>,
+)
+
+@Serializable
+private data class NullableTags(
+    val tags: List<String>? = null,
+)
+
+// No default: unlike NullableTags/NullableMetadata above, these are *required* (decodeElementIndex's
+// isElementOptional bypass never skips them) but still nullable, so decodeNotNullMark() — not the
+// optional-element bypass — is what would mistake an empty collection for null without the marker.
+
+@Serializable
+private data class RequiredNullableTags(
+    val tags: List<String>?,
+)
+
+@Serializable
+private data class RequiredNullableMeta(
+    val meta: Map<String, String>?,
 )
 
 class SerdeTest {
@@ -197,6 +311,67 @@ class SerdeTest {
     }
 
     @Test
+    fun `an explicitly-empty list round-trips to an empty list rather than the declared default`() {
+        // Regression test for #86: encoding Foo(tags = emptyList()) against a non-empty default
+        // (listOf("x")) must not be indistinguishable from tags being absent altogether.
+        val encoded = QueryParametersFormat.encodeToQueryString(Foo(tags = emptyList()))
+        assertEquals("tags[]", encoded)
+        assertEquals(Foo(tags = emptyList()), QueryParametersFormat.decodeFromQueryString<Foo>(encoded))
+    }
+
+    @Test
+    fun `a field genuinely absent from the query still falls back to its declared default`() {
+        assertEquals(Foo(tags = listOf("x")), QueryParametersFormat.decodeFromQueryString<Foo>(""))
+    }
+
+    @Test
+    fun `a list left at its declared empty default is still omitted from the encoded output`() {
+        // Search.tags defaults to emptyList(), so Search(q = "only") leaves it unchanged: no marker,
+        // no repeated pairs, matching the existing default-omission contract.
+        assertEquals("q=only", QueryParametersFormat.encodeToQueryString(Search(q = "only")))
+        assertEquals(emptyList(), QueryParametersFormat.decodeFromQueryString<Search>("q=only").tags)
+    }
+
+    @Test
+    fun `a non-empty list still round-trips without an empty-list marker`() {
+        val original = Foo(tags = listOf("a", "b", "c"))
+        val encoded = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("tags=a&tags=b&tags=c", encoded)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<Foo>(encoded))
+    }
+
+    @Test
+    fun `an explicitly-empty nullable list round-trips to an empty list rather than null`() {
+        // Regression for #86: NullableSerializer calls decodeNotNullMark() before ever reaching
+        // QueryListDecoder. With only the empty-list marker on the wire (no tags=... pairs),
+        // params.has("tags") is false, so a marker-blind decodeNotNullMark() would short-circuit
+        // straight to null instead of decoding an empty list.
+        val encoded = QueryParametersFormat.encodeToQueryString(NullableTags(tags = emptyList()))
+        assertEquals("tags[]", encoded)
+        val decoded = QueryParametersFormat.decodeFromQueryString<NullableTags>(encoded)
+        assertEquals(NullableTags(tags = emptyList()), decoded)
+    }
+
+    @Test
+    fun `an explicitly-empty required-nullable list round-trips to an empty list rather than null`() {
+        // RequiredNullableTags.tags has no default, so it is required: decodeElementIndex always
+        // visits it regardless of presence. But it is still nullable, so decodeNotNullMark() — called
+        // by NullableSerializer before ever reaching QueryListDecoder — is what needs the marker here,
+        // not the optional-element bypass. Gating the marker on "optional only" would make this encode
+        // indistinguishably from RequiredNullableTags(tags = null).
+        val encoded = QueryParametersFormat.encodeToQueryString(RequiredNullableTags(tags = emptyList()))
+        assertEquals("tags[]", encoded)
+        val decoded = QueryParametersFormat.decodeFromQueryString<RequiredNullableTags>(encoded)
+        assertEquals(RequiredNullableTags(tags = emptyList()), decoded)
+    }
+
+    @Test
+    fun `a required-nullable list absent from the query decodes to null`() {
+        val decoded = QueryParametersFormat.decodeFromQueryString<RequiredNullableTags>("")
+        assertEquals(RequiredNullableTags(tags = null), decoded)
+    }
+
+    @Test
     fun `a null optional value is omitted when encoding and decodes back to null`() {
         val withoutNickname = Contact(name = "ada", nickname = null)
         val query = QueryParametersFormat.encodeToQueryString(withoutNickname)
@@ -211,11 +386,95 @@ class SerdeTest {
         assertEquals(withNickname, QueryParametersFormat.decodeFromQueryString<Contact>(query))
     }
 
+    // Profile.bio has no default, unlike Contact.nickname: decodeElementIndex's isElementOptional
+    // short-circuit only applies to a defaulted element, so these cases force an actual
+    // decodeNotNullMark()/encodeNull() call instead of the property being skipped upstream.
+
+    @Test
+    fun `encoding a required nullable property that is null omits its key`() {
+        val query = QueryParametersFormat.encodeToQueryString(Profile(handle = "ada", bio = null))
+        assertEquals("handle=ada", query)
+    }
+
+    @Test
+    fun `decoding a required nullable property absent from the query yields null`() {
+        val profile = QueryParametersFormat.decodeFromQueryString<Profile>("handle=ada")
+        assertEquals(Profile(handle = "ada", bio = null), profile)
+    }
+
+    @Test
+    fun `decoding a required nullable property present with no value yields an empty string`() {
+        val profile = QueryParametersFormat.decodeFromQueryString<Profile>("handle=ada&bio=")
+        assertEquals(Profile(handle = "ada", bio = ""), profile)
+    }
+
+    @Test
+    fun `a required nullable property present but empty round-trips through encode and decode`() {
+        val original = Profile(handle = "ada", bio = "")
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("handle=ada&bio=", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<Profile>(query))
+    }
+
     @Test
     fun `decoding an unrecognized enum value throws`() {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.decodeFromQueryString<Search>("q=x&sort=SIDEWAYS")
         }
+    }
+
+    @Test
+    fun `decoding a numeric boolean value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=1")
+        }
+    }
+
+    @Test
+    fun `decoding a word other than true or false throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=yes")
+        }
+    }
+
+    @Test
+    fun `decoding a misspelled boolean value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=ture")
+        }
+    }
+
+    @Test
+    fun `decoding an invalid boolean list element throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flags>("flags=true&flags=nope")
+        }
+    }
+
+    @Test
+    fun `decoding an empty boolean value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=")
+        }
+    }
+
+    @Test
+    fun `decoding a whitespace-padded boolean value throws instead of trimming`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Flag>("flag=%20true")
+        }
+    }
+
+    @Test
+    fun `decoding true and false boolean values still succeeds`() {
+        assertEquals(Flag(flag = true), QueryParametersFormat.decodeFromQueryString<Flag>("flag=true"))
+        assertEquals(Flag(flag = false), QueryParametersFormat.decodeFromQueryString<Flag>("flag=false"))
+    }
+
+    @Test
+    fun `decoding a boolean value is case-insensitive`() {
+        assertEquals(Flag(flag = true), QueryParametersFormat.decodeFromQueryString<Flag>("flag=TRUE"))
+        assertEquals(Flag(flag = false), QueryParametersFormat.decodeFromQueryString<Flag>("flag=FALSE"))
     }
 
     @Test
@@ -233,6 +492,109 @@ class SerdeTest {
     }
 
     @Test
+    fun `decoding a list with both real values and its empty-collection marker throws`() {
+        // A hand-edited or otherwise malformed query string carrying both `tags=x` and `tags[]` is
+        // self-contradictory: fail fast instead of silently preferring the real values and ignoring
+        // the marker.
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Foo>("tags=x&tags[]")
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Int value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Search>("q=x&page=abc")
+        }
+    }
+
+    @Test
+    fun `decoding an empty Int value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Search>("q=x&page=")
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Long value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=notanumber" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Short value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=notanumber&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Byte value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=notanumber&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Double value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=notanumber&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Float value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=notanumber&doubleValue=1.0&charValue=a&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding an empty Char value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a multi-character Char value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllScalars>(
+                "text=t&flag=true&byteValue=1&shortValue=1&intValue=1&longValue=1" +
+                    "&floatValue=1.0&doubleValue=1.0&charValue=ab&sort=ASC",
+            )
+        }
+    }
+
+    @Test
+    fun `decoding a malformed list element throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<AllLists>(
+                "bytes=abc&shorts=1&ints=1&longs=1&floats=1.0&doubles=1.0&chars=a&flags=true&sorts=ASC",
+            )
+        }
+    }
+
+    @Test
     fun `decoding a nested serializable object is rejected`() {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.decodeFromQueryString<Nested>("inner=x")
@@ -244,5 +606,256 @@ class SerdeTest {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.encodeToQueryParameters(Nested(Search(q = "x")))
         }
+    }
+
+    @Test
+    fun `encoding a serializable object nested inside a list is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.encodeToQueryParameters(Holder(listOf(Contact(name = "ada", nickname = "countess"))))
+        }
+    }
+
+    @Test
+    fun `decoding a serializable object nested inside a list is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Holder>("friends=ada")
+        }
+    }
+
+    @Test
+    fun `encoding a list nested inside a list is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.encodeToQueryParameters(Matrix(listOf(listOf(1, 2))))
+        }
+    }
+
+    @Test
+    fun `decoding a list nested inside a list is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Matrix>("rows=1")
+        }
+    }
+
+    @Test
+    fun `a map property round-trips through the query format`() {
+        val original = Metadata(meta = mapOf("a" to "1", "b" to "2"))
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("meta.key=a&meta.value=1&meta.key=b&meta.value=2", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<Metadata>(query))
+    }
+
+    @Test
+    fun `an empty required map property round-trips without an empty-collection marker`() {
+        // Metadata.meta has no default, so it is required: a required element is always visited on
+        // decode regardless of presence (decodeElementIndex's isElementOptional bypass), so it needs
+        // no marker to disambiguate "present but empty" from "absent" the way an optional/nullable
+        // empty collection does. Encoding it should therefore produce no pairs at all.
+        val original = Metadata(meta = emptyMap())
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<Metadata>(query))
+    }
+
+    @Test
+    fun `a map value needing percent-encoding round-trips through the query format`() {
+        val original = Metadata(meta = mapOf("a" to "b c&d=e"))
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("meta.key=a&meta.value=b%20c%26d=e", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<Metadata>(query))
+    }
+
+    @Test
+    fun `a map with non-string scalar values round-trips through the query format`() {
+        val original = Scores(scores = mapOf("alice" to 1, "bob" to 2))
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("scores.key=alice&scores.value=1&scores.key=bob&scores.value=2", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<Scores>(query))
+    }
+
+    @Test
+    fun `every scalar kind round-trips as a map value through the query format`() {
+        val original =
+            AllMapValues(
+                bytes = mapOf("a" to 1, "b" to 2),
+                shorts = mapOf("a" to 10, "b" to 20),
+                ints = mapOf("a" to 100, "b" to 200),
+                longs = mapOf("a" to 1_000L, "b" to 2_000L),
+                floats = mapOf("a" to 1.5f, "b" to 2.5f),
+                doubles = mapOf("a" to 1.1, "b" to 2.2),
+                chars = mapOf("a" to 'x', "b" to 'y'),
+                flags = mapOf("a" to true, "b" to false),
+                sorts = mapOf("a" to Sort.ASC, "b" to Sort.DESC),
+            )
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<AllMapValues>(query))
+    }
+
+    @Test
+    fun `a map with mismatched key and value counts fails to decode`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Metadata>("meta.key=a&meta.key=b&meta.value=1")
+        }
+    }
+
+    @Test
+    fun `decoding a map with both real values and its empty-collection marker throws`() {
+        // A hand-edited or otherwise malformed query string carrying both real entries and `meta[]`
+        // is self-contradictory: fail fast instead of silently preferring the real entries and
+        // ignoring the marker.
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Metadata>("meta.key=a&meta.value=1&meta[]")
+        }
+    }
+
+    @Test
+    fun `decoding a numeric boolean map value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<MapFlags>("flags.key=a&flags.value=1")
+        }
+    }
+
+    @Test
+    fun `decoding a misspelled boolean map value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<MapFlags>("flags.key=a&flags.value=ture")
+        }
+    }
+
+    @Test
+    fun `decoding an empty boolean map value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<MapFlags>("flags.key=a&flags.value=")
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Int map value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Scores>("scores.key=alice&scores.value=notanumber")
+        }
+    }
+
+    @Test
+    fun `decoding a malformed map key throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Counts>("counts.key=notanumber&counts.value=1")
+        }
+    }
+
+    @Test
+    fun `decoding a nested serializable object as a map value is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<NestedMapValue>("entries.key=x&entries.value=y")
+        }
+    }
+
+    @Test
+    fun `encoding a nested serializable object as a map value is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.encodeToQueryParameters(NestedMapValue(mapOf("x" to Search(q = "y"))))
+        }
+    }
+
+    @Test
+    fun `decoding a list nested as a map value is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<NestedMapList>("entries.key=a&entries.value=1")
+        }
+    }
+
+    @Test
+    fun `encoding a list nested as a map value is rejected`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.encodeToQueryParameters(NestedMapList(entries = mapOf("a" to listOf(1, 2))))
+        }
+    }
+
+    @Test
+    fun `encoding a null map value throws instead of desyncing the key-value pairing`() {
+        val exception =
+            assertFailsWith<SerializationException> {
+                QueryParametersFormat.encodeToQueryParameters(NullableMapValues(scores = mapOf("a" to null)))
+            }
+        assertTrue(exception.message.orEmpty().contains("null map"))
+    }
+
+    @Test
+    fun `a nullable map value type with present values round-trips through the query format`() {
+        val original = NullableMapValues(scores = mapOf("a" to 1, "b" to 2))
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("scores.key=a&scores.value=1&scores.key=b&scores.value=2", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<NullableMapValues>(query))
+    }
+
+    @Test
+    fun `an optional map property with data present round-trips instead of falling back to its default`() {
+        val original = OptionalMetadata(meta = mapOf("a" to "1", "b" to "2"))
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("meta.key=a&meta.value=1&meta.key=b&meta.value=2", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<OptionalMetadata>(query))
+    }
+
+    @Test
+    fun `an absent optional map property decodes to its declared default`() {
+        assertEquals(OptionalMetadata(), QueryParametersFormat.decodeFromQueryString<OptionalMetadata>(""))
+    }
+
+    @Test
+    fun `a nullable map property with data present round-trips instead of decoding to null`() {
+        val original = NullableMetadata(meta = mapOf("a" to "1", "b" to "2"))
+        val query = QueryParametersFormat.encodeToQueryString(original)
+        assertEquals("meta.key=a&meta.value=1&meta.key=b&meta.value=2", query)
+        assertEquals(original, QueryParametersFormat.decodeFromQueryString<NullableMetadata>(query))
+    }
+
+    @Test
+    fun `an absent nullable map property decodes to null`() {
+        assertEquals(NullableMetadata(meta = null), QueryParametersFormat.decodeFromQueryString<NullableMetadata>(""))
+    }
+
+    @Test
+    fun `an explicitly-empty optional map round-trips to an empty map rather than the declared default`() {
+        // Regression for the map counterpart of #86 (see `an explicitly-empty list round-trips...`
+        // above): encoding MapWithDefault(meta = emptyMap()) against a non-empty default
+        // (mapOf("default" to "value")) must not be indistinguishable from meta being absent
+        // altogether. OptionalMetadata can't demonstrate this on its own since its declared default
+        // already is emptyMap(), so an explicitly-empty value there is (correctly) omitted entirely.
+        val encoded = QueryParametersFormat.encodeToQueryString(MapWithDefault(meta = emptyMap()))
+        assertEquals("meta[]", encoded)
+        assertEquals(
+            MapWithDefault(meta = emptyMap()),
+            QueryParametersFormat.decodeFromQueryString<MapWithDefault>(encoded),
+        )
+    }
+
+    @Test
+    fun `an explicitly-empty nullable map round-trips to an empty map rather than null`() {
+        // Regression for the map counterpart of #86: NullableSerializer calls decodeNotNullMark()
+        // before ever reaching QueryMapDecoder. With only the empty-collection marker on the wire (no
+        // meta.key/meta.value pairs), a marker-blind decodeNotNullMark() would short-circuit straight
+        // to null instead of decoding an empty map.
+        val encoded = QueryParametersFormat.encodeToQueryString(NullableMetadata(meta = emptyMap()))
+        assertEquals("meta[]", encoded)
+        val decoded = QueryParametersFormat.decodeFromQueryString<NullableMetadata>(encoded)
+        assertEquals(NullableMetadata(meta = emptyMap()), decoded)
+    }
+
+    @Test
+    fun `an explicitly-empty required-nullable map round-trips to an empty map rather than null`() {
+        // RequiredNullableMeta.meta has no default, so it is required: decodeElementIndex always
+        // visits it regardless of presence. But it is still nullable, so decodeNotNullMark() — called
+        // by NullableSerializer before ever reaching QueryMapDecoder — is what needs the marker here,
+        // not the optional-element bypass. Gating the marker on "optional only" would make this encode
+        // indistinguishably from RequiredNullableMeta(meta = null).
+        val encoded = QueryParametersFormat.encodeToQueryString(RequiredNullableMeta(meta = emptyMap()))
+        assertEquals("meta[]", encoded)
+        val decoded = QueryParametersFormat.decodeFromQueryString<RequiredNullableMeta>(encoded)
+        assertEquals(RequiredNullableMeta(meta = emptyMap()), decoded)
+    }
+
+    @Test
+    fun `a required-nullable map absent from the query decodes to null`() {
+        val decoded = QueryParametersFormat.decodeFromQueryString<RequiredNullableMeta>("")
+        assertEquals(RequiredNullableMeta(meta = null), decoded)
     }
 }

@@ -4,8 +4,10 @@
  */
 package org.dexpace.kuri
 
+import org.dexpace.kuri.error.ValidationErrorKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class UrlSetterTest {
     private fun url(s: String): Url = Url.parseOrThrow(s)
@@ -106,6 +108,20 @@ class UrlSetterTest {
     }
 
     @Test
+    fun `withSearch records invalid-url-unit for an out-of-repertoire code point`() {
+        val withRawSpace = url("http://h/").withSearch("?a b")
+        assertEquals("http://h/?a%20b", withRawSpace.href)
+        assertTrue(withRawSpace.validationErrors().any { it.kind == ValidationErrorKind.INVALID_URL_UNIT })
+    }
+
+    @Test
+    fun `withPathname records invalid-url-unit for an out-of-repertoire code point`() {
+        val withRawSpace = url("http://h/").withPathname("/a b")
+        assertEquals("http://h/a%20b", withRawSpace.href)
+        assertTrue(withRawSpace.validationErrors().any { it.kind == ValidationErrorKind.INVALID_URL_UNIT })
+    }
+
+    @Test
     fun `withHash sets the fragment and strips a leading hash`() {
         assertEquals("http://h/#frag", url("http://h/").withHash("#frag").href)
     }
@@ -113,6 +129,21 @@ class UrlSetterTest {
     @Test
     fun `withHash empty removes the fragment`() {
         assertEquals("http://h/", url("http://h/#frag").withHash("").href)
+    }
+
+    @Test
+    fun `withHash records invalid-url-unit for an out-of-repertoire code point`() {
+        val withRawSpace = url("http://h/").withHash("#a b")
+        assertEquals("http://h/#a%20b", withRawSpace.href)
+        assertTrue(withRawSpace.validationErrors().any { it.kind == ValidationErrorKind.INVALID_URL_UNIT })
+    }
+
+    @Test
+    fun `withHash validation errors reflect only the new fragment rather than the base url's`() {
+        val base = url("http://h/?a b")
+        assertTrue(base.validationErrors().any { it.kind == ValidationErrorKind.INVALID_URL_UNIT })
+        val hashed = base.withHash("#frag")
+        assertTrue(hashed.validationErrors().none { it.kind == ValidationErrorKind.INVALID_URL_UNIT })
     }
 
     @Test

@@ -1962,9 +1962,9 @@ For a `QueryParameters` holding pairs `p[0..size)` where `p[i] = (nameAt(i), val
 
 **[QUERY-17]** `removeAll(name: String): Builder` MUST remove every pair whose name equals `name`, preserving the relative order of the remaining pairs. If no pair matches, the list MUST be unchanged.
 
-**[QUERY-18]** `sort(): Builder` MUST perform a **stable** sort of the pair list by **name only**, comparing names by Unicode **code point** sequence. The comparison MUST be surrogate-aware: a name MUST be compared as a sequence of code points (UTF-16 surrogate pairs combined into a single supplementary code point), so that supplementary-plane characters (`> U+FFFF`) sort after all Basic-Multilingual-Plane characters. Stability MUST be preserved: pairs with equal names MUST retain their pre-sort relative order (and thus their associated values' order). The comparison MUST NOT consider values.
+**[QUERY-18]** `sort(): Builder` MUST perform a **stable** sort of the pair list by **name only**, comparing names by raw UTF-16 **code unit** sequence (i.e. `char`-by-`char`, without combining surrogate pairs into code points), matching the WHATWG URL specification. Because this comparison is not surrogate-aware, a supplementary-plane name's leading surrogate (`U+D800`-`U+DBFF`) can compare below a Basic-Multilingual-Plane character at or above `U+D800`, so a supplementary-plane name can sort before a BMP name that would precede it under code-point order. Stability MUST be preserved: pairs with equal names MUST retain their pre-sort relative order (and thus their associated values' order). The comparison MUST NOT consider values.
 
-> Note: ada `url_search_params::sort` uses a `stable_sort` and decodes UTF-8 into code points (combining surrogates) rather than comparing raw code units; kuri adopts code-point order per this section. WHATWG's own `sort()` is specified over code units — kuri deliberately specifies code-point order for surrogate correctness.
+> Note: ada `url_search_params::sort` uses a `stable_sort` and decodes UTF-8 into code points (combining surrogates) rather than comparing raw code units, diverging from the WHATWG algorithm for names containing supplementary-plane characters; kuri instead follows WHATWG's own `sort()`, which is specified over raw code units.
 
 #### 10.3.3 Serialization back to a raw query
 
@@ -2530,7 +2530,7 @@ Each requirement below is a single testable behaviour with its example input and
 - **[CONF-100]** `addQueryParameter` MUST encode `+`, `=`, `&`, and space (`a+=& b` → `a%2B%3D%26%20b`), whereas `addEncodedQueryParameter` MUST keep `+` literal but still encode `=` and `&`.
 - **[CONF-101]** A query value containing special characters (`` !$(),/:;?@[]\^`{|}~ ``) MUST be fully percent-encoded by the encoding setter path.
 - **[CONF-102]** Form serialization MUST map space → `+`, `+` → `%2B`, `&` → `%26`, `=` → `%3D`, and UTF-8 accents (`été` → `%C3%A9t%C3%A9`); empty pairs MUST round-trip (`a=&=&=b`).
-- **[CONF-103]** `sort()` MUST be stable and ordered by Unicode code point (surrogate-aware), falling back to raw-byte ordering for truncated or invalid UTF-8.
+- **[CONF-103]** `sort()` MUST be stable and ordered by raw UTF-16 code unit, not Unicode code point (i.e. not surrogate-aware — see [QUERY-18]), falling back to raw-byte ordering for truncated or invalid UTF-8.
 - **[CONF-104]** A query parse pair-count limit MUST be enforced as a DoS bound (see §12), beyond which parsing yields `Err` or truncates per the defined policy.
 - **[CONF-105]** A `=` inside an empty-key pair MUST be left literal so `?===3===` round-trips, while `=` inside a non-empty-key pair is encoded.
 
@@ -2690,7 +2690,7 @@ This appendix lists every numbered, testable requirement tag **[ABBR-N]** define
 | **[CONF-100]** | §13 | addQueryParameter MUST encode +, =, &, and space (a+=& b → a%2B%3D%26%20b) … |
 | **[CONF-101]** | §13 | A query value containing special characters ( !$(),/:;?@[]\^{ }~ ) MUST be … |
 | **[CONF-102]** | §13 | Form serialization MUST map space → +, + → %2B, & → … |
-| **[CONF-103]** | §13 | sort() MUST be stable and ordered by Unicode code point (surrogate-aware), falling … |
+| **[CONF-103]** | §13 | sort() MUST be stable and ordered by raw UTF-16 code unit, not Unicode code … |
 | **[CONF-104]** | §13 | A query parse pair-count limit MUST be enforced as a DoS bound … |
 | **[CONF-105]** | §13 | A = inside an empty-key pair MUST be left literal so ?===3=== … |
 | **[CONF-106]** | §13 | Most code points, including non-ASCII, MUST pass through the fragment with identity … |

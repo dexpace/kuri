@@ -238,7 +238,11 @@ internal object UriParser {
             else -> parsePresentAuthority(authority, sections.authorityStart, options)
         }
 
-    /** Splits userinfo from host:port at the LAST `@` ([PARSE-44]); a forbidden userinfo unit is fatal. */
+    /**
+     * Splits userinfo from host:port at the LAST `@` ([PARSE-44]); a forbidden userinfo unit is
+     * fatal. [userinfo] stays `null` when no `@` was found at all — distinct from an `@` found
+     * with nothing before it, which yields the present-but-empty `""` ([MODEL-11]).
+     */
     private fun parsePresentAuthority(
         authority: String,
         authorityStart: Int,
@@ -246,35 +250,57 @@ internal object UriParser {
     ): ParseResult<Authority?> {
         require(authorityStart >= 0) { "authority start must be known: $authorityStart" }
         val at = authority.lastIndexOf('@')
-        val userinfo = if (at >= 0) authority.substring(0, at) else ""
+        val userinfo = if (at >= 0) authority.substring(0, at) else null
         val hostPort = if (at >= 0) authority.substring(at + 1) else authority
-        return when (val error = rawError(userinfo, authorityStart)) {
-            null -> buildAuthority(userinfo, hostPort, options)
+        val hostPortStart = if (at >= 0) authorityStart + at + 1 else authorityStart
+        return when (val error = userinfo?.let { rawError(it, authorityStart) }) {
+            null -> buildAuthority(userinfo, hostPort, hostPortStart, options)
             else -> ParseResult.Err(error)
         }
     }
 
     /** Parses host (§7, `Uri` profile) and port, combining them with the split userinfo credentials. */
     private fun buildAuthority(
-        userinfo: String,
+        userinfo: String?,
         hostPort: String,
+        hostPortStart: Int,
         options: ParseOptions,
     ): ParseResult<Authority?> {
         val (username, password) = splitUserinfo(userinfo)
+        // `host` is always a prefix of `hostPort` (every splitHostPort branch takes a `substring(0,
+        // ...)` or returns `hostPort` itself), so it starts at the same offset as `hostPort`.
         val (host, portText) = splitHostPort(hostPort)
         return when (
             val parsed =
                 UriHostParser.parse(host, allowIpv6ZoneId = options.allowIpv6ZoneId)
         ) {
-            is ParseResult.Err -> parsed
+            is ParseResult.Err -> ParseResult.Err(rebaseHostError(parsed.error, hostPortStart))
             is ParseResult.Ok -> attachPort(username, password, parsed.value, portText)
         }
     }
 
+    /**
+     * Rebases a host-pipeline error's offset to full-input coordinates ([ERR-8]), matching how
+     * [rawError] rebases [UriParseError.InvalidPercentEncoding] with `start + at`.
+     *
+     * [UriHostParser] reports [UriParseError.ForbiddenHostCodePoint.at] relative to the host
+     * substring it was given, not the original `Uri` text; every other host-pipeline error either
+     * carries no offset ([UriParseError.EmptyHost]) or already carries the offending text verbatim
+     * ([UriParseError.InvalidHost]), so no other variant needs adjustment here.
+     */
+    private fun rebaseHostError(
+        error: UriParseError,
+        hostStart: Int,
+    ): UriParseError =
+        when (error) {
+            is UriParseError.ForbiddenHostCodePoint -> error.copy(at = hostStart + error.at)
+            else -> error
+        }
+
     /** Validates the optional port ([PARSE-32]/[PARSE-33]) and assembles the [Authority]. */
     private fun attachPort(
-        username: String,
-        password: String,
+        username: String?,
+        password: String?,
         host: Host,
         portText: String?,
     ): ParseResult<Authority?> =
@@ -283,11 +309,16 @@ internal object UriParser {
             is ParseResult.Ok -> ParseResult.Ok(Authority(username, password, host, port.value))
         }
 
-    /** Splits userinfo into username and password at the FIRST `:` ([PARSE-45]); later `:` stay in the password. */
-    private fun splitUserinfo(userinfo: String): Pair<String, String> {
+    /**
+     * Splits present [userinfo] into username and password at the FIRST `:` ([PARSE-45]); later
+     * `:` stay in the password. A `null` [userinfo] (no `@` at all) yields `Pair(null, null)`; a
+     * non-null [userinfo] with no `:` yields a `null` password ([MODEL-11]).
+     */
+    private fun splitUserinfo(userinfo: String?): Pair<String?, String?> {
+        if (userinfo == null) return Pair(null, null)
         val colon = userinfo.indexOf(':')
         return when {
-            colon < 0 -> Pair(userinfo, "")
+            colon < 0 -> Pair(userinfo, null)
             else -> Pair(userinfo.substring(0, colon), userinfo.substring(colon + 1))
         }
     }
@@ -456,8 +487,8 @@ internal object UriParser {
     ): ParsedComponents =
         ParsedComponents(
             scheme = sections.scheme,
-            username = authority?.username ?: "",
-            password = authority?.password ?: "",
+            username = authority?.username,
+            password = authority?.password,
             host = authority?.host,
             port = authority?.port,
             path = path,
@@ -509,10 +540,13 @@ internal object UriParser {
         val fragmentStart: Int,
     )
 
-    /** The parsed authority pieces: decoded-form credentials, the §7 [host], and the optional [port]. */
+    /**
+     * The parsed authority pieces: decoded-form credentials (nullable per [MODEL-11] — see
+     * [splitUserinfo]), the §7 [host], and the optional [port].
+     */
     private data class Authority(
-        val username: String,
-        val password: String,
+        val username: String?,
+        val password: String?,
         val host: Host,
         val port: Int?,
     )

@@ -10,15 +10,23 @@
 
 package org.dexpace.kuri.parser
 
+import org.dexpace.kuri.error.ValidationError
+import org.dexpace.kuri.error.ValidationErrorKind
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSets
 import org.dexpace.kuri.text.isAsciiAlpha
+import org.dexpace.kuri.text.isSurrogatePairAt
+import org.dexpace.kuri.text.isUrlCodePoint
+import org.dexpace.kuri.text.toCodePoint
 
 /** The canonical `file` scheme, special-cased throughout the §8.3 `Url` state machine. */
 internal const val FILE_SCHEME: String = "file"
 
 /** The code points that may terminate a Windows drive letter prefix (`/`, `\`, `?`, `#`). */
 private const val WINDOWS_DRIVE_TERMINATORS: String = "/\\?#"
+
+/** The `%` code point, exempted from [recordInvalidUrlCodePoints] ([PARSE-59] case (b) is out of scope). */
+private const val PERCENT_CODE_POINT: Int = '%'.code
 
 /**
  * True when [ch] is one of the three universal authority/path terminators `/`, `?`, `#`
@@ -141,4 +149,49 @@ internal fun isNormalizedWindowsDrive(value: String): Boolean =
 internal fun startsWithWindowsDrive(value: String): Boolean {
     val hasDrive = value.length >= 2 && value[0].isAsciiAlpha() && (value[1] == ':' || value[1] == '|')
     return hasDrive && (value.length == 2 || value[2] in WINDOWS_DRIVE_TERMINATORS)
+}
+
+/**
+ * The [ValidationErrorKind.INVALID_URL_UNIT] errors for each code point in [text] that is neither
+ * a URL code point (SPEC §4.2.5) nor `%` (SPEC [PARSE-59] case (a); the WHATWG *invalid-URL-unit*
+ * validation error's code-point case). [textOffset] is where [text]'s first code unit sits in the
+ * coordinate space [ValidationError.at] uses, so every recorded offset is `textOffset` plus the
+ * local index of the offending code point.
+ *
+ * A malformed `%` escape (SPEC [PARSE-59] case (b)) is deliberately not recorded here: every `%`
+ * is skipped regardless of what follows it, since [PercentCodec] always leaves a malformed one
+ * literal ([PCT-23]) and flagging that case is a separate, unimplemented anomaly.
+ *
+ * A free function (rather than a [UrlParserState] method) so `Url`'s setters that encode a
+ * component outside the state machine — [org.dexpace.kuri.Url.withHash], which has no
+ * `StateOverride` to re-enter the engine through — can reuse the exact same scan.
+ */
+internal fun invalidUrlCodePointErrors(
+    text: String,
+    textOffset: Int,
+): List<ValidationError> {
+    require(textOffset >= 0) { "text offset must be non-negative: $textOffset" }
+    val errors = mutableListOf<ValidationError>()
+    var i = 0
+    while (i < text.length) {
+        val pair = isSurrogatePairAt(text, i)
+        val codePoint = if (pair) toCodePoint(text[i], text[i + 1]) else text[i].code
+        if (codePoint != PERCENT_CODE_POINT && !isUrlCodePoint(codePoint)) {
+            errors.add(ValidationError(ValidationErrorKind.INVALID_URL_UNIT, at = textOffset + i))
+        }
+        i += if (pair) 2 else 1
+    }
+    return errors
+}
+
+/**
+ * Records [invalidUrlCodePointErrors] for [text] directly into [state]'s error sink; the
+ * state-machine-facing counterpart used by every full/override parse path.
+ */
+internal fun recordInvalidUrlCodePoints(
+    state: UrlParserState,
+    text: String,
+    textOffset: Int,
+) {
+    state.errors.addAll(invalidUrlCodePointErrors(text, textOffset))
 }

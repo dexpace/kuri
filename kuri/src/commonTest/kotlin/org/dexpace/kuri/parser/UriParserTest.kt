@@ -182,7 +182,23 @@ class UriParserTest {
         val result = UriParser.parse("http://h\u0001ost/p")
 
         assertIs<ParseResult.Err>(result)
-        assertIs<UriParseError.ForbiddenHostCodePoint>(result.error)
+        val error = assertIs<UriParseError.ForbiddenHostCodePoint>(result.error)
+        assertEquals(1, error.codePoint)
+        // UriHostParser reports index 1 relative to the host substring; UriParser must rebase that
+        // to the full-input offset 8 (the host starts right after "http://").
+        assertEquals(8, error.at)
+    }
+
+    @Test
+    fun `parse rebases a forbidden host code point past userinfo credentials`() {
+        // The host still reports its own offense at its local index 1, but here the host starts at
+        // full-input index 12 (right after "http://user@"), so the rebased offset must be 13.
+        val result = UriParser.parse("http://user@h\u0001ost/p")
+
+        assertIs<ParseResult.Err>(result)
+        val error = assertIs<UriParseError.ForbiddenHostCodePoint>(result.error)
+        assertEquals(1, error.codePoint)
+        assertEquals(13, error.at)
     }
 
     @Test
@@ -319,6 +335,34 @@ class UriParserTest {
         assertEquals("user", components.username)
         assertEquals("pw", components.password)
         assertEquals(Host.RegName("h"), components.host)
+    }
+
+    @Test
+    fun `parse leaves username and password null when no at-sign is present`() {
+        val components = parsed("http://h/p")
+
+        assertNull(components.username)
+        assertNull(components.password)
+    }
+
+    @Test
+    fun `parse distinguishes an empty-but-present userinfo from no userinfo`() {
+        // Regression for #104: an at-sign with nothing before it is a present, empty userinfo
+        // (username == ""), distinct from no at-sign at all (username == null).
+        val components = parsed("http://@h/")
+
+        assertEquals("", components.username)
+        assertNull(components.password)
+    }
+
+    @Test
+    fun `parse distinguishes an empty-but-present password from no password`() {
+        // Regression for #104: a colon with nothing after it is a present, empty password
+        // (password == ""), distinct from no colon at all (password == null).
+        val components = parsed("http://u:@h/")
+
+        assertEquals("u", components.username)
+        assertEquals("", components.password)
     }
 
     @Test

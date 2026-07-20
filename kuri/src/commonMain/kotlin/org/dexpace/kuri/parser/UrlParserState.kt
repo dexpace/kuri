@@ -90,8 +90,11 @@ internal class UrlParserState(
     ) : this(value, base = null, fragmentRaw = null, errors = errors) {
         scheme = seed.scheme
         special = seed.scheme?.let { Scheme.isSpecial(it) } ?: false
-        username = seed.username
-        password = seed.password
+        // A Url-profile seed never actually carries a null username/password (the Url profile has
+        // no absent-vs-present-empty userinfo distinction, NORM-30); the `?:` guard keeps this
+        // assignment total against the shared, nullable ParsedComponents shape.
+        username = seed.username ?: ""
+        password = seed.password ?: ""
         host = seed.host
         port = seed.port
         when (val seedPath = seed.path) {
