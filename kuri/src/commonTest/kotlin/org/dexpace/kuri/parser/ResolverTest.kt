@@ -6,6 +6,7 @@ package org.dexpace.kuri.parser
 
 import org.dexpace.kuri.ParseOptions
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.ResourceLimit
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.serialize.UriSerializer
@@ -133,6 +134,58 @@ internal class ResolverTest {
     }
 
     @Test
+    fun `resolve rejects an empty base as MissingScheme without throwing`() {
+        // An empty base serializes to a scheme-less relative reference; it must reach the same
+        // MissingScheme outcome as any other scheme-less base rather than tripping a precondition.
+        // Covers the empty, query-only, and fragment-only references that take the empty-path branch.
+        for (reference in listOf("#s", "", "?q")) {
+            val result = Resolver.resolve("", reference)
+
+            val err = assertIs<ParseResult.Err>(result, "resolve(\"\", \"$reference\")")
+            assertEquals(UriParseError.MissingScheme, err.error, "resolve(\"\", \"$reference\")")
+        }
+    }
+
+    @Test
+    fun `resolve rejects a non-empty scheme-less base as MissingScheme`() {
+        // Regression guard: a non-empty relative base already resolved to MissingScheme, and the
+        // empty base must behave identically -- neither should throw.
+        val result = Resolver.resolve("a/b/c", "g")
+
+        val err = assertIs<ParseResult.Err>(result)
+        assertEquals(UriParseError.MissingScheme, err.error)
+    }
+
+    @Test
+    fun `resolve accepts a flat base with far more segments than the default resolutionDepth`() {
+        // A flat path has zero dot-segments, so it consumes zero resolution depth even though its 300
+        // segments far exceed the default ResolutionDepth (256): ResolutionDepth bounds dot-segment
+        // work, not the total segment count (which is PathSegments' concern).
+        val base = "http://h/" + "s/".repeat(FLAT_SEGMENT_COUNT)
+
+        val result = Resolver.resolve(base, "x")
+
+        assertIs<ParseResult.Ok<String>>(result)
+    }
+
+    @Test
+    fun `resolutionDepth counts one unit per dot-segment removal`() {
+        // Five leading "../" removals cost five resolution-depth units: resolutionDepth(4) rejects
+        // with observed == 5, while resolutionDepth(5) admits it (equality is not "exceeded").
+        val reference = "../".repeat(5) + "g"
+
+        val rejected = Resolver.resolve(BASE, reference, ParseOptions.Builder().resolutionDepth(4).build())
+        val err = assertIs<ParseResult.Err>(rejected)
+        val limit = assertIs<UriParseError.LimitExceeded>(err.error)
+        assertEquals(ResourceLimit.ResolutionDepth, limit.limit)
+        assertEquals(5, limit.observed)
+        assertEquals(4, limit.max)
+
+        val accepted = Resolver.resolve(BASE, reference, ParseOptions.Builder().resolutionDepth(5).build())
+        assertIs<ParseResult.Ok<String>>(accepted)
+    }
+
+    @Test
     fun `resolve guards a dot-segment-collapsed authority-less two-slash path`() {
         // RFC 3986 §3.3: an authority-less path cannot begin with "//" (it would re-read as an
         // authority). "/.//g" resolved against a no-authority base collapses via §5.2.4 case B to
@@ -145,16 +198,106 @@ internal class ResolverTest {
 
     @Test
     fun `resolve returns an error instead of throwing when the merge exceeds the length bound`() {
-        // Each individual input parses fine, but base's directory prefix concatenated with the
-        // rootless reference exceeds the resolver's defensive length bound (8192); this must
-        // surface as a ParseResult.Err, never an escaping exception ("total, never throws").
-        val base = "a:/" + "x".repeat(5000) + "/c"
-        val longRef = "y".repeat(5000)
+        // Each individual input parses fine (well under ParseOptions.DEFAULT.inputLength), but
+        // base's directory prefix concatenated with the rootless reference exceeds the resolver's
+        // ExpandedLength bound; this must surface as a ParseResult.Err, never an escaping
+        // exception ("total, never throws").
+        val base = "a:/" + "x".repeat(SEGMENT_LENGTH) + "/c"
+        val longRef = "y".repeat(SEGMENT_LENGTH)
 
         val result = Resolver.resolve(base, longRef)
 
         val err = assertIs<ParseResult.Err>(result)
         assertIs<UriParseError.InputTooLong>(err.error)
+    }
+
+    @Test
+    fun `resolve respects an overridden expandedLength and reports InputTooLong with the configured max`() {
+        // A merge that fits under the default ExpandedLength must fail once the caller lowers it.
+        val base = "a:/aaaa/c"
+        val longRef = "y".repeat(20)
+        val options = ParseOptions.Builder().expandedLength(10).build()
+
+        val result = Resolver.resolve(base, longRef, options)
+
+        val err = assertIs<ParseResult.Err>(result)
+        val tooLong = assertIs<UriParseError.InputTooLong>(err.error)
+        assertEquals(10, tooLong.max)
+    }
+
+    @Test
+    fun `resolve succeeds when the merge lands exactly at an overridden expandedLength`() {
+        // Mirrors the overridden-bound test above, but sized so the merge lands exactly at the
+        // configured max rather than one past it.
+        val base = "a:/aaaa/c"
+        val ref = "y".repeat(4)
+        val options = ParseOptions.Builder().expandedLength(10).build()
+
+        val result = Resolver.resolve(base, ref, options)
+
+        assertIs<ParseResult.Ok<String>>(result)
+    }
+
+    @Test
+    fun `resolve reports InputTooLong instead of throwing when a lowered expandedLength rejects a reference path`() {
+        // The reference carries its own scheme, so removeDotSegments runs directly on its path (no
+        // merge to guard it) — this call site must still be bounded rather than reaching the require().
+        val options = ParseOptions.Builder().expandedLength(5).build()
+
+        val result = Resolver.resolve("http://a/b", "http:aaaaaaaaaa", options)
+
+        val err = assertIs<ParseResult.Err>(result)
+        assertEquals(UriParseError.InputTooLong(10, 5), err.error)
+    }
+
+    @Test
+    fun `resolve accepts a scheme-bearing reference path exactly at the expandedLength bound`() {
+        // The reference carries its own scheme, so its path goes straight through
+        // boundedRemoveDotSegments; a path length exactly equal to expandedLength is accepted, since
+        // the gate rejects only length strictly greater than the bound (boundary success).
+        val options = ParseOptions.Builder().expandedLength(5).build()
+
+        val result = Resolver.resolve("http://a/b", "http:aaaaa", options)
+
+        val resolved = assertIs<ParseResult.Ok<String>>(result)
+        assertEquals("http:aaaaa", resolved.value)
+    }
+
+    @Test
+    fun `resolve rejects a reference whose dot-segment collapse exceeds a lowered resolutionDepth`() {
+        // A reference with many dot-segments takes many §5.2.4 iterations. A resolutionDepth(1)
+        // override caps that work at one iteration, so the collapse is rejected with
+        // LimitExceeded(ResolutionDepth, ...); the default bound (256) accepts the same reference.
+        val manyDotSegments = "../".repeat(MANY_DOT_SEGMENT_COUNT) + "g"
+        val lowered = ParseOptions.Builder().resolutionDepth(1).build()
+
+        val rejected = Resolver.resolve(BASE, manyDotSegments, lowered)
+
+        val err = assertIs<ParseResult.Err>(rejected)
+        val limit = assertIs<UriParseError.LimitExceeded>(err.error)
+        assertEquals(ResourceLimit.ResolutionDepth, limit.limit)
+        assertEquals(1, limit.max)
+
+        val accepted = Resolver.resolve(BASE, manyDotSegments)
+        assertIs<ParseResult.Ok<String>>(accepted)
+    }
+
+    @Test
+    fun `resolve returns InputTooLong instead of throwing when an empty-path reference keeps an over-long base path`() {
+        // The reference has an empty path, so §5.2.2 keeps the base path verbatim. base.path is
+        // bounded by inputLength, not expandedLength; with a lowered expandedLength the kept base
+        // path exceeds it, and the resolver must fold that to a ParseResult.Err rather than let
+        // recompose's length assertion throw. Covers the empty-path, query-only, and fragment-only
+        // reference forms that all take the empty-path branch.
+        val opts = ParseOptions.Builder().expandedLength(1_000).build()
+        val base = "https://example.com/" + "a".repeat(2_000)
+
+        for (reference in listOf("", "?q", "#f")) {
+            val result = Resolver.resolve(base, reference, opts)
+
+            val err = assertIs<ParseResult.Err>(result, "resolve(base, \"$reference\")")
+            assertIs<UriParseError.InputTooLong>(err.error, "resolve(base, \"$reference\")")
+        }
     }
 
     @Test
@@ -281,10 +424,10 @@ internal class ResolverTest {
     fun `structured resolve returns an error instead of throwing when the merge exceeds the length bound`() {
         // Mirrors "resolve returns an error instead of throwing when the merge exceeds the length
         // bound" on the structured overload: both inputs parse fine individually, but base's
-        // directory prefix concatenated with the rootless reference exceeds the resolver's
-        // defensive length bound (8192), which the structured resolve shares via transformReferences.
-        val base = UriParser.parse("a:/" + "x".repeat(5000) + "/c").getOrThrow()
-        val reference = UriParser.parse("y".repeat(5000)).getOrThrow()
+        // directory prefix concatenated with the rootless reference exceeds the resolver's default
+        // ExpandedLength bound, which the structured resolve shares via transformReferences.
+        val base = UriParser.parse("a:/" + "x".repeat(SEGMENT_LENGTH) + "/c").getOrThrow()
+        val reference = UriParser.parse("y".repeat(SEGMENT_LENGTH)).getOrThrow()
 
         val result = Resolver.resolve(base, reference)
 
@@ -308,5 +451,24 @@ internal class ResolverTest {
     private companion object {
         /** The canonical RFC 3986 §5.4 base URI every example table resolves against. */
         const val BASE: String = "http://a/b/c/d;p?q"
+
+        /**
+         * Half of each length-bound test case's segment length: each half stays under
+         * `ParseOptions.DEFAULT.inputLength` (65,536) on its own, but the merged path exceeds
+         * `ParseOptions.DEFAULT.expandedLength` (also 65,536 by default).
+         */
+        const val SEGMENT_LENGTH: Int = 40_000
+
+        /**
+         * Well more than one dot-segment, yet comfortably under the default [ResourceLimit.ResolutionDepth]
+         * (256) removal bound — so a `resolutionDepth(1)` override rejects it while the default accepts it.
+         */
+        const val MANY_DOT_SEGMENT_COUNT: Int = 50
+
+        /**
+         * Far more ordinary path segments than the default [ResourceLimit.ResolutionDepth] (256), to
+         * prove a flat (dot-segment-free) path consumes zero resolution depth and still resolves.
+         */
+        const val FLAT_SEGMENT_COUNT: Int = 300
     }
 }

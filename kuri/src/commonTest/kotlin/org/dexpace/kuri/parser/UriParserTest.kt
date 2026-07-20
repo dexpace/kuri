@@ -4,7 +4,9 @@
  */
 package org.dexpace.kuri.parser
 
+import org.dexpace.kuri.ParseOptions
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.ResourceLimit
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.host.Host
 import kotlin.test.Test
@@ -248,12 +250,82 @@ class UriParserTest {
 
     @Test
     fun `parse rejects input longer than the maximum length`() {
-        val tooLong = "a".repeat(8193)
+        // One past ParseOptions.DEFAULT.inputLength (ResourceLimit.InputLength's documented default).
+        val tooLong = "a".repeat(65_537)
 
         val result = UriParser.parse(tooLong)
 
         assertIs<ParseResult.Err>(result)
         assertIs<UriParseError.InputTooLong>(result.error)
+    }
+
+    @Test
+    fun `parse respects an overridden inputLength and reports InputTooLong with the configured max`() {
+        val options = ParseOptions.Builder().inputLength(10).build()
+
+        val result = UriParser.parse("a".repeat(11), options)
+
+        val error = assertIs<ParseResult.Err>(result).error
+        val tooLong = assertIs<UriParseError.InputTooLong>(error)
+        assertEquals(11, tooLong.length)
+        assertEquals(10, tooLong.max)
+    }
+
+    @Test
+    fun `parse accepts input at exactly an overridden inputLength`() {
+        val options = ParseOptions.Builder().inputLength(10).build()
+
+        val result = UriParser.parse("a".repeat(10), options)
+
+        assertIs<ParseResult.Ok<ParsedComponents>>(result)
+    }
+
+    @Test
+    fun `parse accepts input at exactly the default inputLength`() {
+        // A bare relative-path reference of exactly ResourceLimit.InputLength's documented
+        // default (65,536) needs no scheme to be a valid Uri-profile reference.
+        val result = UriParser.parse("a".repeat(65_536))
+
+        assertIs<ParseResult.Ok<ParsedComponents>>(result)
+    }
+
+    @Test
+    fun `parse rejects a path whose segment count exceeds an overridden pathSegments limit`() {
+        val options = ParseOptions.Builder().pathSegments(2).build()
+
+        val result = UriParser.parse("s:/a/b/c", options)
+
+        val error = assertIs<ParseResult.Err>(result).error
+        val limitExceeded = assertIs<UriParseError.LimitExceeded>(error)
+        assertEquals(ResourceLimit.PathSegments, limitExceeded.limit)
+        assertEquals(3, limitExceeded.observed)
+        assertEquals(2, limitExceeded.max)
+    }
+
+    @Test
+    fun `parse accepts a path whose segment count equals an overridden pathSegments limit`() {
+        val options = ParseOptions.Builder().pathSegments(3).build()
+
+        val result = UriParser.parse("s:/a/b/c", options)
+
+        assertIs<ParseResult.Ok<ParsedComponents>>(result)
+    }
+
+    @Test
+    fun `parse accepts a three-segment path under the default pathSegments bound`() {
+        val result = UriParser.parse("s:/a/b/c")
+
+        assertIs<ParseResult.Ok<ParsedComponents>>(result)
+    }
+
+    @Test
+    fun `parse accepts a path whose segment count equals the default pathSegments bound`() {
+        // Exactly ResourceLimit.PathSegments's documented default (10,000) one-character segments.
+        val path = (1..10_000).joinToString("/") { "a" }
+
+        val result = UriParser.parse("s:/$path")
+
+        assertIs<ParseResult.Ok<ParsedComponents>>(result)
     }
 
     @Test

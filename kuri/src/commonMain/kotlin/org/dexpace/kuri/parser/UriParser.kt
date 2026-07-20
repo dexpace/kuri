@@ -6,6 +6,7 @@ package org.dexpace.kuri.parser
 
 import org.dexpace.kuri.ParseOptions
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.ResourceLimit
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.host.UriHostParser
@@ -25,12 +26,6 @@ private const val DEL: Char = '\u007F'
 
 /** Number of leading code points consumed by the authority-introducing `//` (RFC 3986 §3.2). */
 private const val DOUBLE_SLASH_LENGTH: Int = 2
-
-/**
- * Fixed maximum input length in UTF-16 code units ([PARSE-1]); a longer input is rejected before
- * the scan begins. A generous bound that no well-formed URI reference approaches in practice.
- */
-private const val MAX_INPUT_LENGTH: Int = 8192
 
 /**
  * The `Uri`-profile component splitter of SPEC §8 ([PARSE-9]..[PARSE-43]) for the RFC 3986
@@ -66,8 +61,10 @@ internal object UriParser {
      * (no scheme) is accepted and parsed standalone, deferring base merging to §9 ([PARSE-19]).
      *
      * @param input the URI-reference text exactly as supplied; no pre-processing is applied.
-     * @param options the opt-in parsing configuration; only [ParseOptions.allowIpv6ZoneId] is read
-     *   here and forwarded to the host pipeline ([HOST-18]).
+     * @param options the opt-in parsing configuration: [ParseOptions.allowIpv6ZoneId] is forwarded
+     *   to the host pipeline ([HOST-18]), and [ParseOptions.inputLength]/[ParseOptions.pathSegments]
+     *   configure the [ResourceLimit.InputLength]/[ResourceLimit.PathSegments] bounds ([ERR-30],
+     *   [ERR-33]).
      * @return the decomposed components, or the first fatal [UriParseError] in input order.
      */
     internal fun parse(
@@ -75,8 +72,8 @@ internal object UriParser {
         options: ParseOptions = ParseOptions.DEFAULT,
     ): ParseResult<ParsedComponents> =
         when {
-            input.length > MAX_INPUT_LENGTH ->
-                ParseResult.Err(UriParseError.InputTooLong(input.length, MAX_INPUT_LENGTH))
+            input.length > options.inputLength ->
+                ParseResult.Err(UriParseError.InputTooLong(input.length, options.inputLength))
 
             else -> decomposeAndBuild(input, options)
         }
@@ -86,7 +83,7 @@ internal object UriParser {
         input: String,
         options: ParseOptions,
     ): ParseResult<ParsedComponents> =
-        when (val sections = decompose(input)) {
+        when (val sections = decompose(input, options)) {
             is ParseResult.Err -> sections
             is ParseResult.Ok -> buildComponents(sections.value, options)
         }
@@ -100,8 +97,11 @@ internal object UriParser {
      * Fragment and query are pruned from the end first ([PARSE-7]/[PARSE-42]), so every retained
      * prefix index equals its original-input index. Only an ill-formed scheme is fatal here.
      */
-    private fun decompose(input: String): ParseResult<Sections> {
-        require(input.length <= MAX_INPUT_LENGTH) { "input must be length-checked before decompose" }
+    private fun decompose(
+        input: String,
+        options: ParseOptions,
+    ): ParseResult<Sections> {
+        require(input.length <= options.inputLength) { "input must be length-checked before decompose" }
         val frag = splitFragment(input)
         val query = splitQuery(frag.body)
         val scheme = splitScheme(query.hier)
@@ -225,7 +225,7 @@ internal object UriParser {
     ): ParseResult<ParsedComponents> =
         when (val authority = parseAuthority(sections, options)) {
             is ParseResult.Err -> authority
-            is ParseResult.Ok -> finishComponents(sections, authority.value)
+            is ParseResult.Ok -> finishComponents(sections, authority.value, options)
         }
 
     /** Parses the authority text into credentials, host, and port, or yields `null` when no `//` was present. */
@@ -385,14 +385,57 @@ internal object UriParser {
         }
     }
 
-    /** Validates the path, query, and fragment for forbidden units, then assembles the result. */
+    /**
+     * Validates the path, query, and fragment for forbidden units, then enforces the
+     * [ResourceLimit.PathSegments] bound on the split path before assembling the result ([ERR-33]).
+     */
     private fun finishComponents(
         sections: Sections,
         authority: Authority?,
+        options: ParseOptions,
     ): ParseResult<ParsedComponents> =
         when (val error = validateText(sections)) {
-            null -> ParseResult.Ok(assemble(sections, authority))
+            null -> buildWithinPathSegmentLimit(sections, authority, options)
             else -> ParseResult.Err(error)
+        }
+
+    /**
+     * Enforces [ParseOptions.pathSegments] on the raw path's segment count ([ERR-33]) before
+     * materializing the segment list: the count is derived arithmetically from the `/` separator
+     * count and the path's rootedness, so a hostile segment count is rejected without ever
+     * allocating the full list. [splitUriPath] runs only once the count is known to fit.
+     */
+    private fun buildWithinPathSegmentLimit(
+        sections: Sections,
+        authority: Authority?,
+        options: ParseOptions,
+    ): ParseResult<ParsedComponents> {
+        val raw = sections.path
+        val separators = raw.count { it == '/' }
+        val observed = pathSegmentCount(raw, separators)
+        // A path has at most one more segment than it has separators (a rootless path); a rooted or
+        // empty path has fewer. A violation would mean the count derivation drifted from splitUriPath.
+        check(observed <= separators + 1) { "segment count $observed exceeds separators-plus-one" }
+        return if (observed > options.pathSegments) {
+            ParseResult.Err(UriParseError.LimitExceeded(ResourceLimit.PathSegments, observed, options.pathSegments))
+        } else {
+            ParseResult.Ok(assemble(sections, authority, splitUriPath(raw)))
+        }
+    }
+
+    /**
+     * The number of RFC 3986 §3.3 segments [raw] splits into, matching [splitUriPath] without
+     * building the list: an empty path is 0, a rooted path (leading `/`) has as many segments as
+     * separators (its leading empty element is dropped), and a rootless path has one more.
+     */
+    private fun pathSegmentCount(
+        raw: String,
+        separators: Int,
+    ): Int =
+        when {
+            raw.isEmpty() -> 0
+            raw.startsWith('/') -> separators
+            else -> separators + 1
         }
 
     /** First forbidden unit across path, query, and fragment in input order, or `null` when all are clean. */
@@ -455,10 +498,14 @@ internal object UriParser {
             else -> minOf(a, b)
         }
 
-    /** Builds the immutable [ParsedComponents] from the validated structural [sections] and [authority]. */
+    /**
+     * Builds the immutable [ParsedComponents] from the validated structural [sections], [authority],
+     * and the already length-limit-checked [path].
+     */
     private fun assemble(
         sections: Sections,
         authority: Authority?,
+        path: ComponentPath.Segments,
     ): ParsedComponents =
         ParsedComponents(
             scheme = sections.scheme,
@@ -466,7 +513,7 @@ internal object UriParser {
             password = authority?.password,
             host = authority?.host,
             port = authority?.port,
-            path = splitUriPath(sections.path),
+            path = path,
             query = sections.query,
             fragment = sections.fragment,
         )

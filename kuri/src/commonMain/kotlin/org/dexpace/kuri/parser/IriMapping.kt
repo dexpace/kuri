@@ -4,6 +4,7 @@
  */
 package org.dexpace.kuri.parser
 
+import org.dexpace.kuri.ParseOptions
 import org.dexpace.kuri.Uri
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriParseError
@@ -35,8 +36,11 @@ private const val DOUBLE_SLASH_LENGTH: Int = 2
  * ASCII delimiters, and the final parse is authoritative, the coarse locator does not need to be a
  * full grammar.
  *
- * Percent-encoding grows the input, so the engine's `MAX_INPUT_LENGTH` bound applies to the
- * *expanded* ASCII string; a very long all-non-ASCII IRI may exceed it after encoding and be rejected.
+ * Percent-encoding and IDNA ToASCII both grow the input, so the raw IRI is bounded by
+ * `ParseOptions.inputLength` up front and the re-assembled ASCII string by
+ * `ParseOptions.expandedLength` afterwards (`ResourceLimit.ExpandedLength`, [ERR-31]); a very long
+ * all-non-ASCII IRI may fit the raw bound yet exceed the expanded one after encoding, and is then
+ * rejected with `UriParseError.InputTooLong`.
  *
  * Before any mapping happens, [precheckError] runs two RFC 3987 checks over the raw text:
  * [findBidiFormattingCharacter] rejects a bidi formatting character (LRM, RLM, LRE, RLE, PDF, LRO,
@@ -52,19 +56,53 @@ internal object IriMapping {
      * Maps [iri] to a [Uri] under RFC 3987 §3.1, or returns the first fatal failure.
      *
      * @param iri the internationalized reference to convert; non-ASCII input is accepted.
+     * @param options the parse configuration whose limits bound the mapping: [ParseOptions.inputLength]
+     *   caps the raw IRI ([ERR-30]) and [ParseOptions.expandedLength] caps the percent-encoded/IDNA-expanded
+     *   ASCII form ([ERR-31]).
      * @return [ParseResult.Ok] with the mapped [Uri], or [ParseResult.Err] on a §4.1 bidi-formatting
-     *   violation, a §2.2 repertoire violation, an IDNA host failure, or a strict-engine rejection of
-     *   the expanded ASCII form.
+     *   violation, a §2.2 repertoire violation, an IDNA host failure, a limit overflow, or a
+     *   strict-engine rejection of the expanded ASCII form.
      */
-    internal fun toUri(iri: String): ParseResult<Uri> {
+    internal fun toUri(
+        iri: String,
+        options: ParseOptions = ParseOptions.DEFAULT,
+    ): ParseResult<Uri> {
+        if (iri.length > options.inputLength) {
+            return ParseResult.Err(UriParseError.InputTooLong(iri.length, options.inputLength))
+        }
         val parts = decompose(iri)
         check(parts.host == null || parts.hasAuthority) { "a host requires an authority" }
-        val hostResult = resolveHost(precheckError(iri, parts), parts)
-        return when (hostResult) {
+        return when (val hostResult = resolveHost(precheckError(iri, parts), parts)) {
             is ParseResult.Err -> hostResult
-            is ParseResult.Ok -> UriParser.parse(reassemble(parts, hostResult.value)).map { Uri(it) }
+            is ParseResult.Ok -> parseExpanded(reassemble(parts, hostResult.value), options)
         }
     }
+
+    /**
+     * Parses the reassembled fully-ASCII [expanded] form under [options], enforcing the
+     * post-expansion [ParseOptions.expandedLength] bound first ([ERR-31]): both percent-encoding and
+     * IDNA ToASCII lengthen the input, so a mapping whose expanded form exceeds that bound is
+     * rejected with [UriParseError.InputTooLong] carrying the post-expansion length. The structural
+     * parse then runs with [ParseOptions.inputLength] raised to at least [ParseOptions.expandedLength],
+     * so the already-validated expansion is never re-rejected by the raw-input gate.
+     */
+    private fun parseExpanded(
+        expanded: String,
+        options: ParseOptions,
+    ): ParseResult<Uri> {
+        if (expanded.length > options.expandedLength) {
+            return ParseResult.Err(UriParseError.InputTooLong(expanded.length, options.expandedLength))
+        }
+        return UriParser.parse(expanded, expandedInputOptions(options)).map { Uri(it, options) }
+    }
+
+    /** [options] with [ParseOptions.inputLength] raised to fit the already-expanded-length-checked ASCII form. */
+    private fun expandedInputOptions(options: ParseOptions): ParseOptions =
+        if (options.inputLength >= options.expandedLength) {
+            options
+        } else {
+            options.newBuilder().inputLength(options.expandedLength).build()
+        }
 
     /**
      * The first §4.1 bidi-formatting or §2.2 repertoire violation in [iri], or `null` when both checks

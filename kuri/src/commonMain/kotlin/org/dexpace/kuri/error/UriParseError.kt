@@ -16,10 +16,10 @@ package org.dexpace.kuri.error
  * The parser produces a fixed slice of this catalog: structural failures
  * ([InvalidScheme], [MissingScheme], [InvalidPercentEncoding], [InvalidPort]),
  * host failures ([EmptyHost], [InvalidHost] carrying a [HostError], and
- * [ForbiddenHostCodePoint]), the size failure [InputTooLong], and the RFC 3987 IRI-conversion
- * failures ([IriInvalidCodePoint], [IriBidiFormattingCharacter]). The hierarchy
- * is `sealed` so a `when` over it is exhaustive without an `else`;
- * adding a variant is an intentional, API-visible change.
+ * [ForbiddenHostCodePoint]), the size failures [InputTooLong] and [LimitExceeded] (SPEC §12.6's
+ * `ResourceLimit` registry), and the RFC 3987 IRI-conversion failures ([IriInvalidCodePoint],
+ * [IriBidiFormattingCharacter]). The hierarchy is `sealed` so a `when` over it is exhaustive
+ * without an `else`; adding a variant is an intentional, API-visible change.
  */
 public sealed interface UriParseError {
     /**
@@ -40,6 +40,7 @@ public sealed interface UriParseError {
                 is InvalidHost -> "invalid host \"$host\": $reason"
                 is ForbiddenHostCodePoint -> "forbidden host code point $codePoint at offset $at"
                 is InputTooLong -> "input length $length exceeds maximum $max"
+                is LimitExceeded -> "$limit limit exceeded: $observed > $max"
                 is IriInvalidCodePoint -> "code point $codePoint at offset $at is outside the iri repertoire"
                 is IriBidiFormattingCharacter -> "forbidden bidi formatting character $codePoint at offset $at"
             }
@@ -128,15 +129,33 @@ public sealed interface UriParseError {
     ) : UriParseError
 
     /**
-     * The input length exceeds the configured maximum. Also produced
-     * when percent-decoding/IDNA expansion pushes the serialized length past the
-     * same bound, carrying the post-expansion [length].
+     * The input length exceeds the configured maximum. Also produced when a lengthening operation —
+     * IRI→URI percent-encoding, IDNA ToASCII/ToUnicode expansion, or RFC 3986 §5.2.3 path merging —
+     * pushes the serialized length past the `ExpandedLength` bound, carrying the post-expansion
+     * [length]. Percent-*decoding* only shrinks and never triggers this.
      *
      * @property length the observed length that triggered the failure.
      * @property max the configured maximum that was exceeded.
      */
     public data class InputTooLong(
         public val length: Int,
+        public val max: Int,
+    ) : UriParseError
+
+    /**
+     * A configured [ResourceLimit] other than [ResourceLimit.InputLength] or
+     * [ResourceLimit.ExpandedLength] was exceeded (SPEC §12.6, [ERR-17]). Those two length limits
+     * are reported through [InputTooLong] instead; every other entry in the [ResourceLimit]
+     * registry — e.g. [ResourceLimit.PathSegments] — is reported here, carrying which limit was
+     * hit, the observed count, and the configured maximum.
+     *
+     * @property limit the [ResourceLimit] that was exceeded.
+     * @property observed the observed count that triggered the failure.
+     * @property max the configured maximum that was exceeded.
+     */
+    public data class LimitExceeded(
+        public val limit: ResourceLimit,
+        public val observed: Int,
         public val max: Int,
     ) : UriParseError
 

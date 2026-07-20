@@ -2317,30 +2317,32 @@ For each listed condition, the table gives the mandated behaviour. "strip"/"trim
 Every unbounded dimension of the input is capped. Each limit has a documented default and MUST be configurable through the parse configuration. The full set is enumerated by `ResourceLimit`. This subsection is the canonical home for the resource-limit registry; other sections (e.g. the query-pair bound of §10.5) reference these limits rather than redefining them.
 
 ```kotlin
-public enum class ResourceLimit {
-    InputLength,       // default 64 KiB (65_536) UTF-16 code units
-    ExpandedLength,    // default equals InputLength; re-checked post percent/IDNA expansion
-    PathSegments,      // default 10_000
-    HostLabelLength,   // 63 (DNS); fixed by RFC 5890, not lowered below 63
-    HostTotalLength,   // 253 (DNS)
-    PortMax,           // 65_535
-    ResolutionDepth,   // default 256 (bound on reference-resolution / dot-segment work)
+public enum class ResourceLimit(public val defaultMax: Int) {
+    InputLength(65_536),     // 64 KiB UTF-16 code units
+    ExpandedLength(65_536),  // independent default equal to InputLength's; re-checked post IDNA/IRI-encoding expansion
+    PathSegments(10_000),
+    HostLabelLength(63),     // DNS; fixed by RFC 5890, not lowered below 63
+    HostTotalLength(253),    // DNS
+    PortMax(65_535),         // Url profile only
+    ResolutionDepth(256),    // bound on reference-resolution / §5.2.4 dot-segment work
 }
 ```
+
+The `defaultMax` is part of the public API ([ERR-36]): each limit's documented default is readable programmatically.
 
 **[ERR-29]** Each limit MUST be enforced and MUST have the documented default value above. Exceeding a limit MUST produce `InputTooLong` (for `InputLength`/`ExpandedLength`) or `LimitExceeded(limit, observed, max)` (for all others), never an unbounded allocation, a `StackOverflowError`, or a hang. Specifically:
 
 **[ERR-30]** **[InputLength]** The original input length MUST be checked before substantive parsing; if it exceeds `InputLength`, parsing MUST short-circuit with `InputTooLong` without scanning the whole input beyond what is needed to establish the overflow.
 
-**[ERR-31]** **[ExpandedLength]** Because percent-decoding and IDNA ToUnicode/ToASCII can lengthen a string, the total serialized length MUST be re-checked after expansion; an expansion that exceeds `ExpandedLength` MUST produce `InputTooLong` with the post-expansion `length`.
+**[ERR-31]** **[ExpandedLength]** Because IDNA ToUnicode/ToASCII expansion, IRI→URI percent-encoding, and RFC 3986 §5.2.3 path merging can lengthen a string, the total serialized length MUST be re-checked after such an operation; an expansion that exceeds `ExpandedLength` MUST produce `InputTooLong` with the post-expansion `length`. (Percent-*decoding* only shrinks and is not re-checked.) `ExpandedLength` defaults to the same value as `InputLength` but is an independent limit, not one that tracks `InputLength`.
 
 **[ERR-32]** **[Query pairs]** Query-pair and form-pair materialization is deliberately NOT a resource limit: deriving `QueryParameters` and parsing form input MUST be single-pass, lossless, and linear in the input length, materializing every pair with no pair-count cap (see [QUERY-24], matching WHATWG `URLSearchParams`). The raw `query`/`encodedQuery` string is not split into a bounded set; it is bounded only by `InputLength` on a profile that configures one (the `Uri` profile), never by a dedicated pair cap. There is accordingly no `QueryPairs` entry in `ResourceLimit`.
 
-**[ERR-33]** **[PathSegments / ResolutionDepth]** Path-segment splitting and dot-segment removal MUST be bounded: segment count by `PathSegments`, and reference-resolution work by `ResolutionDepth`. Resolution and dot-segment removal MUST run in bounded time and MUST NOT recurse without a fixed depth bound; a `..` sequence that would underflow the path MUST clamp at the root (per §9) rather than loop.
+**[ERR-33]** **[PathSegments / ResolutionDepth]** Path-segment splitting and dot-segment removal MUST be bounded: segment count by `PathSegments`, and reference-resolution work by `ResolutionDepth`. Resolution and dot-segment removal MUST run in bounded time and MUST NOT recurse without a fixed depth bound; a `..` sequence that would underflow the path MUST clamp at the root (per §9) rather than loop. Dot-segment removal counts its §5.2.4 `.`/`..` removals (not ordinary segment moves) and rejects a reference exceeding `ResolutionDepth` with `LimitExceeded(ResolutionDepth, observed, max)`; a flat path with no dot-segments consumes zero depth, so this bounds a dimension distinct from `PathSegments`.
 
 **[ERR-34]** **[HostLabelLength / HostTotalLength]** Label length (≤ 63) and total host length (≤ 253) MUST be computed during host parsing. By [ERR-22]/[ERR-23] they are advisory by default and fatal under `strict`. These limits MUST NOT be raised by configuration above the DNS-defined maxima for a host that is to be treated as a domain.
 
-**[ERR-35]** **[PortMax]** A port value MUST be rejected when it exceeds 65535 (`PortMax`), in both profiles and at all strictness levels (table row e).
+**[ERR-35]** **[PortMax]** A port value MUST be rejected when it exceeds 65535 (`PortMax`) in the `Url` profile, at all strictness levels (table row e). The `Uri` profile deliberately applies no port-value ceiling beyond `Int` overflow, per RFC 3986 Appendix B's unbounded `*DIGIT` port grammar, so this bound is `Url`-scoped rather than a both-profile maximum.
 
 **[ERR-36]** Limit defaults MUST be documented in the public API and MUST be overridable per parse via configuration. Lowering a limit MUST NOT change the outcome for inputs already within the lower bound; raising one MUST NOT lift the fixed protocol maxima in [ERR-34]/[ERR-35].
 

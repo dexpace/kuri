@@ -6,6 +6,7 @@ package org.dexpace.kuri
 
 import org.dexpace.kuri.error.HostError
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.ResourceLimit
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.error.UriSyntaxException
 import org.dexpace.kuri.host.Host
@@ -237,6 +238,92 @@ class UriTest {
         val normalized = parseOk("HTTP://www.EXAMPLE.com/%7e").normalized()
 
         assertEquals("http://www.example.com/~", normalized.uriString)
+    }
+
+    @Test
+    fun `normalized round-trips a path within a raised inputLength but beyond the default expandedLength`() {
+        // A path admitted under a raised inputLength must not be re-checked against the unrelated,
+        // smaller default expandedLength on normalize; normalize works on the already-bounded parsed
+        // path and its value round-trips (no dot-segments, already-lowercase scheme/host).
+        val options = ParseOptions.Builder().inputLength(200_000).build()
+        val parsed = Uri.parse("http://h/" + "a".repeat(100_000), options)
+
+        val uri = parsed.getOrNull() ?: fail("expected the raised-inputLength parse to succeed")
+        val normalized = uri.normalized()
+
+        assertEquals(uri.uriString, normalized.uriString)
+    }
+
+    @Test
+    fun `a value parsed under raised limits round-trips through newBuilder and resolve and relativize`() {
+        // ParseOptions is stored on the Uri, so every follow-on operation reuses the raised limits
+        // rather than silently reverting to the default 64 KiB and rejecting the value it produced.
+        val options =
+            ParseOptions
+                .Builder()
+                .inputLength(200_000)
+                .expandedLength(200_000)
+                .build()
+        val base = Uri.parse("http://h/" + "a".repeat(100_000) + "/x", options).getOrThrow()
+
+        // newBuilder rebuild reproduces the value -- would fail under the default inputLength.
+        assertEquals(base, base.newBuilder().build())
+        // re-parsing the serialization under the stored options round-trips.
+        assertEquals(base, Uri.parse(base.uriString, options).getOrThrow())
+
+        // resolve honours the stored expandedLength when merging onto the long base directory.
+        val target = base.resolve("sub").getOrNull() ?: fail("resolve should honour the raised limits")
+        assertTrue(target.uriString.endsWith("/sub"))
+
+        // relativize is not spuriously null: it resolves the candidate back under the stored limits.
+        val relative = base.relativize(target) ?: fail("relativize should find a relative form")
+        assertEquals(target, base.resolve(relative.uriString).getOrThrow())
+    }
+
+    @Test
+    fun `resolve returns an error instead of throwing for an empty reference against an over-long base path`() {
+        // Public-API mirror of the Resolver empty-path guard: a fragment-only reference keeps the
+        // base path, which under a lowered expandedLength exceeds the bound. Uri.resolve must report
+        // ParseResult.Err(InputTooLong), never let an IllegalStateException escape.
+        val opts = ParseOptions.Builder().expandedLength(1_000).build()
+        val base = Uri.parse("https://example.com/" + "a".repeat(2_000), opts).getOrThrow()
+
+        val result = base.resolve("#section", opts)
+
+        val err = assertIs<ParseResult.Err>(result)
+        assertIs<UriParseError.InputTooLong>(err.error)
+    }
+
+    @Test
+    fun `resolving against an empty base is total and reports MissingScheme`() {
+        // Uri.parseOrThrow("") is a scheme-less relative reference; resolving against it must be
+        // total -- Err(MissingScheme)/null/UriSyntaxException -- never a raw IllegalArgumentException.
+        val emptyBase = Uri.parseOrThrow("")
+
+        for (reference in listOf("#s", "", "?q")) {
+            val result = emptyBase.resolve(reference)
+            val err = assertIs<ParseResult.Err>(result, "resolve(\"$reference\")")
+            assertEquals(UriParseError.MissingScheme, err.error, "resolve(\"$reference\")")
+            assertNull(emptyBase.resolveOrNull(reference), "resolveOrNull(\"$reference\")")
+            val thrown = assertFailsWith<UriSyntaxException> { emptyBase.resolveOrThrow(reference) }
+            assertEquals(UriParseError.MissingScheme, thrown.error, "resolveOrThrow(\"$reference\")")
+        }
+    }
+
+    @Test
+    fun `resolve applies the pathSegments limit to the resolved result`() {
+        // Each input is within the limit on its own -- the base path is 3 segments and the reference
+        // is 2 -- but the merged, resolved path is 4 segments, so the limit must be enforced on the
+        // resolve RESULT, not only on the parsed inputs.
+        val options = ParseOptions.Builder().pathSegments(3).build()
+        val base = Uri.parse("http://h/a/b/c", options).getOrThrow()
+
+        val result = base.resolve("d/e")
+
+        val err = assertIs<ParseResult.Err>(result)
+        val limit = assertIs<UriParseError.LimitExceeded>(err.error)
+        assertEquals(ResourceLimit.PathSegments, limit.limit)
+        assertEquals(3, limit.max)
     }
 
     @Test

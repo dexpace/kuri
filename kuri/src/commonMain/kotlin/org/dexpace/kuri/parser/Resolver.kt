@@ -8,15 +8,14 @@ import org.dexpace.kuri.ParseOptions
 import org.dexpace.kuri.ZONE_ID_ENABLED
 import org.dexpace.kuri.carriesZoneId
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.ResourceLimit
 import org.dexpace.kuri.error.UriParseError
+import org.dexpace.kuri.error.flatMap
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.serializeHost
 import org.dexpace.kuri.scheme.Scheme
 import org.dexpace.kuri.scheme.schemeColonIndex
 import org.dexpace.kuri.serialize.guardRecomposedUriPath
-
-/** A generous upper bound on a path/URI length used only for defensive assertions (mirrors the parser cap). */
-private const val MAX_PATH_LENGTH: Int = 8192
 
 /** The path-segment separator, hoisted so the dot-segment prefix tests carry no bare string literals. */
 private const val SLASH: String = "/"
@@ -74,38 +73,59 @@ internal object Resolver {
     /**
      * Removes the complete `.`/`..` dot-segments from [path] per the §5.2.4 two-buffer algorithm.
      *
-     * A pure string transform: the input buffer is consumed prefix by prefix (cases A–E) into the
-     * output buffer, which is returned. Each iteration strictly shrinks the input, so the loop is
-     * bounded by the input length.
+     * A pure string transform run in O(`path.length`): a single non-decreasing cursor walks the
+     * input, and each matched prefix (cases A–E) appends at most one segment to the output buffer
+     * with no per-iteration substring allocation. The output can grow past the input (case C's `/..`
+     * terminal appends a `/` after popping), so the transform does not "strictly shrink"; it is
+     * bounded because every iteration advances the cursor by at least one code unit.
+     *
+     * This entry point is unbounded by [ParseOptions] on purpose — the length and resolution-depth
+     * gates live at the returning call sites ([boundedRemoveDotSegments]); it is used directly only
+     * where the input is already bounded (§6.2.2.3 normalization of an already-parsed path) or is a
+     * unit-test literal.
      *
      * @param path the merged/extracted path to normalize; may be empty.
      * @return the path with extraneous dot-segments removed.
      */
-    internal fun removeDotSegments(path: String): String {
-        require(path.length <= MAX_PATH_LENGTH) { "path exceeds the supported length bound: ${path.length}" }
-        val output = StringBuilder()
-        var input = path
-        val maxIterations = path.length + 1
-        var iterations = 0
-        while (input.isNotEmpty() && iterations <= maxIterations) {
-            input = step(input, output)
-            iterations++
+    internal fun removeDotSegments(path: String): String = collapseDotSegments(path).output
+
+    /**
+     * The pure §5.2.4 collapse of [path], returning the cleaned path and the number of *dot-segment*
+     * removals it performed — the measure [boundedRemoveDotSegments] gates against
+     * [ParseOptions.resolutionDepth]. Moving an ordinary segment (§5.2.4 case E) is not counted, so a
+     * flat path with no `.`/`..` consumes zero depth; only the `.`/`..`/`./`/`../`/`/./`/`/../`
+     * removals (cases A–D) advance the counter.
+     */
+    private fun collapseDotSegments(path: String): DotSegmentCollapse {
+        val output = StringBuilder(path.length)
+        var pos = 0
+        var dotSegments = 0
+        while (pos < path.length) {
+            val stepped = step(path, pos, output)
+            check(stepped.next > pos) { "remove_dot_segments made no progress at $pos" }
+            pos = stepped.next
+            if (stepped.dotSegment) dotSegments++
         }
-        check(input.isEmpty()) { "remove_dot_segments failed to consume the input buffer" }
-        return output.toString()
+        check(pos == path.length) { "remove_dot_segments overran the input to $pos" }
+        check(dotSegments <= path.length) { "dot-segment count $dotSegments exceeds the input length" }
+        return DotSegmentCollapse(output.toString(), dotSegments)
     }
 
     /**
      * Resolves [reference] against the absolute [baseUri] (§5.2), returning the target URI string.
      *
      * Both inputs are parsed with [UriParser] so the resolution inherits the parser's validation; an
-     * unparsable base or reference is forwarded as [ParseResult.Err], and a base without a scheme is
-     * rejected with [UriParseError.MissingScheme] since §5.2 requires an absolute base.
+     * unparsable base or reference is forwarded as [ParseResult.Err], and a base without a scheme —
+     * including the empty base, whose serialization parses to a scheme-less relative reference — is
+     * rejected with [UriParseError.MissingScheme] since §5.2 requires an absolute base. The operation
+     * is total: it never throws for a non-absolute base.
      *
      * @param baseUri the absolute base URI the reference is interpreted against.
      * @param reference the (possibly relative) URI reference to resolve.
      * @param options the opt-in parsing configuration applied to the validation parses of both
-     *   inputs, so a base (or reference) carrying an RFC 6874 zone id is accepted ([HOST-18]).
+     *   inputs, so a base (or reference) carrying an RFC 6874 zone id is accepted ([HOST-18]); its
+     *   [ParseOptions.expandedLength] also bounds the §5.2.3 path merge (`ResourceLimit.ExpandedLength`,
+     *   [ERR-31]).
      * @return the recomposed target URI, or the first fatal parse error.
      */
     internal fun resolve(
@@ -113,10 +133,17 @@ internal object Resolver {
         reference: String,
         options: ParseOptions = ParseOptions.DEFAULT,
     ): ParseResult<String> {
-        require(baseUri.isNotEmpty()) { "an absolute base URI is required for resolution" }
         val base = UriParser.parse(baseUri, options)
         val ref = UriParser.parse(reference, options)
-        return resolveOutcome(baseUri, reference, base, ref)
+        val outcome = resolveOutcome(baseUri, reference, base, ref, options)
+        // Totality (§5.2 absolute base): an unparseable base is forwarded as an error, and a
+        // parseable-but-scheme-less base (the empty serialization included) yields MissingScheme --
+        // never a resolved target, and never a thrown precondition.
+        check(base !is ParseResult.Err || outcome is ParseResult.Err) { "an unparseable base must not resolve" }
+        check(base !is ParseResult.Ok || base.value.scheme != null || outcome is ParseResult.Err) {
+            "a scheme-less base must not resolve to a target"
+        }
+        return outcome
     }
 
     /**
@@ -129,6 +156,10 @@ internal object Resolver {
      *
      * @param base the absolute base components; its scheme MUST be present.
      * @param reference the reference components to resolve.
+     * @param options the effective parse configuration whose limits bound this resolve; defaults to
+     *   [ParseOptions.DEFAULT], in which case [structuredOptions] derives the zone-id opt-in from the
+     *   operands so a direct caller (not routing a stored `Uri`'s options through) still round-trips
+     *   a zoned host.
      * @return [ParseResult.Ok] with the resolved target components, or [ParseResult.Err] when the
      *   recomposed target does not parse — e.g. dot-segment removal produced a `//`-leading, authority-less
      *   path that re-reads as an invalid authority.
@@ -136,15 +167,21 @@ internal object Resolver {
     internal fun resolve(
         base: ParsedComponents,
         reference: ParsedComponents,
+        options: ParseOptions = ParseOptions.DEFAULT,
     ): ParseResult<ParsedComponents> {
         require(base.scheme != null) { "structured resolution requires an absolute base scheme" }
-        return when (val target = transformReferences(partsOf(base), partsOf(reference))) {
+        val effective = if (options == ParseOptions.DEFAULT) structuredOptions(base, reference) else options
+        return when (val target = transformReferences(partsOf(base), partsOf(reference), effective)) {
             is ParseResult.Err -> target
-            is ParseResult.Ok -> UriParser.parse(recompose(target.value), structuredOptions(base, reference))
+            is ParseResult.Ok -> UriParser.parse(recompose(target.value), effective)
         }
     }
 
-    /** Derives the round-trip [ParseOptions] for a structured resolve: a zone id on either input opts in. */
+    /**
+     * Derives the round-trip [ParseOptions] for a structured resolve given only the operands: a zone
+     * id on either input opts in. Used as the fallback when the caller passes [ParseOptions.DEFAULT]
+     * (no stored options to honour), so a zoned host still re-parses through the recompose.
+     */
     private fun structuredOptions(
         base: ParsedComponents,
         reference: ParsedComponents,
@@ -157,13 +194,16 @@ internal object Resolver {
     private fun transformReferences(
         base: UriParts,
         ref: UriParts,
+        options: ParseOptions,
     ): ParseResult<UriParts> {
         require(base.scheme != null) { "reference resolution requires an absolute base scheme" }
         val resolved =
             when {
                 ref.scheme != null ->
-                    ParseResult.Ok(UriParts(ref.scheme, ref.authority, removeDotSegments(ref.path), ref.query, null))
-                else -> resolveRelative(base, ref)
+                    boundedRemoveDotSegments(ref.path, options).map {
+                        UriParts(ref.scheme, ref.authority, it, ref.query, null)
+                    }
+                else -> resolveRelative(base, ref, options)
             }
         return resolved.map { part ->
             val withFragment = part.copy(fragment = ref.fragment)
@@ -176,29 +216,56 @@ internal object Resolver {
     private fun resolveRelative(
         base: UriParts,
         ref: UriParts,
+        options: ParseOptions,
     ): ParseResult<UriParts> =
         when {
             ref.authority != null ->
-                ParseResult.Ok(UriParts(base.scheme, ref.authority, removeDotSegments(ref.path), ref.query, null))
-            else -> resolveNoAuthority(base, ref)
+                boundedRemoveDotSegments(ref.path, options).map {
+                    UriParts(base.scheme, ref.authority, it, ref.query, null)
+                }
+            else -> resolveNoAuthority(base, ref, options)
         }
 
     /** §5.2.2 with neither reference scheme nor authority: the base authority is inherited. */
     private fun resolveNoAuthority(
         base: UriParts,
         ref: UriParts,
+        options: ParseOptions,
     ): ParseResult<UriParts> =
-        resolvePathAndQuery(base, ref).map { (path, query) -> UriParts(base.scheme, base.authority, path, query, null) }
+        resolvePathAndQuery(base, ref, options)
+            .map { (path, query) -> UriParts(base.scheme, base.authority, path, query, null) }
 
     /** §5.2.2 path/query selection: empty reference path keeps the base path (and base query if absent). */
     private fun resolvePathAndQuery(
         base: UriParts,
         ref: UriParts,
+        options: ParseOptions,
     ): ParseResult<Pair<String, String?>> =
         when {
-            ref.path.isEmpty() -> ParseResult.Ok(Pair(base.path, ref.query ?: base.query))
-            ref.path.startsWith(SLASH) -> ParseResult.Ok(Pair(removeDotSegments(ref.path), ref.query))
-            else -> mergedPath(base, ref.path).map { Pair(removeDotSegments(it), ref.query) }
+            ref.path.isEmpty() -> keepBasePath(base, ref, options)
+            ref.path.startsWith(SLASH) ->
+                boundedRemoveDotSegments(ref.path, options).map { Pair(it, ref.query) }
+            else ->
+                mergedPath(base, ref.path, options)
+                    .flatMap { boundedRemoveDotSegments(it, options) }
+                    .map { Pair(it, ref.query) }
+        }
+
+    /**
+     * §5.2.2 empty-reference-path case: the base path is kept verbatim. [base.path] is bounded only
+     * by the parser's [ParseOptions.inputLength], so with a lowered [ParseOptions.expandedLength] the
+     * kept path can exceed the recompose bound; guarding it here folds that to a returning
+     * [UriParseError.InputTooLong] ([ERR-31]) rather than letting [recompose]'s invariant throw.
+     */
+    private fun keepBasePath(
+        base: UriParts,
+        ref: UriParts,
+        options: ParseOptions,
+    ): ParseResult<Pair<String, String?>> =
+        if (base.path.length <= options.expandedLength) {
+            ParseResult.Ok(Pair(base.path, ref.query ?: base.query))
+        } else {
+            ParseResult.Err(UriParseError.InputTooLong(base.path.length, options.expandedLength))
         }
 
     // --- §5.2.3 Merge Paths -----------------------------------------------------------------------
@@ -229,82 +296,169 @@ internal object Resolver {
     /**
      * Guards [merge]'s concatenation: the only point two independently length-bounded paths (the
      * base's directory prefix and the reference path) combine into something that can exceed
-     * [MAX_PATH_LENGTH], since every already-parsed single path is bounded by the parser's own cap.
+     * [ParseOptions.expandedLength] (`ResourceLimit.ExpandedLength`, [ERR-31]), since every
+     * already-parsed single path is bounded by the parser's own [ParseOptions.inputLength] cap.
      */
     private fun mergedPath(
         base: UriParts,
         refPath: String,
+        options: ParseOptions,
     ): ParseResult<String> {
         val merged = merge(base, refPath)
-        return if (merged.length <= MAX_PATH_LENGTH) {
+        return if (merged.length <= options.expandedLength) {
             ParseResult.Ok(merged)
         } else {
-            ParseResult.Err(UriParseError.InputTooLong(merged.length, MAX_PATH_LENGTH))
+            ParseResult.Err(UriParseError.InputTooLong(merged.length, options.expandedLength))
+        }
+    }
+
+    /**
+     * The bounded §5.2.4 entry every resolve path routes through: it enforces both
+     * [ParseOptions.expandedLength] (a path longer than the bound → [UriParseError.InputTooLong],
+     * [ERR-31]) and [ParseOptions.resolutionDepth] (more *dot-segment* removals than the bound →
+     * [UriParseError.LimitExceeded] carrying [ResourceLimit.ResolutionDepth], [ERR-33]) before
+     * returning the cleaned path. Ordinary segment moves do not count, so a flat path never trips the
+     * depth gate. The pure [removeDotSegments] carries neither gate, so no reachable resolve call can
+     * exceed a limit unnoticed nor throw on one.
+     */
+    private fun boundedRemoveDotSegments(
+        refPath: String,
+        options: ParseOptions,
+    ): ParseResult<String> {
+        if (refPath.length > options.expandedLength) {
+            return ParseResult.Err(UriParseError.InputTooLong(refPath.length, options.expandedLength))
+        }
+        val collapsed = collapseDotSegments(refPath)
+        check(collapsed.dotSegments <= refPath.length) { "dot-segment count exceeds the structural bound" }
+        val depth = options.resolutionDepth
+        return if (collapsed.dotSegments > depth) {
+            ParseResult.Err(UriParseError.LimitExceeded(ResourceLimit.ResolutionDepth, collapsed.dotSegments, depth))
+        } else {
+            ParseResult.Ok(collapsed.output)
         }
     }
 
     // --- §5.2.4 Remove Dot Segments ---------------------------------------------------------------
 
-    /** One §5.2.4 loop iteration: matches cases A–E and returns the remaining input buffer. */
+    /**
+     * One §5.2.4 loop iteration over the cursor: matches cases A–E on [path] starting at [pos],
+     * appends at most one segment to [output], and returns the advanced cursor (always `> pos`) plus
+     * whether the match was a dot-segment removal (cases A–D) rather than an ordinary segment move
+     * (case E) — only the former counts against [ParseOptions.resolutionDepth].
+     *
+     * Cases B/C rewrite the buffer to a leading `/`; over an index cursor that `/` is simply the
+     * last matched code unit left unconsumed (`pos + 2`/`pos + 3`), so no prefix is materialized —
+     * except the `/.`/`/..` terminals, which have no trailing `/` to reuse and instead append the
+     * single resulting `/` directly.
+     */
     private fun step(
-        input: String,
+        path: String,
+        pos: Int,
         output: StringBuilder,
-    ): String =
-        when {
-            input.startsWith(PREFIX_DOTDOT_SLASH) -> input.substring(PREFIX_DOTDOT_SLASH.length)
-            input.startsWith(PREFIX_DOT_SLASH) -> input.substring(PREFIX_DOT_SLASH.length)
-            input.startsWith(PREFIX_SLASH_DOT_SLASH) -> SLASH + input.substring(PREFIX_SLASH_DOT_SLASH.length)
-            input == SEGMENT_SLASH_DOT -> SLASH
-            input.startsWith(PREFIX_SLASH_DOTDOT_SLASH) -> popAndReplace(output, input, PREFIX_SLASH_DOTDOT_SLASH)
-            input == SEGMENT_SLASH_DOTDOT -> popAndReplace(output, input, input)
-            input == SEGMENT_DOT || input == SEGMENT_DOTDOT -> ""
-            else -> moveSegment(input, output)
+    ): Step {
+        require(pos in path.indices) { "cursor out of range: $pos" }
+        return when {
+            path.startsWith(PREFIX_DOTDOT_SLASH, pos) -> dot(pos + PREFIX_DOTDOT_SLASH.length)
+            path.startsWith(PREFIX_DOT_SLASH, pos) -> dot(pos + PREFIX_DOT_SLASH.length)
+            path.startsWith(PREFIX_SLASH_DOT_SLASH, pos) -> dot(pos + SEGMENT_SLASH_DOT.length)
+            isTerminal(path, pos, SEGMENT_SLASH_DOT) -> dot(appendSlashTerminal(output, path.length))
+            path.startsWith(PREFIX_SLASH_DOTDOT_SLASH, pos) ->
+                dot(popSegment(output, pos + SEGMENT_SLASH_DOTDOT.length))
+            isTerminal(path, pos, SEGMENT_SLASH_DOTDOT) -> dot(popThenSlashTerminal(output, path.length))
+            isTerminal(path, pos, SEGMENT_DOT) || isTerminal(path, pos, SEGMENT_DOTDOT) -> dot(path.length)
+            else -> Step(moveSegment(path, pos, output), dotSegment = false)
         }
-
-    /** §5.2.4 case C: drop the last output segment, then replace the matched [prefix] with `/`. */
-    private fun popAndReplace(
-        output: StringBuilder,
-        input: String,
-        prefix: String,
-    ): String {
-        require(input.length >= prefix.length) { "matched prefix is longer than the input buffer" }
-        removeLastSegment(output)
-        return SLASH + input.substring(prefix.length)
     }
 
-    /** §5.2.4 case E: move the first path segment (with its leading `/`, if any) to the output buffer. */
-    private fun moveSegment(
-        input: String,
+    /** A [step] that removed a §5.2.4 dot-segment (cases A–D), advancing the cursor to [next]. */
+    private fun dot(next: Int): Step = Step(next, dotSegment = true)
+
+    /** The result of one [step]: the advanced cursor and whether it removed a dot-segment (cases A–D). */
+    private data class Step(
+        val next: Int,
+        val dotSegment: Boolean,
+    )
+
+    /** True when the whole remaining input of [path] from [pos] equals [segment] (a §5.2.4 terminal). */
+    private fun isTerminal(
+        path: String,
+        pos: Int,
+        segment: String,
+    ): Boolean = pos + segment.length == path.length && path.startsWith(segment, pos)
+
+    /** §5.2.4 case B `/.` terminal: the collapsed buffer is a lone `/`, appended straight to [output]. */
+    private fun appendSlashTerminal(
         output: StringBuilder,
-    ): String {
-        require(input.isNotEmpty()) { "moveSegment requires a non-empty input buffer" }
-        val next = input.indexOf('/', 1)
-        val end = if (next < 0) input.length else next
-        output.append(input.substring(0, end))
-        check(end in 1..input.length) { "segment boundary out of range: $end" }
-        return input.substring(end)
+        end: Int,
+    ): Int {
+        output.append('/')
+        return end
+    }
+
+    /** §5.2.4 case C `/..` terminal: pop the last output segment, then append the resulting lone `/`. */
+    private fun popThenSlashTerminal(
+        output: StringBuilder,
+        end: Int,
+    ): Int {
+        removeLastSegment(output)
+        output.append('/')
+        return end
+    }
+
+    /** §5.2.4 case C: drop the last output segment and advance the cursor to the rewritten leading `/`. */
+    private fun popSegment(
+        output: StringBuilder,
+        next: Int,
+    ): Int {
+        removeLastSegment(output)
+        return next
+    }
+
+    /**
+     * §5.2.4 case E: move the first path segment (its leading `/`, if any, then up to the next `/`)
+     * from [path] at [pos] to [output], returning the cursor at that next `/` or end-of-input.
+     */
+    private fun moveSegment(
+        path: String,
+        pos: Int,
+        output: StringBuilder,
+    ): Int {
+        require(pos in path.indices) { "cursor out of range: $pos" }
+        val next = path.indexOf('/', pos + 1)
+        val end = if (next < 0) path.length else next
+        check(end > pos) { "segment boundary did not advance past $pos" }
+        output.appendRange(path, pos, end)
+        return end
     }
 
     /** §5.2.4 case C helper: removes the last segment and its preceding `/` (if any) from [output]. */
     private fun removeLastSegment(output: StringBuilder) {
         val slash = output.lastIndexOf('/')
         val cut = if (slash >= 0) slash else 0
-        check(cut in 0..output.length) { "output cut index out of range: $cut" }
+        // setLength's own precondition: the cut can only shorten the buffer, never grow it.
+        check(cut <= output.length) { "output cut index past the buffer end: $cut > ${output.length}" }
         output.setLength(cut)
     }
+
+    /** The cleaned path produced by [collapseDotSegments] and the number of dot-segment removals it made. */
+    private data class DotSegmentCollapse(
+        val output: String,
+        val dotSegments: Int,
+    )
 
     // --- §5.3 Component Recomposition -------------------------------------------------------------
 
     /**
      * §5.3: assembles the five resolved components back into a URI-reference string, applying the
      * §3.3 `/.`-guard so an authority-less path produced by dot-segment removal never re-parses as
-     * fabricating an authority (RFC 3986 §3.3/§5.2.2). The length invariant is a postcondition, not a
-     * precondition: by the time [transformReferences] returns [ParseResult.Ok], its path is already
-     * known to fit (the one path that can exceed [MAX_PATH_LENGTH] — [merge]'s concatenation — is
-     * caught earlier, in [mergedPath]), so a violation here means this class's own invariant broke.
+     * fabricating an authority (RFC 3986 §3.3/§5.2.2).
+     *
+     * Total by construction: every path reaching here has already been bounded by a returning call
+     * site ([keepBasePath] for the empty-reference case, [boundedRemoveDotSegments] for every
+     * dot-segment-collapsed path, [mergedPath] for the §5.2.3 concatenation), so no length check is
+     * needed and this can never throw on a length overflow.
      */
     private fun recompose(parts: UriParts): String {
-        check(parts.path.length <= MAX_PATH_LENGTH) { "resolved path exceeds the supported length bound" }
         val sb = StringBuilder()
         if (parts.scheme != null) sb.append(parts.scheme).append(':')
         if (parts.authority != null) sb.append(DOUBLE_SLASH).append(parts.authority)
@@ -323,22 +477,24 @@ internal object Resolver {
         reference: String,
         base: ParseResult<ParsedComponents>,
         ref: ParseResult<ParsedComponents>,
+        options: ParseOptions,
     ): ParseResult<String> =
         when {
             base is ParseResult.Err -> base
             ref is ParseResult.Err -> ref
             base is ParseResult.Ok && base.value.scheme == null -> ParseResult.Err(UriParseError.MissingScheme)
-            else -> resolveStrings(baseUri, reference)
+            else -> resolveStrings(baseUri, reference, options)
         }
 
     /** Splits both strings into raw 5-tuples, transforms, and recomposes the target URI string. */
     private fun resolveStrings(
         baseUri: String,
         reference: String,
+        options: ParseOptions,
     ): ParseResult<String> {
         val baseParts = splitUri(baseUri)
         require(baseParts.scheme != null) { "an absolute base must carry a scheme" }
-        return transformReferences(baseParts, splitUri(reference)).map { target ->
+        return transformReferences(baseParts, splitUri(reference), options).map { target ->
             check(target.scheme != null) { "the resolved target must be absolute" }
             recompose(target)
         }

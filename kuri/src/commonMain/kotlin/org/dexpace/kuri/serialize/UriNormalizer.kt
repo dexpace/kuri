@@ -174,6 +174,10 @@ internal object UriNormalizer {
         path: ComponentPath.Segments,
         hasAuthority: Boolean,
     ): ComponentPath {
+        // §6.2.2.3 normalizes an already-parsed path, itself bounded by the parse's inputLength, so
+        // the pure removeDotSegments applies — normalization is not a resolve and carries no
+        // ExpandedLength/ResolutionDepth gate of its own (which is why a raised-inputLength value
+        // normalizes without re-checking against the unrelated default expandedLength).
         val cleaned = Resolver.removeDotSegments(normalizeText(path.toUriPathString()))
         val rendered = if (cleaned.isEmpty() && hasAuthority) SLASH else cleaned
         check(!(hasAuthority && rendered.isEmpty())) { "an authority path must render as at least /" }
