@@ -99,12 +99,11 @@ public enum class ResourceLimit(
      * The bound on reference-resolution / dot-segment work ([ERR-33]). Default 256; overridable
      * per parse via `ParseOptions.Builder.resolutionDepth`.
      *
-     * Registered and configurable today, but not yet independently enforced: the reference-resolution
-     * transform is currently a single-pass, non-recursive §5.2 algorithm with no "depth" dimension
-     * distinct from [PathSegments]'s already-bounded segment count, so there is no unbounded-work
-     * condition this limit alone would catch that [InputLength]/[ExpandedLength]/[PathSegments] do
-     * not already catch. It is part of the registry so the public surface matches section 12.6's
-     * declared shape and is ready for a future recursive/chained resolution feature.
+     * Enforced by every resolve path: the §5.2.4 dot-segment collapse counts its loop iterations
+     * (one per consumed prefix or moved segment), and a reference whose collapse exceeds this bound
+     * is rejected with [UriParseError.LimitExceeded] carrying this variant. The default is generous
+     * enough that no well-formed reference approaches it; lowering it caps how much dot-segment
+     * rewriting a single resolve will perform.
      */
     ResolutionDepth(DEFAULT_RESOLUTION_DEPTH),
 }

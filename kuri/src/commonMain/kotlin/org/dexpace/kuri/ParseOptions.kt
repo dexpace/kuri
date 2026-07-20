@@ -109,9 +109,9 @@ public class ParseOptions private constructor(
      * The bound on reference-resolution / dot-segment work ([ResourceLimit.ResolutionDepth], SPEC
      * §12.6, [ERR-33]).
      *
-     * Defaults to [ResourceLimit.ResolutionDepth]'s documented bound. See
-     * [ResourceLimit.ResolutionDepth] for why this value is accepted and stored but not yet
-     * independently enforced by a resolve call.
+     * Defaults to [ResourceLimit.ResolutionDepth]'s documented bound. Every resolve bounds the
+     * §5.2.4 dot-segment collapse by this many iterations; a reference exceeding it is reported as
+     * `UriParseError.LimitExceeded` carrying [ResourceLimit.ResolutionDepth].
      */
     public val resolutionDepth: Int = resolutionDepth
 
@@ -238,8 +238,8 @@ public class ParseOptions private constructor(
 
         /**
          * Overrides [ResourceLimit.ResolutionDepth] for this parse; defaults to its documented
-         * bound (256) when not called. See [ResourceLimit.ResolutionDepth]: the value is stored and
-         * validated, but not yet independently enforced by a resolve call.
+         * bound (256) when not called. Every resolve bounds its §5.2.4 dot-segment collapse by this
+         * many iterations (see [ResourceLimit.ResolutionDepth]).
          *
          * @param max the maximum bound on reference-resolution / dot-segment work.
          * @return this builder, for chaining.

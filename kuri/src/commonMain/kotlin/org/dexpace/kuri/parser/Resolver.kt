@@ -8,6 +8,7 @@ import org.dexpace.kuri.ParseOptions
 import org.dexpace.kuri.ZONE_ID_ENABLED
 import org.dexpace.kuri.carriesZoneId
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.ResourceLimit
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.error.flatMap
 import org.dexpace.kuri.error.map
@@ -72,31 +73,39 @@ internal object Resolver {
     /**
      * Removes the complete `.`/`..` dot-segments from [path] per the §5.2.4 two-buffer algorithm.
      *
-     * A pure string transform: the input buffer is consumed prefix by prefix (cases A–E) into the
-     * output buffer, which is returned. Each iteration strictly shrinks the input, so the loop is
-     * bounded by the input length.
+     * A pure string transform run in O(`path.length`): a single non-decreasing cursor walks the
+     * input, and each matched prefix (cases A–E) appends at most one segment to the output buffer
+     * with no per-iteration substring allocation. The output can grow past the input (case C's `/..`
+     * terminal appends a `/` after popping), so the transform does not "strictly shrink"; it is
+     * bounded because every iteration advances the cursor by at least one code unit.
+     *
+     * This entry point is unbounded by [ParseOptions] on purpose — the length and resolution-depth
+     * gates live at the returning call sites ([boundedRemoveDotSegments]); it is used directly only
+     * where the input is already bounded (§6.2.2.3 normalization of an already-parsed path) or is a
+     * unit-test literal.
      *
      * @param path the merged/extracted path to normalize; may be empty.
-     * @param options supplies the [ParseOptions.expandedLength] bound this call asserts against;
-     *   defaults to [ParseOptions.DEFAULT] for the many direct, non-parse-configured call sites
-     *   (tests, and the structured resolve's own internal use).
      * @return the path with extraneous dot-segments removed.
      */
-    internal fun removeDotSegments(
-        path: String,
-        options: ParseOptions = ParseOptions.DEFAULT,
-    ): String {
-        require(path.length <= options.expandedLength) { "path exceeds the supported length bound: ${path.length}" }
-        val output = StringBuilder()
-        var input = path
-        val maxIterations = path.length + 1
+    internal fun removeDotSegments(path: String): String = collapseDotSegments(path).output
+
+    /**
+     * The pure §5.2.4 collapse of [path], returning the cleaned path and the number of loop
+     * iterations it took — the measure [boundedRemoveDotSegments] gates against
+     * [ParseOptions.resolutionDepth].
+     */
+    private fun collapseDotSegments(path: String): DotSegmentCollapse {
+        val output = StringBuilder(path.length)
+        var pos = 0
         var iterations = 0
-        while (input.isNotEmpty() && iterations <= maxIterations) {
-            input = step(input, output)
+        while (pos < path.length) {
+            val next = step(path, pos, output)
+            check(next > pos) { "remove_dot_segments made no progress at $pos" }
+            pos = next
             iterations++
         }
-        check(input.isEmpty()) { "remove_dot_segments failed to consume the input buffer" }
-        return output.toString()
+        check(pos == path.length) { "remove_dot_segments overran the input to $pos" }
+        return DotSegmentCollapse(output.toString(), iterations)
     }
 
     /**
@@ -283,60 +292,109 @@ internal object Resolver {
     }
 
     /**
-     * Guards a [removeDotSegments] call on [refPath] that is not routed through [mergedPath] (which
-     * already guards its own concatenation). Every direct, non-merged reference path must be checked
-     * the same way before it reaches [removeDotSegments]'s precondition.
+     * The bounded §5.2.4 entry every resolve path routes through: it enforces both
+     * [ParseOptions.expandedLength] (a path longer than the bound → [UriParseError.InputTooLong],
+     * [ERR-31]) and [ParseOptions.resolutionDepth] (more collapse iterations than the bound →
+     * [UriParseError.LimitExceeded] carrying [ResourceLimit.ResolutionDepth], [ERR-33]) before
+     * returning the cleaned path. The pure [removeDotSegments] carries neither gate, so no reachable
+     * resolve call can exceed a limit unnoticed nor throw on one.
      */
     private fun boundedRemoveDotSegments(
         refPath: String,
         options: ParseOptions,
-    ): ParseResult<String> =
-        if (refPath.length <= options.expandedLength) {
-            ParseResult.Ok(removeDotSegments(refPath, options))
-        } else {
-            ParseResult.Err(UriParseError.InputTooLong(refPath.length, options.expandedLength))
+    ): ParseResult<String> {
+        if (refPath.length > options.expandedLength) {
+            return ParseResult.Err(UriParseError.InputTooLong(refPath.length, options.expandedLength))
         }
+        val collapsed = collapseDotSegments(refPath)
+        check(collapsed.iterations <= refPath.length + 1) { "iteration count exceeds the structural bound" }
+        val depth = options.resolutionDepth
+        return if (collapsed.iterations > depth) {
+            ParseResult.Err(UriParseError.LimitExceeded(ResourceLimit.ResolutionDepth, collapsed.iterations, depth))
+        } else {
+            ParseResult.Ok(collapsed.output)
+        }
+    }
 
     // --- §5.2.4 Remove Dot Segments ---------------------------------------------------------------
 
-    /** One §5.2.4 loop iteration: matches cases A–E and returns the remaining input buffer. */
+    /**
+     * One §5.2.4 loop iteration over the cursor: matches cases A–E on [path] starting at [pos],
+     * appends at most one segment to [output], and returns the advanced cursor (always `> pos`).
+     *
+     * Cases B/C rewrite the buffer to a leading `/`; over an index cursor that `/` is simply the
+     * last matched code unit left unconsumed (`pos + 2`/`pos + 3`), so no prefix is materialized —
+     * except the `/.`/`/..` terminals, which have no trailing `/` to reuse and instead append the
+     * single resulting `/` directly.
+     */
     private fun step(
-        input: String,
+        path: String,
+        pos: Int,
         output: StringBuilder,
-    ): String =
-        when {
-            input.startsWith(PREFIX_DOTDOT_SLASH) -> input.substring(PREFIX_DOTDOT_SLASH.length)
-            input.startsWith(PREFIX_DOT_SLASH) -> input.substring(PREFIX_DOT_SLASH.length)
-            input.startsWith(PREFIX_SLASH_DOT_SLASH) -> SLASH + input.substring(PREFIX_SLASH_DOT_SLASH.length)
-            input == SEGMENT_SLASH_DOT -> SLASH
-            input.startsWith(PREFIX_SLASH_DOTDOT_SLASH) -> popAndReplace(output, input, PREFIX_SLASH_DOTDOT_SLASH)
-            input == SEGMENT_SLASH_DOTDOT -> popAndReplace(output, input, input)
-            input == SEGMENT_DOT || input == SEGMENT_DOTDOT -> ""
-            else -> moveSegment(input, output)
+    ): Int {
+        require(pos in path.indices) { "cursor out of range: $pos" }
+        return when {
+            path.startsWith(PREFIX_DOTDOT_SLASH, pos) -> pos + PREFIX_DOTDOT_SLASH.length
+            path.startsWith(PREFIX_DOT_SLASH, pos) -> pos + PREFIX_DOT_SLASH.length
+            path.startsWith(PREFIX_SLASH_DOT_SLASH, pos) -> pos + SEGMENT_SLASH_DOT.length
+            isTerminal(path, pos, SEGMENT_SLASH_DOT) -> appendSlashTerminal(output, path.length)
+            path.startsWith(PREFIX_SLASH_DOTDOT_SLASH, pos) -> popSegment(output, pos + SEGMENT_SLASH_DOTDOT.length)
+            isTerminal(path, pos, SEGMENT_SLASH_DOTDOT) -> popThenSlashTerminal(output, path.length)
+            isTerminal(path, pos, SEGMENT_DOT) || isTerminal(path, pos, SEGMENT_DOTDOT) -> path.length
+            else -> moveSegment(path, pos, output)
         }
-
-    /** §5.2.4 case C: drop the last output segment, then replace the matched [prefix] with `/`. */
-    private fun popAndReplace(
-        output: StringBuilder,
-        input: String,
-        prefix: String,
-    ): String {
-        require(input.length >= prefix.length) { "matched prefix is longer than the input buffer" }
-        removeLastSegment(output)
-        return SLASH + input.substring(prefix.length)
     }
 
-    /** §5.2.4 case E: move the first path segment (with its leading `/`, if any) to the output buffer. */
-    private fun moveSegment(
-        input: String,
+    /** True when the whole remaining input of [path] from [pos] equals [segment] (a §5.2.4 terminal). */
+    private fun isTerminal(
+        path: String,
+        pos: Int,
+        segment: String,
+    ): Boolean = pos + segment.length == path.length && path.startsWith(segment, pos)
+
+    /** §5.2.4 case B `/.` terminal: the collapsed buffer is a lone `/`, appended straight to [output]. */
+    private fun appendSlashTerminal(
         output: StringBuilder,
-    ): String {
-        require(input.isNotEmpty()) { "moveSegment requires a non-empty input buffer" }
-        val next = input.indexOf('/', 1)
-        val end = if (next < 0) input.length else next
-        output.append(input.substring(0, end))
-        check(end in 1..input.length) { "segment boundary out of range: $end" }
-        return input.substring(end)
+        end: Int,
+    ): Int {
+        output.append('/')
+        return end
+    }
+
+    /** §5.2.4 case C `/..` terminal: pop the last output segment, then append the resulting lone `/`. */
+    private fun popThenSlashTerminal(
+        output: StringBuilder,
+        end: Int,
+    ): Int {
+        removeLastSegment(output)
+        output.append('/')
+        return end
+    }
+
+    /** §5.2.4 case C: drop the last output segment and advance the cursor to the rewritten leading `/`. */
+    private fun popSegment(
+        output: StringBuilder,
+        next: Int,
+    ): Int {
+        removeLastSegment(output)
+        return next
+    }
+
+    /**
+     * §5.2.4 case E: move the first path segment (its leading `/`, if any, then up to the next `/`)
+     * from [path] at [pos] to [output], returning the cursor at that next `/` or end-of-input.
+     */
+    private fun moveSegment(
+        path: String,
+        pos: Int,
+        output: StringBuilder,
+    ): Int {
+        require(pos in path.indices) { "cursor out of range: $pos" }
+        val next = path.indexOf('/', pos + 1)
+        val end = if (next < 0) path.length else next
+        check(end > pos) { "segment boundary did not advance past $pos" }
+        output.appendRange(path, pos, end)
+        return end
     }
 
     /** §5.2.4 case C helper: removes the last segment and its preceding `/` (if any) from [output]. */
@@ -346,6 +404,12 @@ internal object Resolver {
         check(cut in 0..output.length) { "output cut index out of range: $cut" }
         output.setLength(cut)
     }
+
+    /** The cleaned path produced by [collapseDotSegments] and the iteration count that produced it. */
+    private data class DotSegmentCollapse(
+        val output: String,
+        val iterations: Int,
+    )
 
     // --- §5.3 Component Recomposition -------------------------------------------------------------
 

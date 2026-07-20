@@ -6,6 +6,7 @@ package org.dexpace.kuri.parser
 
 import org.dexpace.kuri.ParseOptions
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.ResourceLimit
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.serialize.UriSerializer
@@ -198,18 +199,22 @@ internal class ResolverTest {
     }
 
     @Test
-    fun `resolutionDepth does not bound dot-segment removal yet`() {
-        // Pins today's actual behavior: ResolutionDepth is registered/configurable on
-        // ParseOptions.Builder but not independently enforced (see ResourceLimit.ResolutionDepth's
-        // KDoc). A resolutionDepth(1) override must NOT reject a reference with many more than one
-        // dot-segment, so this test catches an accidental wiring-in (or removal) of enforcement
-        // either way, without blessing the current gap as permanent.
+    fun `resolve rejects a reference whose dot-segment collapse exceeds a lowered resolutionDepth`() {
+        // A reference with many dot-segments takes many §5.2.4 iterations. A resolutionDepth(1)
+        // override caps that work at one iteration, so the collapse is rejected with
+        // LimitExceeded(ResolutionDepth, ...); the default bound (256) accepts the same reference.
         val manyDotSegments = "../".repeat(MANY_DOT_SEGMENT_COUNT) + "g"
-        val options = ParseOptions.Builder().resolutionDepth(1).build()
+        val lowered = ParseOptions.Builder().resolutionDepth(1).build()
 
-        val result = Resolver.resolve(BASE, manyDotSegments, options)
+        val rejected = Resolver.resolve(BASE, manyDotSegments, lowered)
 
-        assertIs<ParseResult.Ok<String>>(result)
+        val err = assertIs<ParseResult.Err>(rejected)
+        val limit = assertIs<UriParseError.LimitExceeded>(err.error)
+        assertEquals(ResourceLimit.ResolutionDepth, limit.limit)
+        assertEquals(1, limit.max)
+
+        val accepted = Resolver.resolve(BASE, manyDotSegments)
+        assertIs<ParseResult.Ok<String>>(accepted)
     }
 
     @Test
@@ -389,7 +394,11 @@ internal class ResolverTest {
          */
         const val SEGMENT_LENGTH: Int = 40_000
 
-        /** Well more than "a handful": far above what a hand-written path would ever carry. */
-        const val MANY_DOT_SEGMENT_COUNT: Int = 500
+        /**
+         * Well more than one dot-segment, yet comfortably under the default [ResourceLimit.ResolutionDepth]
+         * (256) collapse-iteration bound — so a `resolutionDepth(1)` override rejects it while the
+         * default accepts it.
+         */
+        const val MANY_DOT_SEGMENT_COUNT: Int = 50
     }
 }
