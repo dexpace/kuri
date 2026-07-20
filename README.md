@@ -47,6 +47,31 @@ Runs on **Java 8+** and **Kotlin 2.0+**, with no runtime dependencies beyond the
 > kuri is in the `0.x` series — the public API is not yet frozen and may change between minor releases, so
 > pin to an exact version.
 
+## Modules
+
+kuri ships as three artifacts under `org.dexpace`, so you pull in only what you use:
+
+- **`kuri`** — the core engine: the `Url` and `Uri` models, parsing, building, the query API, and the
+  standalone `Percent` / `Idn` / `Schemes` utilities. Kotlin Multiplatform (JVM, Android, JS, Wasm, native).
+  This is the only module the [quick start](#quick-start) needs.
+- **`kuri-bind`** — maps an annotated request object onto a `Url`/`Uri` builder (`@Url`, `@Path`, `@Query`,
+  …). JVM-only, since it uses Kotlin reflection; the core stays dependency-free. See
+  [Annotation binding](docs/GUIDE.md#annotation-binding-kuri-bind).
+- **`kuri-serde-kotlinx`** — a [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization)
+  bridge: `Url`/`Uri` serializers plus a query-parameters format. Multiplatform across the same targets as
+  `kuri`, minus Android. See
+  [kotlinx.serialization](docs/GUIDE.md#kotlinxserialization-kuri-serde-kotlinx).
+
+The optional modules depend on the core, and you add them the same way:
+
+```kotlin
+dependencies {
+    implementation("org.dexpace:kuri:0.1.0")
+    implementation("org.dexpace:kuri-bind:0.1.0")           // optional — annotation binding
+    implementation("org.dexpace:kuri-serde-kotlinx:0.1.0")  // optional — kotlinx.serialization
+}
+```
+
 ## Quick start
 
 ```kotlin
