@@ -179,7 +179,10 @@ internal class QueryMapEncoder(
     private fun paramName(): String = "$name.${if (encodingKey) MAP_KEY_SUFFIX else MAP_VALUE_SUFFIX}"
 }
 
-/** The nesting-rejection message shared by [QueryEncoder.beginStructure] and [QueryListEncoder.beginStructure]. */
+/**
+ * The nesting-rejection message shared by [QueryEncoder.beginStructure], [QueryListEncoder.beginStructure],
+ * and [QueryMapEncoder.beginStructure].
+ */
 private const val NESTED_OBJECTS_REJECTED_MESSAGE: String = "nested objects are not supported by the query format"
 
 /**

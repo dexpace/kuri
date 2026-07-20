@@ -236,28 +236,45 @@ internal class QueryMapDecoder(
         return raw ?: throw SerializationException("null map ${if (fromKey) "key" else "value"}")
     }
 
+    /**
+     * Reads the next scalar via [next] and converts it with [convert], routed through [scalarOrFail]
+     * so a malformed map key or value fails with a [SerializationException] instead of a foreign
+     * exception type (`NumberFormatException`, etc.) — mirrors how [QueryDecoder]/[QueryListDecoder]
+     * decode their own scalars. The key/value label is read from `cursor` *before* [next] advances it.
+     */
+    private fun <T : Any> nextScalar(
+        kind: String,
+        convert: (String) -> T?,
+    ): T {
+        val fromKey = cursor % 2 == 0
+        return scalarOrFail(kind, next(), "map ${if (fromKey) "key" else "value"}", convert)
+    }
+
     override fun decodeString(): String = next()
 
-    override fun decodeBoolean(): Boolean = next().toBoolean()
+    override fun decodeBoolean(): Boolean = parseStrictBoolean(next())
 
-    override fun decodeInt(): Int = next().toInt()
+    override fun decodeInt(): Int = nextScalar("Int", String::toIntOrNull)
 
-    override fun decodeLong(): Long = next().toLong()
+    override fun decodeLong(): Long = nextScalar("Long", String::toLongOrNull)
 
-    override fun decodeShort(): Short = next().toShort()
+    override fun decodeShort(): Short = nextScalar("Short", String::toShortOrNull)
 
-    override fun decodeByte(): Byte = next().toByte()
+    override fun decodeByte(): Byte = nextScalar("Byte", String::toByteOrNull)
 
-    override fun decodeDouble(): Double = next().toDouble()
+    override fun decodeDouble(): Double = nextScalar("Double", String::toDoubleOrNull)
 
-    override fun decodeFloat(): Float = next().toFloat()
+    override fun decodeFloat(): Float = nextScalar("Float", String::toFloatOrNull)
 
-    override fun decodeChar(): Char = next().single()
+    override fun decodeChar(): Char = nextScalar("Char") { it.singleOrNull() }
 
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = enumIndex(enumDescriptor, next())
 }
 
-/** The nesting-rejection message shared by [QueryDecoder.beginStructure] and [QueryListDecoder.beginStructure]. */
+/**
+ * The nesting-rejection message shared by [QueryDecoder.beginStructure], [QueryListDecoder.beginStructure],
+ * and [QueryMapDecoder.beginStructure].
+ */
 private const val NESTED_OBJECTS_REJECTED_MESSAGE: String = "nested objects are not supported by the query format"
 
 /** Converts [raw] with [convert], failing with a [SerializationException] describing [kind] and [context] on error. */

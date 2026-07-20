@@ -85,6 +85,16 @@ private data class Scores(
 )
 
 @Serializable
+private data class MapFlags(
+    val flags: Map<String, Boolean>,
+)
+
+@Serializable
+private data class Counts(
+    val counts: Map<Int, Int>,
+)
+
+@Serializable
 private data class AllMapValues(
     val bytes: Map<String, Byte>,
     val shorts: Map<String, Short>,
@@ -631,6 +641,41 @@ class SerdeTest {
     fun `a map with mismatched key and value counts fails to decode`() {
         assertFailsWith<SerializationException> {
             QueryParametersFormat.decodeFromQueryString<Metadata>("meta.key=a&meta.key=b&meta.value=1")
+        }
+    }
+
+    @Test
+    fun `decoding a numeric boolean map value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<MapFlags>("flags.key=a&flags.value=1")
+        }
+    }
+
+    @Test
+    fun `decoding a misspelled boolean map value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<MapFlags>("flags.key=a&flags.value=ture")
+        }
+    }
+
+    @Test
+    fun `decoding an empty boolean map value throws instead of silently coercing to false`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<MapFlags>("flags.key=a&flags.value=")
+        }
+    }
+
+    @Test
+    fun `decoding a malformed Int map value throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Scores>("scores.key=alice&scores.value=notanumber")
+        }
+    }
+
+    @Test
+    fun `decoding a malformed map key throws a serialization exception`() {
+        assertFailsWith<SerializationException> {
+            QueryParametersFormat.decodeFromQueryString<Counts>("counts.key=notanumber&counts.value=1")
         }
     }
 
