@@ -120,6 +120,23 @@ class UrlHostParserTest {
     }
 
     @Test
+    fun `parse rejects an NBSP-mapped code point sharing a label with non-ASCII text`() {
+        // Unlike the previous case, the NBSP here sits in the SAME label as "ü", so the label as a
+        // whole is non-ASCII and gets Punycode-encoded rather than staying plain ASCII. The mapped
+        // SPACE survives into the Punycode output because Punycode copies basic (ASCII) code points
+        // verbatim, in their original relative order, into the output before the extended-code-point
+        // suffix -- so the forbidden-domain re-scan still finds it, and the reported code point/offset
+        // must still trace back to the original NBSP, not a position derived from the Punycode string
+        // ([HOST-30], [HOST-37]).
+        val result = UrlHostParser.parse("a" + Char(0x00A0) + "ü.c", isSpecial = true)
+
+        val err = assertIs<ParseResult.Err>(result)
+        val cause = assertIs<UriParseError.ForbiddenHostCodePoint>(err.error)
+        assertEquals(0x00A0, cause.codePoint)
+        assertEquals(1, cause.at)
+    }
+
+    @Test
     fun `parse locates a forbidden code point past a Punycode-expanded label`() {
         // "ä" Punycode-expands to the 7-character "xn--4ca", shifting every later index in the
         // transformed string; the untouched ASCII label "a^b" must still report '^' at its ORIGINAL
@@ -145,6 +162,49 @@ class UrlHostParserTest {
         val cause = assertIs<UriParseError.ForbiddenHostCodePoint>(err.error)
         assertEquals('^'.code, cause.codePoint)
         assertEquals(8, cause.at)
+    }
+
+    @Test
+    fun `parse traces a forbidden code point through a 3-octet percent-decoded run`() {
+        // "%E3%80%80" percent-decodes to U+3000 IDEOGRAPHIC SPACE, a three-octet UTF-8 sequence --
+        // unlike "%C3%A4" above (two octets), this exercises the run tracer's UTF8_THREE_OCTETS
+        // stride through the triplet run. UTS-46 maps U+3000 to U+0020 SPACE, which the
+        // forbidden-domain re-scan then rejects; the reported code point/offset must trace back to
+        // the original IDEOGRAPHIC SPACE and the raw triplet run's start ('%' at index 1), not the
+        // mapped SPACE or a mis-scaled offset ([HOST-37]).
+        val result = UrlHostParser.parse("a%E3%80%80b", isSpecial = true)
+
+        val err = assertIs<ParseResult.Err>(result)
+        val cause = assertIs<UriParseError.ForbiddenHostCodePoint>(err.error)
+        assertEquals(0x3000, cause.codePoint)
+        assertEquals(1, cause.at)
+    }
+
+    @Test
+    fun `parse rejects a domain whose Mapped replacement carries a forbidden character past its first position`() {
+        // U+2105 (the "care of" symbol) is an IdnaMapping.Mapped entry whose replacement is the
+        // 3-character string "c/o" -- the forbidden '/' sits SECOND in the replacement, not first
+        // (unlike the single-char NBSP-to-SPACE case above), so this pins traceMapping's per-unit
+        // text scan rather than just its first-character check ([HOST-37]).
+        val result = UrlHostParser.parse(Char(0x2105) + ".example", isSpecial = true)
+
+        val err = assertIs<ParseResult.Err>(result)
+        val cause = assertIs<UriParseError.ForbiddenHostCodePoint>(err.error)
+        assertEquals(0x2105, cause.codePoint)
+        assertEquals(0, cause.at)
+    }
+
+    @Test
+    fun `parse reports the earlier of two forbidden code points spanning different labels`() {
+        // "ü@a.b#c" has two independently forbidden units: '@' in the non-ASCII first label (which
+        // Punycode-expands under IDNA) and '#' in the untouched ASCII second label. The re-scan must
+        // report the '@' at its original index 1, not the later '#' ([HOST-30]/[HOST-37]).
+        val result = UrlHostParser.parse("ü@a.b#c", isSpecial = true)
+
+        val err = assertIs<ParseResult.Err>(result)
+        val cause = assertIs<UriParseError.ForbiddenHostCodePoint>(err.error)
+        assertEquals('@'.code, cause.codePoint)
+        assertEquals(1, cause.at)
     }
 
     // --- Url profile, non-special opaque ---------------------------------------------
