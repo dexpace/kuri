@@ -9,6 +9,7 @@ import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.idna.Idna
 import org.dexpace.kuri.parser.IriMapping
 import org.dexpace.kuri.percent.PercentCodec
+import kotlin.jvm.JvmOverloads
 import kotlin.jvm.JvmStatic
 
 /**
@@ -43,15 +44,22 @@ public object Iri {
      * The transform can fail: an IDNA-invalid non-ASCII host is a [ParseResult.Err], as is a non-ASCII
      * code point outside its component's §2.2 repertoire, a §4.1 bidi formatting character anywhere
      * in [iri], or a mapping whose expanded ASCII form is rejected by the strict engine — note that
-     * percent-encoding grows the input, so a very long all-non-ASCII IRI may exceed the engine's
-     * maximum input length.
+     * percent-encoding and IDNA ToASCII both grow the input, so a very long IRI that fits
+     * [ParseOptions.inputLength] may still exceed [ParseOptions.expandedLength] after mapping and be
+     * rejected with `UriParseError.InputTooLong`.
      *
      * @param iri the internationalized reference to convert; non-ASCII input is accepted.
+     * @param options the parse configuration whose [ParseOptions.inputLength]/[ParseOptions.expandedLength]
+     *   bound the raw IRI and its expanded ASCII form respectively; defaults to [ParseOptions.DEFAULT].
      * @return [ParseResult.Ok] with the mapped [Uri], or [ParseResult.Err] when the IRI cannot be
-     *   mapped to a valid URI (e.g. an IDNA failure in the host).
+     *   mapped to a valid URI (e.g. an IDNA failure in the host, or a limit overflow).
      */
     @JvmStatic
-    public fun toUri(iri: String): ParseResult<Uri> = IriMapping.toUri(iri)
+    @JvmOverloads
+    public fun toUri(
+        iri: String,
+        options: ParseOptions = ParseOptions.DEFAULT,
+    ): ParseResult<Uri> = IriMapping.toUri(iri, options)
 
     /**
      * Renders [uri] back to a best-effort display IRI under the RFC 3987 §3.2 transform.

@@ -5,6 +5,7 @@
 package org.dexpace.kuri.parser
 
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.ResourceLimit
 import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.error.ValidationError
 import org.dexpace.kuri.error.ValidationErrorKind
@@ -20,6 +21,16 @@ import org.dexpace.kuri.text.isC0ControlOrSpace
 private const val MAX_REENTRIES_PER_CODE_POINT: Int = 40
 
 /**
+ * The fixed [ResourceLimit.InputLength] cap the `Url` profile enforces ([ERR-30]). The `Url` profile
+ * takes no [org.dexpace.kuri.ParseOptions], so it applies the registry default rather than a
+ * per-parse override, sharing the constant source with the `Uri` profile so the two cannot drift.
+ */
+private val URL_MAX_INPUT_LENGTH: Int = ResourceLimit.InputLength.defaultMax
+
+/** The fixed [ResourceLimit.PathSegments] cap the `Url` profile enforces ([ERR-33]); see [URL_MAX_INPUT_LENGTH]. */
+private val URL_MAX_PATH_SEGMENTS: Int = ResourceLimit.PathSegments.defaultMax
+
+/**
  * The WHATWG **basic URL parser** for the `Url` profile — the §8 state machine for special and
  * non-special schemes (SPEC §8; WHATWG "basic URL parser"; ada `src/parser.cpp`).
  *
@@ -30,7 +41,11 @@ private const val MAX_REENTRIES_PER_CODE_POINT: Int = 40
  * `Url`-profile form and are snapshotted into an immutable [ParsedComponents] on success.
  *
  * Failures are returned as [ParseResult.Err] values, never thrown ([ERR-1]).
+ *
+ * The state machine is a short ordered procedure decomposed into single-purpose helpers, each well
+ * under the line/return budgets; this legitimately exceeds the per-object function count.
  */
+@Suppress("TooManyFunctions")
 internal object UrlParser {
     /**
      * Parses [input] under the `Url` profile, optionally resolving a relative reference against
@@ -47,13 +62,31 @@ internal object UrlParser {
         input: String,
         base: ParsedComponents? = null,
     ): ParseResult<ParsedComponents> {
+        if (input.length > URL_MAX_INPUT_LENGTH) {
+            return ParseResult.Err(UriParseError.InputTooLong(input.length, URL_MAX_INPUT_LENGTH))
+        }
         val errors = mutableListOf<ValidationError>()
         val (trimmed, trimStart) = trimC0OrSpace(input, errors)
         val stripped = stripTabAndNewline(trimmed, trimStart, errors)
         val (body, fragmentRaw) = pruneFragment(stripped)
         val state = UrlParserState(body, base, fragmentRaw, errors)
         val failure = runStateMachine(state)
-        return if (failure != null) ParseResult.Err(failure) else ParseResult.Ok(finalize(state))
+        return if (failure != null) ParseResult.Err(failure) else withinPathSegmentLimit(finalize(state))
+    }
+
+    /**
+     * Enforces the fixed [ResourceLimit.PathSegments] cap on a finalized [components] ([ERR-33]): a
+     * segmented path with more than [URL_MAX_PATH_SEGMENTS] segments is rejected with
+     * [UriParseError.LimitExceeded]; an opaque path carries no segment structure and is exempt.
+     */
+    private fun withinPathSegmentLimit(components: ParsedComponents): ParseResult<ParsedComponents> {
+        val path = components.path
+        val observed = if (path is ComponentPath.Segments) path.segments.size else 0
+        return if (observed > URL_MAX_PATH_SEGMENTS) {
+            ParseResult.Err(UriParseError.LimitExceeded(ResourceLimit.PathSegments, observed, URL_MAX_PATH_SEGMENTS))
+        } else {
+            ParseResult.Ok(components)
+        }
     }
 
     /**
@@ -93,7 +126,7 @@ internal object UrlParser {
         // history. (The fragment is untouched by every override, so it is carried straight from seed.)
         return when (val outcome = runOverride(state)) {
             OverrideOutcome.ABORT -> ParseResult.Ok(seed)
-            OverrideOutcome.OK -> ParseResult.Ok(finalize(state).copy(fragment = seed.fragment))
+            OverrideOutcome.OK -> withinPathSegmentLimit(finalize(state).copy(fragment = seed.fragment))
             is OverrideOutcome.Fail -> ParseResult.Err(outcome.error)
         }
     }

@@ -129,9 +129,10 @@ public sealed interface UriParseError {
     ) : UriParseError
 
     /**
-     * The input length exceeds the configured maximum. Also produced
-     * when percent-decoding/IDNA expansion pushes the serialized length past the
-     * same bound, carrying the post-expansion [length].
+     * The input length exceeds the configured maximum. Also produced when a lengthening operation —
+     * IRI→URI percent-encoding, IDNA ToASCII/ToUnicode expansion, or RFC 3986 §5.2.3 path merging —
+     * pushes the serialized length past the `ExpandedLength` bound, carrying the post-expansion
+     * [length]. Percent-*decoding* only shrinks and never triggers this.
      *
      * @property length the observed length that triggered the failure.
      * @property max the configured maximum that was exceeded.

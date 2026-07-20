@@ -5,6 +5,8 @@
 package org.dexpace.kuri.parser
 
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.ResourceLimit
+import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.error.ValidationErrorKind
 import org.dexpace.kuri.host.Host
 import kotlin.test.Test
@@ -371,5 +373,53 @@ class UrlParserTest {
         val url = parsed("http://h/a%20b")
 
         assertTrue(url.validationErrors.none { it.kind == ValidationErrorKind.INVALID_URL_UNIT })
+    }
+
+    // --- fixed Url-profile resource caps (ERR-30 / ERR-33) ----------------------------------------
+
+    @Test
+    fun `rejects a Url longer than the fixed input-length cap`() {
+        // The Url profile takes no options, so it enforces ResourceLimit.InputLength's default (64
+        // KiB) as a fixed cap; one code unit past it is rejected before the state loop.
+        val tooLong = "h".repeat(ResourceLimit.InputLength.defaultMax + 1)
+
+        val result = UrlParser.parse(tooLong)
+
+        val error = assertIs<ParseResult.Err>(result).error
+        val tooLongError = assertIs<UriParseError.InputTooLong>(error)
+        assertEquals(ResourceLimit.InputLength.defaultMax + 1, tooLongError.length)
+        assertEquals(ResourceLimit.InputLength.defaultMax, tooLongError.max)
+    }
+
+    @Test
+    fun `accepts a Url at exactly the fixed input-length cap`() {
+        // A bare-scheme opaque Url of exactly the cap: "a:" plus filler stays a single opaque path.
+        val atCap = "a:" + "b".repeat(ResourceLimit.InputLength.defaultMax - 2)
+
+        val result = UrlParser.parse(atCap)
+
+        assertIs<ParseResult.Ok<ParsedComponents>>(result)
+    }
+
+    @Test
+    fun `rejects a Url whose path exceeds the fixed path-segment cap`() {
+        val segments = (0..ResourceLimit.PathSegments.defaultMax).joinToString("/") { "a" }
+
+        val result = UrlParser.parse("http://h/$segments")
+
+        val error = assertIs<ParseResult.Err>(result).error
+        val limit = assertIs<UriParseError.LimitExceeded>(error)
+        assertEquals(ResourceLimit.PathSegments, limit.limit)
+        assertEquals(ResourceLimit.PathSegments.defaultMax + 1, limit.observed)
+        assertEquals(ResourceLimit.PathSegments.defaultMax, limit.max)
+    }
+
+    @Test
+    fun `accepts a Url whose path equals the fixed path-segment cap`() {
+        val segments = (1..ResourceLimit.PathSegments.defaultMax).joinToString("/") { "a" }
+
+        val result = UrlParser.parse("http://h/$segments")
+
+        assertIs<ParseResult.Ok<ParsedComponents>>(result)
     }
 }

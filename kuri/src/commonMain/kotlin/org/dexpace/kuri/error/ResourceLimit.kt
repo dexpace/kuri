@@ -32,16 +32,23 @@ private const val DEFAULT_RESOLUTION_DEPTH: Int = 256
  *
  * Exceeding [InputLength] or [ExpandedLength] is reported as [UriParseError.InputTooLong];
  * exceeding any other variant is reported as [UriParseError.LimitExceeded] carrying that variant
- * ([ERR-29]). [InputLength], [ExpandedLength], [PathSegments], and [ResolutionDepth] are
- * overridable per parse through `ParseOptions.Builder` (lowering one never changes the outcome for
- * input already within the lower bound, per [ERR-36]). [HostLabelLength], [HostTotalLength], and
- * [PortMax] are fixed protocol maxima defined by DNS (RFC 5890) and the 16-bit port range: they are
- * never raised or lowered by configuration ([ERR-34], [ERR-35]). Of the three, only [PortMax] is
- * actually enforced today — by the `Url` (WHATWG) profile via `UriParseError.InvalidPort`, and not
- * by the `Uri` profile, which applies no port-value ceiling. [HostLabelLength] and [HostTotalLength]
- * are registered so the public surface matches section 12.6's declared shape, but neither profile
- * constructs the corresponding `HostError` variant yet. They appear here so the registry documents
- * the complete set section 12.6 declares.
+ * ([ERR-29]).
+ *
+ * [InputLength], [ExpandedLength], [PathSegments], and [ResolutionDepth] are overridable per parse
+ * through `ParseOptions.Builder` in the `Uri` profile (lowering one never changes the outcome for
+ * input already within the lower bound, per [ERR-36]). The `Url` (WHATWG) profile takes no
+ * `ParseOptions`, so it enforces [InputLength] and [PathSegments] at these fixed default bounds
+ * instead; its [ExpandedLength]/[ResolutionDepth] are not separately configurable dimensions
+ * (`Iri.toUri` reference-resolution dot-segment work belong to the `Uri` profile).
+ *
+ * [HostLabelLength], [HostTotalLength], and [PortMax] are fixed protocol maxima defined by DNS
+ * (RFC 5890) and the 16-bit port range: they are never raised or lowered by configuration ([ERR-34],
+ * [ERR-35]). Of the three, only [PortMax] is enforced today — by the `Url` profile via
+ * [UriParseError.InvalidPort]; the `Uri` profile deliberately applies no port-value ceiling
+ * (RFC 3986 Appendix B's unbounded `*DIGIT` port grammar), so [ERR-35]'s ceiling is `Url`-scoped.
+ * [HostLabelLength] and [HostTotalLength] are registered so the public surface matches section
+ * 12.6's declared shape, but neither profile constructs the corresponding `HostError` variant yet.
+ * They appear here so the registry documents the complete set section 12.6 declares.
  *
  * @property defaultMax the documented default bound for this limit, applied when a parse does not
  *   override it.
@@ -57,9 +64,10 @@ public enum class ResourceLimit(
 
     /**
      * The maximum serialized length, in UTF-16 code units, re-checked after an operation that can
-     * lengthen the parsed text — percent-decoding, IDNA expansion, or RFC 3986 §5.2.3 path merging
-     * during reference resolution ([ERR-31]). Defaults to [InputLength]'s effective bound unless
-     * overridden separately; overridable per parse.
+     * lengthen the text: IDNA ToASCII/ToUnicode expansion, IRI→URI percent-encoding (`Iri.toUri`),
+     * or RFC 3986 §5.2.3 path merging during reference resolution ([ERR-31]). Percent-*decoding* only
+     * shrinks and never trips this. An independent default equal to [InputLength]'s (64 KiB) but not
+     * tied to it; overridable per parse in the `Uri` profile.
      */
     ExpandedLength(DEFAULT_INPUT_LENGTH),
 
@@ -88,10 +96,11 @@ public enum class ResourceLimit(
     HostTotalLength(DNS_HOST_LENGTH),
 
     /**
-     * The maximum numeric port value: 65,535, the largest 16-bit port. Not configurable. Enforced
-     * by the `Url` (WHATWG) profile via `UriParseError.InvalidPort` ([ERR-35]); the `Uri` profile
-     * deliberately applies no port-value ceiling beyond `Int` overflow, per RFC 3986 Appendix B's
-     * unbounded `*DIGIT` port grammar.
+     * The maximum numeric port value: 65,535, the largest 16-bit port. Not configurable, and scoped
+     * to the `Url` (WHATWG) profile, which rejects a port above it via [UriParseError.InvalidPort]
+     * ([ERR-35]). The `Uri` profile deliberately applies **no** port-value ceiling beyond `Int`
+     * overflow, per RFC 3986 Appendix B's unbounded `*DIGIT` port grammar — so this bound is not a
+     * both-profile maximum.
      */
     PortMax(MAX_PORT_VALUE),
 

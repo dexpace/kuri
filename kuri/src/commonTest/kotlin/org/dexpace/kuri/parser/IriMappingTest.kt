@@ -4,8 +4,10 @@
  */
 package org.dexpace.kuri.parser
 
+import org.dexpace.kuri.ParseOptions
 import org.dexpace.kuri.Uri
 import org.dexpace.kuri.error.ParseResult
+import org.dexpace.kuri.error.UriParseError
 import org.dexpace.kuri.host.Host
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -92,5 +94,45 @@ internal class IriMappingTest {
         val result = IriMapping.toUri("http://[oops/x")
 
         assertIs<ParseResult.Err>(result)
+    }
+
+    @Test
+    fun `rejects an iri whose percent-encoded form exceeds a lowered expandedLength`() {
+        // Each é maps to the three-code-unit "%C3%A9", so the encoded path is three times the raw
+        // run: the raw iri fits inputLength but the expanded ASCII form exceeds expandedLength.
+        val iri = "foo:" + eAcute.repeat(10)
+        val options = ParseOptions.Builder().expandedLength(20).build()
+
+        val result = IriMapping.toUri(iri, options)
+
+        val error = assertIs<ParseResult.Err>(result).error
+        val tooLong = assertIs<UriParseError.InputTooLong>(error)
+        assertEquals(20, tooLong.max)
+    }
+
+    @Test
+    fun `rejects an iri whose IDNA-expanded host exceeds a lowered expandedLength`() {
+        // The non-ASCII host runs UTS-46 ToASCII to an xn-- form longer than the raw host; a lowered
+        // expandedLength rejects the expanded authority even though the raw iri is short.
+        val iri = "http://b${eAcute}cher.example/"
+        val options = ParseOptions.Builder().expandedLength(15).build()
+
+        val result = IriMapping.toUri(iri, options)
+
+        val error = assertIs<ParseResult.Err>(result).error
+        val tooLong = assertIs<UriParseError.InputTooLong>(error)
+        assertEquals(15, tooLong.max)
+    }
+
+    @Test
+    fun `rejects an iri longer than a lowered inputLength before mapping`() {
+        val options = ParseOptions.Builder().inputLength(5).build()
+
+        val result = IriMapping.toUri("foo:abcdef", options)
+
+        val error = assertIs<ParseResult.Err>(result).error
+        val tooLong = assertIs<UriParseError.InputTooLong>(error)
+        assertEquals(10, tooLong.length)
+        assertEquals(5, tooLong.max)
     }
 }
