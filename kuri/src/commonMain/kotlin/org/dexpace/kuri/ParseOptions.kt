@@ -54,7 +54,7 @@ internal fun roundTripOptions(host: Host?): ParseOptions =
 public class ParseOptions private constructor(
     allowIpv6ZoneId: Boolean,
     inputLength: Int,
-    expandedLength: Int,
+    expandedLengthOverride: Int?,
     pathSegments: Int,
     resolutionDepth: Int,
 ) {
@@ -80,6 +80,9 @@ public class ParseOptions private constructor(
      */
     public val inputLength: Int = inputLength
 
+    /** The raw override this value was built with, or `null` if [expandedLength] tracks [inputLength]. */
+    internal val expandedLengthOverride: Int? = expandedLengthOverride
+
     /**
      * The maximum accepted length, in UTF-16 code units, of text derived from the input by an
      * operation that can lengthen it — percent-decoding, IDNA expansion, or §5.2.3 path merging
@@ -88,7 +91,7 @@ public class ParseOptions private constructor(
      * Defaults to this [ParseOptions]'s effective [inputLength] unless set explicitly on the
      * [Builder]. Exceeding it is reported as `UriParseError.InputTooLong`.
      */
-    public val expandedLength: Int = expandedLength
+    public val expandedLength: Int = expandedLengthOverride ?: inputLength
 
     /**
      * The maximum number of `/`-delimited segments a parsed path may carry
@@ -172,7 +175,7 @@ public class ParseOptions private constructor(
         internal constructor(source: ParseOptions) {
             allowIpv6ZoneId = source.allowIpv6ZoneId
             inputLength = source.inputLength
-            expandedLength = source.expandedLength
+            expandedLength = source.expandedLengthOverride
             pathSegments = source.pathSegments
             resolutionDepth = source.resolutionDepth
         }
@@ -251,6 +254,6 @@ public class ParseOptions private constructor(
          * @return the [ParseOptions] for the assembled state.
          */
         public fun build(): ParseOptions =
-            ParseOptions(allowIpv6ZoneId, inputLength, expandedLength ?: inputLength, pathSegments, resolutionDepth)
+            ParseOptions(allowIpv6ZoneId, inputLength, expandedLength, pathSegments, resolutionDepth)
     }
 }

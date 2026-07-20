@@ -4,6 +4,7 @@
  */
 package org.dexpace.kuri.serialize
 
+import org.dexpace.kuri.ParseOptions
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.parser.ComponentPath
 import org.dexpace.kuri.parser.ParsedComponents
@@ -174,7 +175,9 @@ internal object UriNormalizer {
         path: ComponentPath.Segments,
         hasAuthority: Boolean,
     ): ComponentPath {
-        val cleaned = Resolver.removeDotSegments(normalizeText(path.toUriPathString()))
+        val pathString = normalizeText(path.toUriPathString())
+        val options = ParseOptions.Builder().expandedLength(maxOf(pathString.length, 1)).build()
+        val cleaned = Resolver.removeDotSegments(pathString, options)
         val rendered = if (cleaned.isEmpty() && hasAuthority) SLASH else cleaned
         check(!(hasAuthority && rendered.isEmpty())) { "an authority path must render as at least /" }
         return splitUriPath(rendered)

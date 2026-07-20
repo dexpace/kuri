@@ -169,9 +169,9 @@ internal object Resolver {
         val resolved =
             when {
                 ref.scheme != null ->
-                    ParseResult.Ok(
-                        UriParts(ref.scheme, ref.authority, removeDotSegments(ref.path, options), ref.query, null),
-                    )
+                    boundedRemoveDotSegments(ref.path, options).map {
+                        UriParts(ref.scheme, ref.authority, it, ref.query, null)
+                    }
                 else -> resolveRelative(base, ref, options)
             }
         return resolved.map { part ->
@@ -189,9 +189,9 @@ internal object Resolver {
     ): ParseResult<UriParts> =
         when {
             ref.authority != null ->
-                ParseResult.Ok(
-                    UriParts(base.scheme, ref.authority, removeDotSegments(ref.path, options), ref.query, null),
-                )
+                boundedRemoveDotSegments(ref.path, options).map {
+                    UriParts(base.scheme, ref.authority, it, ref.query, null)
+                }
             else -> resolveNoAuthority(base, ref, options)
         }
 
@@ -212,7 +212,8 @@ internal object Resolver {
     ): ParseResult<Pair<String, String?>> =
         when {
             ref.path.isEmpty() -> ParseResult.Ok(Pair(base.path, ref.query ?: base.query))
-            ref.path.startsWith(SLASH) -> ParseResult.Ok(Pair(removeDotSegments(ref.path, options), ref.query))
+            ref.path.startsWith(SLASH) ->
+                boundedRemoveDotSegments(ref.path, options).map { Pair(it, ref.query) }
             else -> mergedPath(base, ref.path, options).map { Pair(removeDotSegments(it, options), ref.query) }
         }
 
@@ -259,6 +260,21 @@ internal object Resolver {
             ParseResult.Err(UriParseError.InputTooLong(merged.length, options.expandedLength))
         }
     }
+
+    /**
+     * Guards a [removeDotSegments] call on [refPath] that is not routed through [mergedPath] (which
+     * already guards its own concatenation). Every direct, non-merged reference path must be checked
+     * the same way before it reaches [removeDotSegments]'s precondition.
+     */
+    private fun boundedRemoveDotSegments(
+        refPath: String,
+        options: ParseOptions,
+    ): ParseResult<String> =
+        if (refPath.length <= options.expandedLength) {
+            ParseResult.Ok(removeDotSegments(refPath, options))
+        } else {
+            ParseResult.Err(UriParseError.InputTooLong(refPath.length, options.expandedLength))
+        }
 
     // --- §5.2.4 Remove Dot Segments ---------------------------------------------------------------
 

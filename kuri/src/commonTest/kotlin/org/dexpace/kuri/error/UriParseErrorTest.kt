@@ -100,11 +100,13 @@ internal class UriParseErrorTest {
         val error = UriParseError.InputTooLong(length = 8193, max = MAX_INPUT_LENGTH)
         val same = UriParseError.InputTooLong(length = 8193, max = MAX_INPUT_LENGTH)
         val other = UriParseError.InputTooLong(length = 9000, max = MAX_INPUT_LENGTH)
+        val differentMax = UriParseError.InputTooLong(length = 8193, max = MAX_INPUT_LENGTH + 1)
 
         // act + assert
         assertEquals(same, error)
         assertEquals(same.hashCode(), error.hashCode())
         assertNotEquals(other, error)
+        assertNotEquals(differentMax, error)
     }
 
     @Test
@@ -134,12 +136,14 @@ internal class UriParseErrorTest {
         val same = UriParseError.LimitExceeded(ResourceLimit.PathSegments, observed = 3, max = 2)
         val differentLimit = UriParseError.LimitExceeded(ResourceLimit.ResolutionDepth, observed = 3, max = 2)
         val differentObserved = UriParseError.LimitExceeded(ResourceLimit.PathSegments, observed = 4, max = 2)
+        val differentMax = UriParseError.LimitExceeded(ResourceLimit.PathSegments, observed = 3, max = 5)
 
         // act + assert
         assertEquals(same, error)
         assertEquals(same.hashCode(), error.hashCode())
         assertNotEquals(differentLimit, error)
         assertNotEquals(differentObserved, error)
+        assertNotEquals(differentMax, error)
     }
 
     @Test
@@ -156,6 +160,38 @@ internal class UriParseErrorTest {
         assertEquals(ResourceLimit.PathSegments, limitExceeded.limit)
         assertEquals(3L, limitExceeded.observed)
         assertEquals(2L, limitExceeded.max)
+    }
+
+    @Test
+    fun `parse reports InputTooLong with the overridden inputLength through the public Uri API`() {
+        // arrange: an input one longer than a builder-lowered maximum
+        val options = ParseOptions.Builder().inputLength(10).build()
+
+        // act
+        val result = Uri.parse("a".repeat(11), options)
+
+        // assert
+        val error = assertIs<ParseResult.Err>(result).error
+        val tooLong = assertIs<UriParseError.InputTooLong>(error)
+        assertEquals(11, tooLong.length)
+        assertEquals(10, tooLong.max)
+    }
+
+    @Test
+    fun `resolve reports InputTooLong with the overridden expandedLength through the public Uri API`() {
+        // arrange: base's directory prefix concatenated with the rootless reference exceeds a
+        // builder-lowered expandedLength override
+        val base = Uri.parse("a:/aaaa/c").getOrThrow()
+        val options = ParseOptions.Builder().expandedLength(10).build()
+
+        // act
+        val result = base.resolve("y".repeat(20), options)
+
+        // assert
+        val error = assertIs<ParseResult.Err>(result).error
+        val tooLong = assertIs<UriParseError.InputTooLong>(error)
+        assertEquals(26, tooLong.length)
+        assertEquals(10, tooLong.max)
     }
 
     @Test

@@ -240,6 +240,19 @@ class UriTest {
     }
 
     @Test
+    fun `normalized does not throw for a path within a raised inputLength but beyond the default expandedLength`() {
+        // ParseOptions is never stored on a Uri, so a path admitted under a raised inputLength must
+        // not be re-checked against the unrelated, smaller default expandedLength on normalize.
+        val options = ParseOptions.Builder().inputLength(200_000).build()
+        val parsed = Uri.parse("http://h/" + "a".repeat(100_000), options)
+
+        val uri = parsed.getOrNull() ?: fail("expected the raised-inputLength parse to succeed")
+        val normalized = uri.normalized()
+
+        assertTrue(normalized.uriString.isNotEmpty())
+    }
+
+    @Test
     fun `normalizedEquals folds case-only differences`() {
         assertTrue(parseOk("HTTP://H/").normalizedEquals(parseOk("http://h/")))
     }

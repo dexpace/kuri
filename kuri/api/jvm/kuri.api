@@ -23,7 +23,7 @@ public final class org/dexpace/kuri/Kuri {
 public final class org/dexpace/kuri/ParseOptions {
 	public static final field Companion Lorg/dexpace/kuri/ParseOptions$Companion;
 	public static final field DEFAULT Lorg/dexpace/kuri/ParseOptions;
-	public synthetic fun <init> (ZIIIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (ZILjava/lang/Integer;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun allowIpv6ZoneId ()Z
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getExpandedLength ()I

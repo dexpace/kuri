@@ -173,6 +173,46 @@ internal class ResolverTest {
     }
 
     @Test
+    fun `resolve succeeds when the merge lands exactly at an overridden expandedLength`() {
+        // Mirrors the overridden-bound test above, but sized so the merge lands exactly at the
+        // configured max rather than one past it.
+        val base = "a:/aaaa/c"
+        val ref = "y".repeat(4)
+        val options = ParseOptions.Builder().expandedLength(10).build()
+
+        val result = Resolver.resolve(base, ref, options)
+
+        assertIs<ParseResult.Ok<String>>(result)
+    }
+
+    @Test
+    fun `resolve reports InputTooLong instead of throwing when a lowered expandedLength rejects a reference path`() {
+        // The reference carries its own scheme, so removeDotSegments runs directly on its path (no
+        // merge to guard it) — this call site must still be bounded rather than reaching the require().
+        val options = ParseOptions.Builder().expandedLength(5).build()
+
+        val result = Resolver.resolve("http://a/b", "http:aaaaaaaaaa", options)
+
+        val err = assertIs<ParseResult.Err>(result)
+        assertEquals(UriParseError.InputTooLong(10, 5), err.error)
+    }
+
+    @Test
+    fun `resolutionDepth does not bound dot-segment removal yet`() {
+        // Pins today's actual behavior: ResolutionDepth is registered/configurable on
+        // ParseOptions.Builder but not independently enforced (see ResourceLimit.ResolutionDepth's
+        // KDoc). A resolutionDepth(1) override must NOT reject a reference with many more than one
+        // dot-segment, so this test catches an accidental wiring-in (or removal) of enforcement
+        // either way, without blessing the current gap as permanent.
+        val manyDotSegments = "../".repeat(MANY_DOT_SEGMENT_COUNT) + "g"
+        val options = ParseOptions.Builder().resolutionDepth(1).build()
+
+        val result = Resolver.resolve(BASE, manyDotSegments, options)
+
+        assertIs<ParseResult.Ok<String>>(result)
+    }
+
+    @Test
     fun `resolve merges a relative reference onto an empty-authority base path`() {
         // base authority present with an empty base path: §5.2.3 prepends a single "/" to the ref.
         val result = Resolver.resolve("http://a", "g").getOrThrow()
@@ -330,5 +370,8 @@ internal class ResolverTest {
          * `ParseOptions.DEFAULT.expandedLength` (also 65,536 by default).
          */
         const val SEGMENT_LENGTH: Int = 40_000
+
+        /** Well more than "a handful": far above what a hand-written path would ever carry. */
+        const val MANY_DOT_SEGMENT_COUNT: Int = 500
     }
 }

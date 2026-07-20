@@ -147,17 +147,46 @@ class ParseOptionsTest {
     }
 
     @Test
+    fun `expandedLength keeps tracking inputLength after a newBuilder round-trip that only overrides inputLength`() {
+        val tracking =
+            ParseOptions.DEFAULT
+                .newBuilder()
+                .inputLength(100)
+                .build()
+
+        assertEquals(100, tracking.expandedLength)
+
+        val frozen =
+            ParseOptions
+                .Builder()
+                .inputLength(50)
+                .expandedLength(200)
+                .build()
+                .newBuilder()
+                .inputLength(999)
+                .build()
+
+        assertEquals(200, frozen.expandedLength)
+    }
+
+    @Test
     fun `equals and hashCode fold over every field`() {
         val on = ParseOptions.Builder().allowIpv6ZoneId(true).build()
         val onAgain = ParseOptions.Builder().allowIpv6ZoneId(true).build()
         val off = ParseOptions.Builder().allowIpv6ZoneId(false).build()
         val loweredPathSegments = ParseOptions.Builder().pathSegments(5).build()
+        val loweredInputLength = ParseOptions.Builder().inputLength(100).build()
+        val raisedExpandedLength = ParseOptions.Builder().expandedLength(200_000).build()
+        val loweredResolutionDepth = ParseOptions.Builder().resolutionDepth(16).build()
 
         assertEquals(on, onAgain)
         assertEquals(on.hashCode(), onAgain.hashCode())
         assertNotEquals(on, off)
         assertEquals(ParseOptions.DEFAULT, off)
         assertNotEquals(ParseOptions.DEFAULT, loweredPathSegments)
+        assertNotEquals(ParseOptions.DEFAULT, loweredInputLength)
+        assertNotEquals(ParseOptions.DEFAULT, raisedExpandedLength)
+        assertNotEquals(ParseOptions.DEFAULT, loweredResolutionDepth)
     }
 
     @Test

@@ -36,9 +36,12 @@ private const val DEFAULT_RESOLUTION_DEPTH: Long = 256L
  * overridable per parse through `ParseOptions.Builder` (lowering one never changes the outcome for
  * input already within the lower bound, per [ERR-36]). [HostLabelLength], [HostTotalLength], and
  * [PortMax] are fixed protocol maxima defined by DNS (RFC 5890) and the 16-bit port range: they are
- * never raised or lowered by configuration ([ERR-34], [ERR-35]) and are enforced through the
- * existing `HostError`/`InvalidPort` machinery rather than `LimitExceeded`; they appear here so the
- * registry documents the complete set section 12.6 declares.
+ * never raised or lowered by configuration ([ERR-34], [ERR-35]). Of the three, only [PortMax] is
+ * actually enforced today — by the `Url` (WHATWG) profile via `UriParseError.InvalidPort`, and not
+ * by the `Uri` profile, which applies no port-value ceiling. [HostLabelLength] and [HostTotalLength]
+ * are registered so the public surface matches section 12.6's declared shape, but neither profile
+ * constructs the corresponding `HostError` variant yet. They appear here so the registry documents
+ * the complete set section 12.6 declares.
  *
  * @property defaultMax the documented default bound for this limit, applied when a parse does not
  *   override it.
@@ -68,21 +71,27 @@ public enum class ResourceLimit(
 
     /**
      * The maximum length of a single domain label: 63, fixed by RFC 5890. Not configurable in
-     * either direction ([ERR-34]); enforced via `HostError.LabelTooLong` under `strict` (§12.4).
+     * either direction ([ERR-34]). Registered so the public surface matches section 12.6's
+     * declared shape; not yet enforced by either profile — `HostError.LabelTooLong` exists but
+     * nothing constructs it today, since the `Uri` profile has no `strict` DNS-length escalation
+     * yet (SPEC [HOST-31], deferred).
      */
     HostLabelLength(DNS_LABEL_LENGTH),
 
     /**
      * The maximum total host length: 253, the DNS limit. Configuration MUST NOT raise it above
-     * this protocol maximum ([ERR-34]); enforced via `HostError.HostTooLong` under `strict`
-     * (§12.4).
+     * this protocol maximum ([ERR-34]). Registered so the public surface matches section 12.6's
+     * declared shape; not yet enforced by either profile — `HostError.HostTooLong` exists but
+     * nothing constructs it today, since the `Uri` profile has no `strict` DNS-length escalation
+     * yet (SPEC [HOST-31], deferred).
      */
     HostTotalLength(DNS_HOST_LENGTH),
 
     /**
-     * The maximum numeric port value: 65,535, the largest 16-bit port. Rejected at every
-     * strictness level in both profiles via `UriParseError.InvalidPort` ([ERR-35]); not
-     * configurable.
+     * The maximum numeric port value: 65,535, the largest 16-bit port. Not configurable. Enforced
+     * by the `Url` (WHATWG) profile via `UriParseError.InvalidPort` ([ERR-35]); the `Uri` profile
+     * deliberately applies no port-value ceiling beyond `Int` overflow, per RFC 3986 Appendix B's
+     * unbounded `*DIGIT` port grammar.
      */
     PortMax(MAX_PORT_VALUE),
 

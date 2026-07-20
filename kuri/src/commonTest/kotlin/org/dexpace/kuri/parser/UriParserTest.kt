@@ -281,6 +281,15 @@ class UriParserTest {
     }
 
     @Test
+    fun `parse accepts input at exactly the default inputLength`() {
+        // A bare relative-path reference of exactly ResourceLimit.InputLength's documented
+        // default (65,536) needs no scheme to be a valid Uri-profile reference.
+        val result = UriParser.parse("a".repeat(65_536))
+
+        assertIs<ParseResult.Ok<ParsedComponents>>(result)
+    }
+
+    @Test
     fun `parse rejects a path whose segment count exceeds an overridden pathSegments limit`() {
         val options = ParseOptions.Builder().pathSegments(2).build()
 
@@ -305,6 +314,16 @@ class UriParserTest {
     @Test
     fun `parse accepts a three-segment path under the default pathSegments bound`() {
         val result = UriParser.parse("s:/a/b/c")
+
+        assertIs<ParseResult.Ok<ParsedComponents>>(result)
+    }
+
+    @Test
+    fun `parse accepts a path whose segment count equals the default pathSegments bound`() {
+        // Exactly ResourceLimit.PathSegments's documented default (10,000) one-character segments.
+        val path = (1..10_000).joinToString("/") { "a" }
+
+        val result = UriParser.parse("s:/$path")
 
         assertIs<ParseResult.Ok<ParsedComponents>>(result)
     }
