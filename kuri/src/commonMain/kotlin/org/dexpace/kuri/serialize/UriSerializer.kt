@@ -34,7 +34,7 @@ internal object UriSerializer {
     ): String {
         val sb = StringBuilder()
         if (c.scheme != null) sb.append(c.scheme).append(':')
-        if (c.host != null) sb.append(DOUBLE_SLASH).append(serializeAuthority(c))
+        if (c.host != null) sb.append(DOUBLE_SLASH).append(serializeAuthority(c, preserveEmptyUserinfo = true))
         sb.append(guardRecomposedUriPath(c.scheme, c.host != null, c.path.toUriPathString()))
         appendQueryFragment(sb, c, excludeFragment)
         check(c.host == null || sb.contains(DOUBLE_SLASH)) { "an authority must emit //" }

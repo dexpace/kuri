@@ -68,6 +68,32 @@ class UriBuilderTest {
     }
 
     @Test
+    fun `newBuilder then build reproduces an empty-but-present userinfo`() {
+        // Regression for #104: newBuilder() pre-fills its verbatim userInfo field from source.userInfo,
+        // which is now "" (not null) for a present-but-empty userinfo, so the rebuild must still emit
+        // the "@" rather than silently dropping it.
+        val original = parseOk("http://@h/")
+
+        val rebuilt = original.newBuilder().build()
+
+        assertEquals(original, rebuilt)
+        assertEquals("http://@h/", rebuilt.uriString)
+    }
+
+    @Test
+    fun `newBuilder then build reproduces an empty-but-present password`() {
+        // Regression for #104: newBuilder() pre-fills its verbatim userInfo field from source.userInfo,
+        // which is now "u:" (not "u") for a present-but-empty password, so the rebuild must still emit
+        // the trailing ":" rather than silently dropping it.
+        val original = parseOk("http://u:@h/")
+
+        val rebuilt = original.newBuilder().build()
+
+        assertEquals(original, rebuilt)
+        assertEquals("http://u:@h/", rebuilt.uriString)
+    }
+
+    @Test
     fun `builds a rootless relative reference from a bare encoded path`() {
         val uri = Uri.Builder().encodedPath("a/b").build()
 

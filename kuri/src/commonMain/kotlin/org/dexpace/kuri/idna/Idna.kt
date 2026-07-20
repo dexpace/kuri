@@ -12,8 +12,30 @@ import org.dexpace.kuri.text.MAX_CODE_POINT
 import org.dexpace.kuri.text.NON_ASCII_MIN
 import org.dexpace.kuri.text.appendCodePoint
 import org.dexpace.kuri.text.asciiLowercased
+import org.dexpace.kuri.text.charCount
 import org.dexpace.kuri.text.codePointsOf
 import org.dexpace.kuri.text.isAllAscii
+
+/**
+ * One fragment of a [Idna.traceMapping] result: the UTS-46 mapping-step output produced by a single
+ * pre-mapping code point, paired with that code point's own value and position.
+ *
+ * Deliberately narrower than a full ToASCII trace (see [Idna.traceMapping] for the scope this
+ * covers) — it exists solely so a caller can locate, in the *original* text, a code point whose
+ * mapped output is known to matter (e.g. a forbidden-domain code point found in the final ASCII
+ * domain, [HOST-37]).
+ *
+ * @property text the mapping step's output for [sourceCodePoint] (its own UTF-16 text for a kept
+ *   code point, the replacement text for a mapped one; empty is never produced — an ignored code
+ *   point contributes no [MappedUnit] at all).
+ * @property sourceIndex the UTF-16 offset of [sourceCodePoint] in the pre-mapping text.
+ * @property sourceCodePoint the original (pre-mapping) Unicode scalar value.
+ */
+internal data class MappedUnit(
+    val text: String,
+    val sourceIndex: Int,
+    val sourceCodePoint: Int,
+)
 
 /** ACE prefix marking a Punycode-encoded (`xn--`) label (RFC 5890 §2.3.2.1). */
 private const val ACE_PREFIX: String = "xn--"
@@ -23,18 +45,6 @@ private const val ACE_PREFIX_LENGTH: Int = 4
 
 /** Label separator inside a domain (U+002E FULL STOP); also the join separator. */
 private const val LABEL_SEPARATOR: String = "."
-
-/** [LABEL_SEPARATOR] as a `Char`, for splitting a raw (pre-mapping) domain by code point. */
-private const val LABEL_SEPARATOR_CHAR: Char = '.'
-
-/** U+3002 IDEOGRAPHIC FULL STOP: a UTS-46 dot-separator variant [IdnaMapping.Mapped] to `.`. */
-private const val IDEOGRAPHIC_FULL_STOP: Char = '\u3002'
-
-/** U+FF0E FULLWIDTH FULL STOP: a UTS-46 dot-separator variant [IdnaMapping.Mapped] to `.`. */
-private const val FULLWIDTH_FULL_STOP: Char = '\uFF0E'
-
-/** U+FF61 HALFWIDTH IDEOGRAPHIC FULL STOP: a UTS-46 dot-separator variant [IdnaMapping.Mapped] to `.`. */
-private const val HALFWIDTH_IDEOGRAPHIC_FULL_STOP: Char = '\uFF61'
 
 /**
  * UTS-46 ToASCII / ToUnicode for IDNA domains (SPEC §7.4, [HOST-26]) under the `Url`-profile
@@ -84,15 +94,19 @@ internal object Idna {
      * WHATWG "domain to ASCII" for the `Url` profile (`beStrict = false`): the URL-layer wrapper over
      * the pure UTS-46 [domainToAscii] (SPEC §7.4, [HOST-26]).
      *
-     * Decided **per label**, not per whole domain: an all-ASCII label is kept **lowercased
-     * verbatim**, since per the standard an ASCII label's Unicode ToASCII failure is only a
-     * validation error, never fatal, for web compatibility — so an invalid `xn--` label such as
-     * `xn--pokxncvks` is kept as-is rather than rejected, regardless of whether a sibling label
-     * elsewhere in the same domain happens to carry non-ASCII text. A label carrying any non-ASCII
-     * code point runs the full UTS-46 pipeline via [domainToAscii] and its failure is fatal. Either
-     * way, a result that collapses to the empty string (e.g. a lone soft hyphen, which maps to
-     * nothing) is a failure ("if result is the empty string, return failure"). The residual
-     * forbidden-code-point check is applied by the host classifier, not here.
+     * Decided on the **whole domain**, not per label ([HOST-48]): a [domain] that is all-ASCII
+     * *before any mapping runs* is returned **lowercased verbatim**, since per the standard an
+     * ASCII domain's Unicode ToASCII failure is only a validation error, never fatal, for web
+     * compatibility — so an invalid `xn--` label such as `xn--pokxncvks` is kept as-is rather than
+     * rejected. A [domain] carrying any non-ASCII code point — even a single non-ASCII sibling
+     * label beside an otherwise-plain-ASCII one — runs the full UTS-46 pipeline via [domainToAscii]
+     * over the *entire* domain, and that pipeline's failure is fatal for the whole domain: an
+     * invalid label such as `xn--a` in `xn--a.bücher` is **not** rescued by its non-ASCII sibling,
+     * matching the WHATWG "domain to ASCII" algorithm's `If domain is an ASCII string:` gate, which
+     * is a whole-domain condition, not a per-label one. Either way, a result that collapses to the
+     * empty string (e.g. a lone soft hyphen, which maps to nothing) is a failure ("if result is the
+     * empty string, return failure"). The residual forbidden-code-point check is applied by the host
+     * classifier, not here.
      *
      * @param domain the percent-decoded, assumed-NFC domain text.
      * @return [ParseResult.Ok] with the ASCII domain, or [ParseResult.Err] on a domain-to-ASCII failure.
@@ -103,46 +117,25 @@ internal object Idna {
     }
 
     /**
-     * Splits the raw (pre-mapping) [domain] on [LABEL_SEPARATOR] or any of the three non-ASCII
-     * UTS-46 dot-separator variants (see [splitRawLabels]) and resolves each raw label
-     * independently: a label that is already all-ASCII **before any mapping runs** is lowercased
-     * and kept unconditionally (never validated, matching the existing intentional leniency — see
-     * [domainToAsciiForUrl]); a label carrying any non-ASCII code point runs the full
-     * [domainToAscii] pipeline (which performs the mapping, NFC, and Punycode decode/validate steps
-     * itself), and that label's failure fails the whole domain.
+     * Resolves the whole, raw (pre-mapping) [domain] per [HOST-48]: a [domain] that is already
+     * all-ASCII is lowercased and kept unconditionally, without ever running it through
+     * [domainToAscii] — matching the existing intentional leniency, see [domainToAsciiForUrl]. A
+     * [domain] carrying any non-ASCII code point runs the full [domainToAscii] pipeline over the
+     * whole string (which performs the mapping, NFC, label split, and Punycode decode/validate
+     * steps itself), and that pipeline's failure fails the whole domain — including a plain-ASCII
+     * label that happens to sit beside the non-ASCII one that triggered the full pipeline.
      *
-     * The ASCII/non-ASCII decision is deliberately made on each **raw** label, not on a
-     * whole-domain-mapped one: mapping the domain before this decision would let a non-ASCII
-     * sequence that maps down to a literal ASCII string (e.g. a fullwidth rendering of `xn--a`)
-     * take the unconditional-keep branch and skip [domainToAscii]'s Punycode decode/validate step
-     * entirely — exactly the case this leniency must not cover, since HOST-48 scopes it to a
-     * domain that is already ASCII pre-mapping. Splitting on the raw dot-separator variants (rather
-     * than only [LABEL_SEPARATOR]) keeps the boundary that the mapping step would otherwise reveal
-     * visible here too, without needing to map first: those three code points are always mapped to
-     * exactly [LABEL_SEPARATOR] on their own (never merged into a longer replacement), so a literal
-     * split on them is equivalent to mapping-then-splitting for boundary purposes alone.
-     *
-     * @return the joined ASCII domain, or `null` on the first non-ASCII label's UTS-46 failure.
+     * @return the ASCII domain, or `null` on a non-ASCII domain's UTS-46 failure.
      */
-    private fun asciiLenientDomainToAscii(domain: String): String? {
-        val labels = splitRawLabels(domain)
-        val out = ArrayList<String>(labels.size)
-        var index = 0
-        var failed = false
-        while (index < labels.size && !failed) {
-            val label = labels[index]
-            if (label.isAllAscii()) {
-                out.add(asciiLowercase(label))
-            } else {
-                when (val result = domainToAscii(label)) {
-                    is ParseResult.Ok -> out.add(result.value)
-                    is ParseResult.Err -> failed = true
-                }
+    private fun asciiLenientDomainToAscii(domain: String): String? =
+        if (domain.isAllAscii()) {
+            asciiLowercase(domain)
+        } else {
+            when (val result = domainToAscii(domain)) {
+                is ParseResult.Ok -> result.value
+                is ParseResult.Err -> null
             }
-            index++
         }
-        return if (failed) null else out.joinToString(LABEL_SEPARATOR)
-    }
 
     /**
      * Runs the inverse display transform (UTS-46 ToUnicode) over [domain]: map, (deferred) NFC,
@@ -198,21 +191,58 @@ internal object Idna {
         }
     }
 
+    /**
+     * Traces the UTS-46 mapping step ([HOST-26] step 2, see [applyMapping]) over [domain] one source
+     * code point at a time, pairing each output fragment with the pre-mapping code point and offset
+     * that produced it.
+     *
+     * A **post-hoc diagnostic aid only**: it applies exactly the mapping table (byte-for-byte the
+     * same decisions [mapAll] makes) but skips the NFC/Punycode/validation steps that follow it, so
+     * it must be called only after [domainToAsciiForUrl] has already accepted the same [domain] — it
+     * cannot itself decide success or failure. Used to locate a forbidden-domain code point's
+     * original position ([HOST-37]) once the transformed ASCII domain is already known to contain
+     * one.
+     *
+     * @param domain the percent-decoded, pre-IDNA domain text (the same argument
+     *   [domainToAsciiForUrl] was called with).
+     * @return the mapped fragments in source order; an ignored code point contributes no entry.
+     */
+    internal fun traceMapping(domain: String): List<MappedUnit> {
+        val codePoints = codePointsOf(domain)
+        val out = ArrayList<MappedUnit>(codePoints.size)
+        var offset = 0
+        for (codePoint in codePoints) {
+            appendTracedUnit(out, codePoint, offset)
+            offset += charCount(codePoint)
+        }
+        check(out.size <= codePoints.size) { "trace produced more units than source code points" }
+        return out
+    }
+
+    /** Appends the traced mapping outcome of one [codePoint] at pre-mapping [offset] to [out] (see [traceMapping]). */
+    private fun appendTracedUnit(
+        out: MutableList<MappedUnit>,
+        codePoint: Int,
+        offset: Int,
+    ) {
+        require(offset >= 0) { "offset must not be negative: $offset" }
+        when (val mapping = IdnaMappingTable.map(codePoint)) {
+            is IdnaMapping.Valid, is IdnaMapping.Deviation ->
+                out.add(MappedUnit(codePointText(codePoint), offset, codePoint))
+            is IdnaMapping.Mapped -> out.add(MappedUnit(mapping.replacement, offset, codePoint))
+            is IdnaMapping.Ignored -> Unit
+            // Unreachable in the [traceMapping] contract: the caller already ran [domainToAsciiForUrl]
+            // to a successful [ParseResult.Ok] over this same domain, which fails fast on the first
+            // disallowed code point ([mapAll]) long before this trace runs.
+            is IdnaMapping.Disallowed -> Unit
+        }
+    }
+
+    /** Renders a single [codePoint] as its own UTF-16 text (one unit, or a surrogate pair above the BMP). */
+    private fun codePointText(codePoint: Int): String = buildString { appendCodePoint(this, codePoint) }
+
     /** Splits [domain] into labels on [LABEL_SEPARATOR]; an empty domain yields one empty label. */
     private fun splitLabels(domain: String): List<String> = domain.split(LABEL_SEPARATOR)
-
-    /**
-     * Splits the raw, pre-mapping [domain] into labels on [LABEL_SEPARATOR] or any of the three
-     * non-ASCII UTS-46 dot-separator variants that map to it, so a label boundary they form is
-     * visible before mapping runs (see [asciiLenientDomainToAscii]).
-     */
-    private fun splitRawLabels(domain: String): List<String> =
-        domain.split(
-            LABEL_SEPARATOR_CHAR,
-            IDEOGRAPHIC_FULL_STOP,
-            FULLWIDTH_FULL_STOP,
-            HALFWIDTH_IDEOGRAPHIC_FULL_STOP,
-        )
 
     /**
      * Processes every label in order, short-circuiting on the first failure so the resulting

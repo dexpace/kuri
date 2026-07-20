@@ -139,8 +139,9 @@ internal class UriParseErrorTest {
         val error = assertIs<ParseResult.Err>(result).error
         val forbidden = assertIs<UriParseError.ForbiddenHostCodePoint>(error)
         assertEquals('|'.code, forbidden.codePoint)
-        // The offset is relative to the host substring "ex|ample" (UriParser forwards the host
-        // error's index unchanged), so the '|' at host index 2 is the reported offense.
-        assertEquals(2, forbidden.at)
+        // UriParser rebases the host-relative index (2, within "ex|ample") to the full-input offset
+        // by adding the host's own start (4, right after "s://"), so '|' is reported at index 6 --
+        // its actual position in "s://ex|ample".
+        assertEquals(6, forbidden.at)
     }
 }

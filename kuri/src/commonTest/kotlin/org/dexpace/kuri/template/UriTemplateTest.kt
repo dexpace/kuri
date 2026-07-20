@@ -149,6 +149,16 @@ class UriTemplateTest {
     }
 
     @Test
+    fun `prefix modifiers with a leading sign or leading zero are rejected`() {
+        // RFC 6570 §2.4.1: max-length = %x31-39 0*3DIGIT — the first digit must be 1-9, so
+        // neither a leading '+'/'-' sign nor a leading zero is a valid prefix length, even
+        // though `String.toIntOrNull()` would happily accept both.
+        assertNull(UriTemplate.parseOrNull("{var:+5}"))
+        assertNull(UriTemplate.parseOrNull("{var:-5}"))
+        assertNull(UriTemplate.parseOrNull("{x:007}"))
+    }
+
+    @Test
     fun `malformed variable names are rejected`() {
         assertNull(UriTemplate.parseOrNull("{a,,b}"))
         assertNull(UriTemplate.parseOrNull("{v@r}"))
