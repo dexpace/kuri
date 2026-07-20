@@ -425,16 +425,32 @@ public final class org/dexpace/kuri/error/UriSyntaxException : java/lang/Illegal
 	public final fun getError ()Lorg/dexpace/kuri/error/UriParseError;
 }
 
-public final class org/dexpace/kuri/error/ValidationError : java/lang/Enum {
-	public static final field BACKSLASH_AS_SOLIDUS Lorg/dexpace/kuri/error/ValidationError;
-	public static final field INVALID_CREDENTIALS Lorg/dexpace/kuri/error/ValidationError;
-	public static final field INVALID_URL_UNIT Lorg/dexpace/kuri/error/ValidationError;
-	public static final field LEADING_OR_TRAILING_C0_CONTROL_OR_SPACE Lorg/dexpace/kuri/error/ValidationError;
-	public static final field MISSING_AUTHORITY_SLASHES Lorg/dexpace/kuri/error/ValidationError;
-	public static final field TAB_OR_NEWLINE_REMOVED Lorg/dexpace/kuri/error/ValidationError;
+public final class org/dexpace/kuri/error/ValidationError {
+	public fun <init> (Lorg/dexpace/kuri/error/ValidationErrorKind;I)V
+	public final fun component1 ()Lorg/dexpace/kuri/error/ValidationErrorKind;
+	public final fun component2 ()I
+	public final fun copy (Lorg/dexpace/kuri/error/ValidationErrorKind;I)Lorg/dexpace/kuri/error/ValidationError;
+	public static synthetic fun copy$default (Lorg/dexpace/kuri/error/ValidationError;Lorg/dexpace/kuri/error/ValidationErrorKind;IILjava/lang/Object;)Lorg/dexpace/kuri/error/ValidationError;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAt ()I
+	public final fun getKind ()Lorg/dexpace/kuri/error/ValidationErrorKind;
+	public fun hashCode ()I
+	public final fun isFailure ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class org/dexpace/kuri/error/ValidationErrorKind : java/lang/Enum {
+	public static final field BACKSLASH_AS_SOLIDUS Lorg/dexpace/kuri/error/ValidationErrorKind;
+	public static final field FILE_INVALID_WINDOWS_DRIVE_LETTER Lorg/dexpace/kuri/error/ValidationErrorKind;
+	public static final field FILE_INVALID_WINDOWS_DRIVE_LETTER_HOST Lorg/dexpace/kuri/error/ValidationErrorKind;
+	public static final field INVALID_CREDENTIALS Lorg/dexpace/kuri/error/ValidationErrorKind;
+	public static final field INVALID_URL_UNIT Lorg/dexpace/kuri/error/ValidationErrorKind;
+	public static final field LEADING_OR_TRAILING_C0_CONTROL_OR_SPACE Lorg/dexpace/kuri/error/ValidationErrorKind;
+	public static final field MISSING_AUTHORITY_SLASHES Lorg/dexpace/kuri/error/ValidationErrorKind;
+	public static final field TAB_OR_NEWLINE_REMOVED Lorg/dexpace/kuri/error/ValidationErrorKind;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lorg/dexpace/kuri/error/ValidationError;
-	public static fun values ()[Lorg/dexpace/kuri/error/ValidationError;
+	public static fun valueOf (Ljava/lang/String;)Lorg/dexpace/kuri/error/ValidationErrorKind;
+	public static fun values ()[Lorg/dexpace/kuri/error/ValidationErrorKind;
 }
 
 public abstract interface class org/dexpace/kuri/host/Host {

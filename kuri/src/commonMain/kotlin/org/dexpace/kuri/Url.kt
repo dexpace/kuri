@@ -7,6 +7,7 @@ package org.dexpace.kuri
 import org.dexpace.kuri.error.ParseResult
 import org.dexpace.kuri.error.UriSyntaxException
 import org.dexpace.kuri.error.ValidationError
+import org.dexpace.kuri.error.ValidationErrorKind
 import org.dexpace.kuri.error.map
 import org.dexpace.kuri.host.Host
 import org.dexpace.kuri.parser.BuilderPath
@@ -17,6 +18,7 @@ import org.dexpace.kuri.parser.UrlParser
 import org.dexpace.kuri.parser.decodedSegments
 import org.dexpace.kuri.parser.fileExtensionOf
 import org.dexpace.kuri.parser.fileNameOf
+import org.dexpace.kuri.parser.invalidUrlCodePointErrors
 import org.dexpace.kuri.parser.isDirectoryPath
 import org.dexpace.kuri.percent.PercentCodec
 import org.dexpace.kuri.percent.PercentEncodeSet
@@ -335,9 +337,11 @@ public class Url internal constructor(
      *
      * WHATWG parsing is a lenient repair process: it accepts and silently corrects inputs a strict
      * reader would reject (a `\` read as `/`, a missing authority slash, an out-of-set code point),
-     * and records each correction as a [ValidationError] without failing the parse. The list is
-     * ordered by first occurrence and empty for a fully conformant input; it is useful for linting or
-     * telemetry, never for control flow (a validation error never downgrades a successful parse).
+     * and records each correction as a [ValidationError] without failing the parse. Each entry
+     * carries its [ValidationError.kind], the offset [ValidationError.at] it occurred at, and
+     * [ValidationError.isFailure]. The list is ordered by first occurrence and empty for a fully
+     * conformant input; it is useful for linting or telemetry, never for control flow (a validation
+     * error never downgrades a successful parse).
      *
      * @return a read-only, ordered copy of the validation warnings; empty for a clean parse.
      */
@@ -536,6 +540,11 @@ public class Url internal constructor(
      * Matches real browsers' `hash` setter in not escaping a literal `%` first, so [value] does
      * not necessarily round-trip through [decodedFragment] — see its KDoc.
      *
+     * Also matches [withPathname]/[withSearch] in recording [ValidationErrorKind.INVALID_URL_UNIT]
+     * for any out-of-repertoire code point in the new fragment (SPEC [PARSE-59]): the fresh
+     * fragment's errors replace [validationErrors] rather than appending to the base URL's, the
+     * same "no cumulative history" convention every override-backed setter follows.
+     *
      * @param value the new fragment text, with or without a leading `#`; `""` removes the fragment.
      * @return the updated [Url].
      */
@@ -547,8 +556,11 @@ public class Url internal constructor(
         // the shared engine (there is no FRAGMENT StateOverride), so it must replicate that step
         // itself rather than percent-encode a literal tab/newline into the fragment.
         val stripped = withoutHash.filterNot { it == '\t' || it == '\n' || it == '\r' }
+        // Likewise replicates finalizeFragment's invalid-URL-unit scan (offsets are 0-based within
+        // `stripped`, the same convention parseWithOverride uses for its own override-local text).
+        val newErrors = invalidUrlCodePointErrors(stripped, textOffset = 0)
         val encoded = PercentCodec.encode(stripped, PercentEncodeSets.FRAGMENT)
-        return withComponents(components.copy(fragment = encoded))
+        return withComponents(components.copy(fragment = encoded, validationErrors = newErrors))
     }
 
     /**
