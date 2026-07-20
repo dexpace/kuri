@@ -410,7 +410,8 @@ internal object Resolver {
     private fun removeLastSegment(output: StringBuilder) {
         val slash = output.lastIndexOf('/')
         val cut = if (slash >= 0) slash else 0
-        check(cut in 0..output.length) { "output cut index out of range: $cut" }
+        // setLength's own precondition: the cut can only shorten the buffer, never grow it.
+        check(cut <= output.length) { "output cut index past the buffer end: $cut > ${output.length}" }
         output.setLength(cut)
     }
 

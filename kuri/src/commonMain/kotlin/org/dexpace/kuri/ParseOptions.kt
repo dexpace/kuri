@@ -90,7 +90,9 @@ public class ParseOptions private constructor(
      * ([ResourceLimit.PathSegments], SPEC §12.6, [ERR-33]).
      *
      * Defaults to [ResourceLimit.PathSegments]'s documented bound. Exceeding it is reported as
-     * `UriParseError.LimitExceeded`.
+     * `UriParseError.LimitExceeded`. The count follows RFC 3986 §3.3 splitting: an empty path is 0
+     * segments and `/` is 1; a rooted path's leading empty segment is not counted (so `/a/b` is 2),
+     * while a trailing slash does add a segment (so `/a/b/` is 3).
      */
     public val pathSegments: Int = pathSegments
 

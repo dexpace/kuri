@@ -40,7 +40,7 @@ public sealed interface UriParseError {
                 is InvalidHost -> "invalid host \"$host\": $reason"
                 is ForbiddenHostCodePoint -> "forbidden host code point $codePoint at offset $at"
                 is InputTooLong -> "input length $length exceeds maximum $max"
-                is LimitExceeded -> "resource limit $limit exceeded: observed $observed exceeds maximum $max"
+                is LimitExceeded -> "$limit limit exceeded: $observed > $max"
                 is IriInvalidCodePoint -> "code point $codePoint at offset $at is outside the iri repertoire"
                 is IriBidiFormattingCharacter -> "forbidden bidi formatting character $codePoint at offset $at"
             }

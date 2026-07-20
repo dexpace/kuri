@@ -399,21 +399,44 @@ internal object UriParser {
             else -> ParseResult.Err(error)
         }
 
-    /** Splits the raw path and enforces [ParseOptions.pathSegments] on its segment count ([ERR-33]). */
+    /**
+     * Enforces [ParseOptions.pathSegments] on the raw path's segment count ([ERR-33]) before
+     * materializing the segment list: the count is derived arithmetically from the `/` separator
+     * count and the path's rootedness, so a hostile segment count is rejected without ever
+     * allocating the full list. [splitUriPath] runs only once the count is known to fit.
+     */
     private fun buildWithinPathSegmentLimit(
         sections: Sections,
         authority: Authority?,
         options: ParseOptions,
     ): ParseResult<ParsedComponents> {
-        val path = splitUriPath(sections.path)
-        val observed = path.segments.size
-        check(observed >= 0) { "a segment list can never report a negative size: $observed" }
+        val raw = sections.path
+        val separators = raw.count { it == '/' }
+        val observed = pathSegmentCount(raw, separators)
+        // A path has at most one more segment than it has separators (a rootless path); a rooted or
+        // empty path has fewer. A violation would mean the count derivation drifted from splitUriPath.
+        check(observed <= separators + 1) { "segment count $observed exceeds separators-plus-one" }
         return if (observed > options.pathSegments) {
             ParseResult.Err(UriParseError.LimitExceeded(ResourceLimit.PathSegments, observed, options.pathSegments))
         } else {
-            ParseResult.Ok(assemble(sections, authority, path))
+            ParseResult.Ok(assemble(sections, authority, splitUriPath(raw)))
         }
     }
+
+    /**
+     * The number of RFC 3986 §3.3 segments [raw] splits into, matching [splitUriPath] without
+     * building the list: an empty path is 0, a rooted path (leading `/`) has as many segments as
+     * separators (its leading empty element is dropped), and a rootless path has one more.
+     */
+    private fun pathSegmentCount(
+        raw: String,
+        separators: Int,
+    ): Int =
+        when {
+            raw.isEmpty() -> 0
+            raw.startsWith('/') -> separators
+            else -> separators + 1
+        }
 
     /** First forbidden unit across path, query, and fragment in input order, or `null` when all are clean. */
     private fun validateText(sections: Sections): UriParseError? =

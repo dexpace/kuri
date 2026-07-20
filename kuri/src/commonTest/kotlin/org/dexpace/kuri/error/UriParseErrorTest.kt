@@ -79,28 +79,28 @@ internal class UriParseErrorTest {
     fun `message renders the exact string for InputTooLong`() {
         // arrange + act + assert
         assertEquals(
-            "input length 8193 exceeds maximum 8192",
-            UriParseError.InputTooLong(length = 8193, max = 8192).message,
+            "input length ${MAX_INPUT_LENGTH + 1} exceeds maximum $MAX_INPUT_LENGTH",
+            UriParseError.InputTooLong(length = MAX_INPUT_LENGTH + 1, max = MAX_INPUT_LENGTH).message,
         )
     }
 
     @Test
     fun `InputTooLong exposes its length and max`() {
         // arrange
-        val error = UriParseError.InputTooLong(length = 8193, max = MAX_INPUT_LENGTH)
+        val error = UriParseError.InputTooLong(length = MAX_INPUT_LENGTH + 1, max = MAX_INPUT_LENGTH)
 
         // act + assert
-        assertEquals(8193, error.length)
+        assertEquals(MAX_INPUT_LENGTH + 1, error.length)
         assertEquals(MAX_INPUT_LENGTH, error.max)
     }
 
     @Test
     fun `InputTooLong is equal by value and differs on an unequal field`() {
         // arrange
-        val error = UriParseError.InputTooLong(length = 8193, max = MAX_INPUT_LENGTH)
-        val same = UriParseError.InputTooLong(length = 8193, max = MAX_INPUT_LENGTH)
-        val other = UriParseError.InputTooLong(length = 9000, max = MAX_INPUT_LENGTH)
-        val differentMax = UriParseError.InputTooLong(length = 8193, max = MAX_INPUT_LENGTH + 1)
+        val error = UriParseError.InputTooLong(length = MAX_INPUT_LENGTH + 1, max = MAX_INPUT_LENGTH)
+        val same = UriParseError.InputTooLong(length = MAX_INPUT_LENGTH + 1, max = MAX_INPUT_LENGTH)
+        val other = UriParseError.InputTooLong(length = MAX_INPUT_LENGTH + 100, max = MAX_INPUT_LENGTH)
+        val differentMax = UriParseError.InputTooLong(length = MAX_INPUT_LENGTH + 1, max = MAX_INPUT_LENGTH + 1)
 
         // act + assert
         assertEquals(same, error)
@@ -113,7 +113,7 @@ internal class UriParseErrorTest {
     fun `message renders the exact string for LimitExceeded`() {
         // arrange + act + assert
         assertEquals(
-            "resource limit PathSegments exceeded: observed 3 exceeds maximum 2",
+            "PathSegments limit exceeded: 3 > 2",
             UriParseError.LimitExceeded(ResourceLimit.PathSegments, observed = 3, max = 2).message,
         )
     }
