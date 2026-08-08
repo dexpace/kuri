@@ -145,6 +145,13 @@ codegen never touches. Search the repo for the outgoing version's `Unicode <OLD>
 - the hand-written Kotlin KDocs — `IdnaMappingTable.kt` and `IdnaValidity.kt` (decoders)
   and `IdnaConformanceTest.kt` and `NormalizerTest.kt` (tests).
 
+Also update `TestBundledUnicodeVersionRenderings` in `tools/internal/ucd/ucd_test.go` by
+hand: it asserts the bare `MajorMinor()`/`String()` literals (e.g. `"17.0"`, `"17.0.0"`),
+which the grep above won't catch since neither pattern matches an unprefixed version
+string. Nothing runs this test as part of a version bump (`go test` isn't part of the
+`./gradlew build` gate in step 6, and CI's `tools` job only runs when files under `tools/`
+change), so a missed update here fails silently rather than failing the bump.
+
 Then update the "current version" note at the top of this file. (The mapping-table KDoc
 had already drifted a full major release behind before this was written down, so treat
 the grep as authoritative rather than trusting this list to stay complete.)

@@ -96,6 +96,13 @@ func loadNfcUnicodeData(data []byte) (map[int]int, map[int][]int, error) {
 // parseHexTokens splits a whitespace-separated hex mapping into a list of code
 // points. strings.Fields collapses whitespace runs and trims, matching Python's
 // no-argument str.split.
+// parseHexTokens parses a whitespace-separated list of hex code points (a
+// UnicodeData.txt decomposition mapping's targets). Unlike [ScalarsToString],
+// this does not reject out-of-range or surrogate values — it validates only
+// hex syntax, mirroring the Python ports' int(tok, 16). The real UCD corpus
+// never contains such values in this field, so the two hex-list parsers'
+// differing strictness is an accepted, intentional discrepancy rather than an
+// oversight; see TestParseHexTokensAcceptsOutOfRangeAndSurrogate.
 func parseHexTokens(mapping string) ([]int, error) {
 	tokens := strings.Fields(mapping)
 	targets := make([]int, 0, len(tokens))

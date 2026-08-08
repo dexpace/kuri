@@ -122,6 +122,9 @@ func loadValidityUnicodeData(data []byte) (marks, viramas []plainRange, err erro
 	pendingStart := -1
 	for scanner.Scan() {
 		fields := strings.Split(scanner.Text(), ";")
+		if len(fields) <= fieldCCC {
+			continue
+		}
 		codePoint, parseErr := strconv.ParseInt(fields[fieldCodePoint], 16, 32)
 		if parseErr != nil {
 			return nil, nil, fmt.Errorf("ucd: parsing code point %q: %w", fields[fieldCodePoint], parseErr)
@@ -190,7 +193,8 @@ func loadJoining(data []byte) ([]typedRange, error) {
 }
 
 // mergeSetRanges sorts plain ranges by (start, end) and adjacency-merges any
-// pair that touches, overlaps, or is separated by a single code point.
+// pair that touches (current.start == merged.end+1) or overlaps. A gap of one
+// or more uncovered code points between two ranges is preserved, not merged.
 func mergeSetRanges(ranges []plainRange) []plainRange {
 	sort.Slice(ranges, func(i, j int) bool {
 		if ranges[i].start != ranges[j].start {

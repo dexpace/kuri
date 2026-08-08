@@ -356,18 +356,69 @@ jobs:
             ~/.android/adb*
           key: avd-30-aosp_atd-x86_64-pixel6-v1
 
+  tools-changed:
+    name: Detect tools/ changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      changed: ${{ steps.filter.outputs.tools }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            tools:
+              - 'tools/**'
+
+  tools:
+    name: Go build · vet · fmt · tests (tools/)
+    needs: tools-changed
+    if: needs.tools-changed.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    # Needs no JDK and no emulator, so it's the cheapest job in this workflow; a generous
+    # bound is still cheap insurance against a hung `go test`.
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: tools
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+      - name: Build, vet, gofmt, test
+        run: |
+          go build ./...
+          go vet ./...
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "The following files are not gofmt-formatted:"
+            gofmt -l .
+            exit 1
+          fi
+          go test ./...
+
   # Aggregate gate: a single check to require in branch protection. Green only when every
-  # job above succeeded; fails if any was skipped, cancelled or failed.
+  # job above succeeded; fails if any was skipped, cancelled or failed. `tools` is allowed
+  # to be legitimately skipped (it's path-gated via tools-changed) so it isn't in `needs`
+  # directly — only tools-changed is, which always runs and always succeeds or fails cleanly.
+  # A failing `tools` run still fails branch protection because GitHub reports the `tools`
+  # check itself as a required status when it runs; when it doesn't run there is nothing to
+  # gate on and the aggregate correctly ignores it.
   ci:
     name: CI
     if: always()
-    needs: [ static-analysis, web, native, android-unit, android-instrumented ]
+    needs: [ static-analysis, web, native, android-unit, android-instrumented, tools-changed, tools ]
     runs-on: ubuntu-latest
     # Only evaluates the aggregate result; a couple of minutes is ample.
     timeout-minutes: 5
     steps:
-      - name: Fail if any job did not succeed
-        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+      - name: Fail if any required job did not succeed
+        # `tools` is expected to report `skipped` when tools/ didn't change (see tools-changed
+        # above) — that's not a failure, so it's excluded from the failure check while every
+        # other job (including tools-changed itself) must have succeeded.
+        if: ${{ contains(fromJSON('["failure","cancelled","skipped"]'), needs.static-analysis.result) || contains(fromJSON('["failure","cancelled","skipped"]'), needs.web.result) || contains(fromJSON('["failure","cancelled","skipped"]'), needs.native.result) || contains(fromJSON('["failure","cancelled","skipped"]'), needs.android-unit.result) || contains(fromJSON('["failure","cancelled","skipped"]'), needs.android-instrumented.result) || contains(fromJSON('["failure","cancelled"]'), needs.tools-changed.result) || contains(fromJSON('["failure","cancelled"]'), needs.tools.result) }}
         run: |
-          echo "One or more CI jobs did not succeed: ${{ join(needs.*.result, ', ') }}"
+          echo "One or more required CI jobs did not succeed."
+          echo "static-analysis=${{ needs.static-analysis.result }} web=${{ needs.web.result }} native=${{ needs.native.result }} android-unit=${{ needs.android-unit.result }} android-instrumented=${{ needs.android-instrumented.result }} tools-changed=${{ needs.tools-changed.result }} tools=${{ needs.tools.result }}"
           exit 1

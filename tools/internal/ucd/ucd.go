@@ -98,13 +98,21 @@ func (v UnicodeVersion) String() string {
 // error and yields an error rather than letting a bogus version reach generated
 // code.
 func BundledUnicodeVersion() (UnicodeVersion, error) {
-	rest, ok := strings.CutPrefix(unicodeVersionDir, versionDirPrefix)
+	return parseVersionPin(unicodeVersionDir)
+}
+
+// parseVersionPin parses a "unicode-<major>.<minor>[.<patch>]" directory pin
+// into its components. It is split out from [BundledUnicodeVersion] so the
+// parser itself can be exercised against a range of well- and ill-formed pins
+// independent of whatever [unicodeVersionDir] currently is.
+func parseVersionPin(pin string) (UnicodeVersion, error) {
+	rest, ok := strings.CutPrefix(pin, versionDirPrefix)
 	if !ok {
-		return UnicodeVersion{}, fmt.Errorf("ucd: version pin %q lacks the %q prefix", unicodeVersionDir, versionDirPrefix)
+		return UnicodeVersion{}, fmt.Errorf("ucd: version pin %q lacks the %q prefix", pin, versionDirPrefix)
 	}
 	fields := strings.Split(rest, ".")
 	if len(fields) < minVersionComponents || len(fields) > maxVersionComponents {
-		return UnicodeVersion{}, fmt.Errorf("ucd: version pin %q is not unicode-<major>.<minor>[.<patch>]", unicodeVersionDir)
+		return UnicodeVersion{}, fmt.Errorf("ucd: version pin %q is not unicode-<major>.<minor>[.<patch>]", pin)
 	}
 	var components [maxVersionComponents]int
 	for index, field := range fields {
@@ -114,7 +122,7 @@ func BundledUnicodeVersion() (UnicodeVersion, error) {
 		// a version string that no longer matches the on-disk directory suffix. The
 		// value < 0 arm is still needed because "-5" round-trips through Itoa.
 		if err != nil || value < 0 || field != strconv.Itoa(value) {
-			return UnicodeVersion{}, fmt.Errorf("ucd: version pin %q has a malformed component %q", unicodeVersionDir, field)
+			return UnicodeVersion{}, fmt.Errorf("ucd: version pin %q has a malformed component %q", pin, field)
 		}
 		components[index] = value
 	}
@@ -225,7 +233,7 @@ func ScalarsToString(field string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("ucd: parsing hex scalar %q: %w", token, err)
 		}
-		if code > maxScalar || (code >= firstSurrogate && code <= lastSurrogate) {
+		if code < 0 || code > maxScalar || (code >= firstSurrogate && code <= lastSurrogate) {
 			return "", fmt.Errorf("ucd: %q is not a valid Unicode scalar value", token)
 		}
 		builder.WriteRune(rune(code))

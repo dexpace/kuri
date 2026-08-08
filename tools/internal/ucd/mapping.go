@@ -138,6 +138,9 @@ func parseLine(line string) (*idnaRange, error) {
 		return nil, nil
 	}
 	fields := strings.Split(body, ";")
+	if len(fields) < 2 {
+		return nil, fmt.Errorf("ucd: expected at least 2 ';'-separated fields in %q", body)
+	}
 	for index := range fields {
 		fields[index] = strings.TrimSpace(fields[index])
 	}
